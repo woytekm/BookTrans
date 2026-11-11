@@ -1,0 +1,1702 @@
+{
+  "schema_version": "0.2.1",
+  "source_file": "/mnt/data/0002.tif",
+  "pages": [
+    {
+      "page": 1,
+      "side": "L",
+      "x_offset": 0,
+      "width": 925,
+      "height": 1314,
+      "estimated_body_glyph_height": 14.0,
+      "regions": [
+        {
+          "id": 1,
+          "type": "paragraph",
+          "bbox": [
+            325,
+            162,
+            726,
+            238
+          ],
+          "text": "ae\nREISEN",
+          "line_count": 2,
+          "median_relative_size": 1.25,
+          "lines": [
+            {
+              "bbox": [
+                575,
+                162,
+                726,
+                194
+              ],
+              "text": "ae",
+              "glyph_height": 32.0,
+              "confidence": 45.0,
+              "uppercase_ratio": 0.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 2.29,
+              "style": "unknown"
+            },
+            {
+              "bbox": [
+                325,
+                235,
+                397,
+                238
+              ],
+              "text": "REISEN",
+              "glyph_height": 3.0,
+              "confidence": 30.0,
+              "uppercase_ratio": 1.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.21,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 4.0,
+              "paragraph_gap_threshold": 14.2
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "paragraph",
+          "bbox": [
+            288,
+            344,
+            760,
+            443
+          ],
+          "text": "Zu I\nHR ı2",
+          "line_count": 2,
+          "median_relative_size": 2.77,
+          "lines": [
+            {
+              "bbox": [
+                288,
+                344,
+                530,
+                443
+              ],
+              "text": "Zu I",
+              "glyph_height": 67.5,
+              "confidence": 32.5,
+              "uppercase_ratio": 0.67,
+              "word_count": 2,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 4.82,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 17.0,
+              "paragraph_gap_threshold": 14.2
+            },
+            {
+              "bbox": [
+                477,
+                363,
+                760,
+                375
+              ],
+              "text": "HR ı2",
+              "glyph_height": 10.0,
+              "confidence": 53.5,
+              "uppercase_ratio": 1.0,
+              "word_count": 2,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.71,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 0.0,
+              "paragraph_gap_threshold": 14.2
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "paragraph",
+          "bbox": [
+            234,
+            651,
+            543,
+            761
+          ],
+          "text": ">\n|\nBr",
+          "line_count": 3,
+          "median_relative_size": 0.79,
+          "lines": [
+            {
+              "bbox": [
+                479,
+                651,
+                543,
+                761
+              ],
+              "text": ">",
+              "glyph_height": 110.0,
+              "confidence": 72.0,
+              "uppercase_ratio": 0.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 7.86,
+              "style": "unknown"
+            },
+            {
+              "bbox": [
+                299,
+                714,
+                300,
+                725
+              ],
+              "text": "|",
+              "glyph_height": 11.0,
+              "confidence": 94.0,
+              "uppercase_ratio": 0.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.79,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 0.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                234,
+                745,
+                305,
+                755
+              ],
+              "text": "Br",
+              "glyph_height": 10.0,
+              "confidence": 31.0,
+              "uppercase_ratio": 0.5,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.71,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 38.0,
+              "paragraph_gap_threshold": 21.6
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "paragraph",
+          "bbox": [
+            479,
+            651,
+            543,
+            761
+          ],
+          "text": ">",
+          "line_count": 1,
+          "median_relative_size": 7.86,
+          "lines": [
+            {
+              "bbox": [
+                479,
+                651,
+                543,
+                761
+              ],
+              "text": ">",
+              "glyph_height": 110.0,
+              "confidence": 72.0,
+              "uppercase_ratio": 0.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 7.86,
+              "style": "unknown"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "paragraph",
+          "bbox": [
+            299,
+            714,
+            300,
+            725
+          ],
+          "text": "|",
+          "line_count": 1,
+          "median_relative_size": 0.79,
+          "lines": [
+            {
+              "bbox": [
+                299,
+                714,
+                300,
+                725
+              ],
+              "text": "|",
+              "glyph_height": 11.0,
+              "confidence": 94.0,
+              "uppercase_ratio": 0.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.79,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 0.0,
+              "paragraph_gap_threshold": 12.2
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "paragraph",
+          "bbox": [
+            234,
+            745,
+            329,
+            789
+          ],
+          "text": "Br\n0. BOSDORF 08\nPORTALSOCKEI",
+          "line_count": 3,
+          "median_relative_size": 0.57,
+          "lines": [
+            {
+              "bbox": [
+                234,
+                745,
+                305,
+                755
+              ],
+              "text": "Br",
+              "glyph_height": 10.0,
+              "confidence": 31.0,
+              "uppercase_ratio": 0.5,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.71,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 38.0,
+              "paragraph_gap_threshold": 21.6
+            },
+            {
+              "bbox": [
+                234,
+                767,
+                329,
+                775
+              ],
+              "text": "0. BOSDORF 08",
+              "glyph_height": 8.0,
+              "confidence": 60.7,
+              "uppercase_ratio": 1.0,
+              "word_count": 3,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.57,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 16.0,
+              "paragraph_gap_threshold": 21.6
+            },
+            {
+              "bbox": [
+                234,
+                781,
+                322,
+                789
+              ],
+              "text": "PORTALSOCKEI",
+              "glyph_height": 8.0,
+              "confidence": 69.0,
+              "uppercase_ratio": 1.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.57,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 21.6
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "paragraph",
+          "bbox": [
+            234,
+            767,
+            588,
+            794
+          ],
+          "text": "0. BOSDORF 08\n57 FRIEDLAND OS\nPORTALSOCKEI\nPORTALKAMPFER",
+          "line_count": 4,
+          "median_relative_size": 0.57,
+          "lines": [
+            {
+              "bbox": [
+                234,
+                767,
+                329,
+                775
+              ],
+              "text": "0. BOSDORF 08",
+              "glyph_height": 8.0,
+              "confidence": 60.7,
+              "uppercase_ratio": 1.0,
+              "word_count": 3,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.57,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 16.0,
+              "paragraph_gap_threshold": 21.6
+            },
+            {
+              "bbox": [
+                477,
+                771,
+                588,
+                779
+              ],
+              "text": "57 FRIEDLAND OS",
+              "glyph_height": 8.0,
+              "confidence": 77.3,
+              "uppercase_ratio": 1.0,
+              "word_count": 3,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.57,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 83.0,
+              "paragraph_gap_threshold": 60.8
+            },
+            {
+              "bbox": [
+                234,
+                781,
+                322,
+                789
+              ],
+              "text": "PORTALSOCKEI",
+              "glyph_height": 8.0,
+              "confidence": 69.0,
+              "uppercase_ratio": 1.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.57,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 21.6
+            },
+            {
+              "bbox": [
+                478,
+                785,
+                577,
+                794
+              ],
+              "text": "PORTALKAMPFER",
+              "glyph_height": 9.0,
+              "confidence": 57.0,
+              "uppercase_ratio": 1.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.64,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 60.8
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "type": "paragraph",
+          "bbox": [
+            477,
+            771,
+            588,
+            794
+          ],
+          "text": "57 FRIEDLAND OS\nPORTALKAMPFER",
+          "line_count": 2,
+          "median_relative_size": 0.6,
+          "lines": [
+            {
+              "bbox": [
+                477,
+                771,
+                588,
+                779
+              ],
+              "text": "57 FRIEDLAND OS",
+              "glyph_height": 8.0,
+              "confidence": 77.3,
+              "uppercase_ratio": 1.0,
+              "word_count": 3,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.57,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 83.0,
+              "paragraph_gap_threshold": 60.8
+            },
+            {
+              "bbox": [
+                478,
+                785,
+                577,
+                794
+              ],
+              "text": "PORTALKAMPFER",
+              "glyph_height": 9.0,
+              "confidence": 57.0,
+              "uppercase_ratio": 1.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.64,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 60.8
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "type": "paragraph",
+          "bbox": [
+            235,
+            820,
+            809,
+            857
+          ],
+          "text": "und die ischechoslowakische Republik) in Betracht gezogen werden\nmußten.",
+          "line_count": 2,
+          "median_relative_size": 1.04,
+          "lines": [
+            {
+              "bbox": [
+                237,
+                820,
+                809,
+                843
+              ],
+              "text": "und die ischechoslowakische Republik) in Betracht gezogen werden",
+              "glyph_height": 14.0,
+              "confidence": 92.8,
+              "uppercase_ratio": 0.04,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 28.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                235,
+                842,
+                300,
+                857
+              ],
+              "text": "mußten.",
+              "glyph_height": 15.0,
+              "confidence": 96.0,
+              "uppercase_ratio": 0.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.07,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 12.2
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "type": "paragraph",
+          "bbox": [
+            233,
+            865,
+            808,
+            1101
+          ],
+          "text": "Die Gliederung des Stoffes erfolgte bei dem fast gänzlichen Fehlen\nvon Archivalien nicht in chronologischer Reihenfolge, sondern nach\nder Art ihrer Anlage. Es werden zunächst die einfacheren und dann\ndie reicheren Portale behandelt werden.\nDas mit seiner mittelalterlichen Stadtmauer und seinen stattlichen\nWehrtürmen ebenso einheitlich wie malerisch wirkende Städtchen\nPitschen zeigt uns an seiner mittelalterlichen Backsteinkirche St. Petri\nbzw.Nikolai die einfachste Form eines gotischen Portalsmit einer Ab-\ntreppung. Abb. 37. Es ist dem in seinem Untergeschoß aus Bruchstei-\nnen bestehenden Westturm der Kirche eingefügt. Ein mit steilen Spitz-",
+          "line_count": 10,
+          "median_relative_size": 1.04,
+          "lines": [
+            {
+              "bbox": [
+                235,
+                865,
+                807,
+                889
+              ],
+              "text": "Die Gliederung des Stoffes erfolgte bei dem fast gänzlichen Fehlen",
+              "glyph_height": 15.0,
+              "confidence": 95.0,
+              "uppercase_ratio": 0.07,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.07,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 15.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                235,
+                889,
+                807,
+                913
+              ],
+              "text": "von Archivalien nicht in chronologischer Reihenfolge, sondern nach",
+              "glyph_height": 14.5,
+              "confidence": 92.4,
+              "uppercase_ratio": 0.03,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.04,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                234,
+                911,
+                807,
+                933
+              ],
+              "text": "der Art ihrer Anlage. Es werden zunächst die einfacheren und dann",
+              "glyph_height": 14.0,
+              "confidence": 95.5,
+              "uppercase_ratio": 0.06,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                234,
+                935,
+                565,
+                954
+              ],
+              "text": "die reicheren Portale behandelt werden.",
+              "glyph_height": 14.0,
+              "confidence": 94.8,
+              "uppercase_ratio": 0.03,
+              "word_count": 5,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                234,
+                958,
+                808,
+                980
+              ],
+              "text": "Das mit seiner mittelalterlichen Stadtmauer und seinen stattlichen",
+              "glyph_height": 14.5,
+              "confidence": 91.8,
+              "uppercase_ratio": 0.03,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.04,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 10.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                237,
+                982,
+                808,
+                1003
+              ],
+              "text": "Wehrtürmen ebenso einheitlich wie malerisch wirkende Städtchen",
+              "glyph_height": 15.0,
+              "confidence": 94.3,
+              "uppercase_ratio": 0.04,
+              "word_count": 7,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.07,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                236,
+                1004,
+                806,
+                1026
+              ],
+              "text": "Pitschen zeigt uns an seiner mittelalterlichen Backsteinkirche St. Petri",
+              "glyph_height": 15.0,
+              "confidence": 82.6,
+              "uppercase_ratio": 0.06,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.07,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                236,
+                1028,
+                807,
+                1049
+              ],
+              "text": "bzw.Nikolai die einfachste Form eines gotischen Portalsmit einer Ab-",
+              "glyph_height": 14.0,
+              "confidence": 92.7,
+              "uppercase_ratio": 0.07,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                233,
+                1052,
+                808,
+                1073
+              ],
+              "text": "treppung. Abb. 37. Es ist dem in seinem Untergeschoß aus Bruchstei-",
+              "glyph_height": 14.0,
+              "confidence": 89.3,
+              "uppercase_ratio": 0.08,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 12.2
+            },
+            {
+              "bbox": [
+                235,
+                1071,
+                806,
+                1101
+              ],
+              "text": "nen bestehenden Westturm der Kirche eingefügt. Ein mit steilen Spitz-",
+              "glyph_height": 15.5,
+              "confidence": 69.5,
+              "uppercase_ratio": 0.07,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.11,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 12.2
+            }
+          ]
+        }
+      ],
+      "line_count": 23
+    },
+    {
+      "page": 2,
+      "side": "R",
+      "x_offset": 925,
+      "width": 875,
+      "height": 1314,
+      "estimated_body_glyph_height": 14.5,
+      "regions": [
+        {
+          "id": 1,
+          "type": "paragraph",
+          "bbox": [
+            62,
+            154,
+            651,
+            944
+          ],
+          "text": "bogen gewölbtesPortalmit einer Abtreppungohneeingestellten Rund-\ndienst und ohne Markierung vor Sockel und Kämpfer, die Ecken durch\neine einfache Phase gebrochen. Die mit der Mauer bündig liegende\nEinfassung aus dem gleichen Baustoff wie das Untergeschoß des Tur-\nmes, nur aus größeren Werkstücken zusammengefügt. Werkmäßig be-\narbeitet nur in den Leibungen und an der Vorderseite. Die an das\nBruchsteinmauerwerk anstoßenden Seiten unbearbeitet.\nDie ganz schlichte architektonische Durchbildung, die fast rohe tech-\nnische Behandlung lassen zunächst auf ein hohes Alter dieses Portals\nschließen. Wie man aus den Einzelformen besonders im Innern der\nKirche auf das gleichzeitig mit ihr errichtete Portal schließen kann,\ndürfte es kaum vor dem Jahre 1300 entstanden sein. Es gehört somit\nnicht zu den ältesten steinernen Werken Oberschlesiens. Die Urkun-\nden geben über den Baubeginn der Kirche leider keinen Aufschluß.\nWenn auch reicher in der Einzeldurchbildung, so doch in der Gesamt-\nanordnung verwandt mit dem Pitschener Werk sind die Portale in\nBösdorf, Ritterswalde, Friedland OS, sowie dieChorportale\nder Pfarrkirche in Barzdorf und der Friedhofskapelle in Jauernig.\nDie beiden letzteren im Nachbargebiet der Tschechoslowakei (ehemals\nÖsterreich-Schlesien). Sie besitzen ebenfalls nur eine Abstufung. Hier\nsind aber Dienste in die einspringende Gewändedecke gestellt mit\nentsprechendem Rundstab in den Archivolten. Sockel und Kämpfer\nwerden durch besondere Gesimsung betont. Die Profilierung aller\nArchitekturteile, trotz des verwendeten Granits, von feinster Durch-\narbeitung. Besonders eigenartig die Gesimsung der Kämpfer. Sie zei-\ngen die Form der im Übergangsstil so beliebten Säulenschaftringe in\nden verschiedensten Gestaltungen. Die Sockel der Dienste mit Aus-\nnahme vom Portal in Friedland OS, das dem Sockelgesims die Form\neines lesbischen Kymas gegeben hat haben die übrigen attischen\nBasen in mittelalterlicher Umprägung. Während die Basis in Bösdorf,\nAbb. 40, noch stark an das antike Vorbild erinnert, Ritterswalde,\nAbb. 39, eine recht unbeholfene Form zeigt, hat Barzdorf, Abb. 41,\nbereits die tief unterschnittene schüsselförmige Gestaltung, die für\nlie Gotik charakteristisch ist.",
+          "line_count": 34,
+          "median_relative_size": 1.02,
+          "lines": [
+            {
+              "bbox": [
+                79,
+                154,
+                651,
+                190
+              ],
+              "text": "bogen gewölbtesPortalmit einer Abtreppungohneeingestellten Rund-",
+              "glyph_height": 28.0,
+              "confidence": 73.2,
+              "uppercase_ratio": 0.05,
+              "word_count": 5,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.93,
+              "style": "unknown"
+            },
+            {
+              "bbox": [
+                79,
+                182,
+                646,
+                209
+              ],
+              "text": "dienst und ohne Markierung vor Sockel und Kämpfer, die Ecken durch",
+              "glyph_height": 14.0,
+              "confidence": 77.3,
+              "uppercase_ratio": 0.07,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 4.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                78,
+                206,
+                647,
+                234
+              ],
+              "text": "eine einfache Phase gebrochen. Die mit der Mauer bündig liegende",
+              "glyph_height": 15.0,
+              "confidence": 95.1,
+              "uppercase_ratio": 0.06,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                78,
+                228,
+                646,
+                256
+              ],
+              "text": "Einfassung aus dem gleichen Baustoff wie das Untergeschoß des Tur-",
+              "glyph_height": 14.0,
+              "confidence": 93.5,
+              "uppercase_ratio": 0.07,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                74,
+                254,
+                646,
+                280
+              ],
+              "text": "mes, nur aus größeren Werkstücken zusammengefügt. Werkmäßig be-",
+              "glyph_height": 15.0,
+              "confidence": 90.5,
+              "uppercase_ratio": 0.04,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                76,
+                275,
+                645,
+                300
+              ],
+              "text": "arbeitet nur in den Leibungen und an der Vorderseite. Die an das",
+              "glyph_height": 14.0,
+              "confidence": 93.8,
+              "uppercase_ratio": 0.06,
+              "word_count": 12,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                77,
+                298,
+                537,
+                322
+              ],
+              "text": "Bruchsteinmauerwerk anstoßenden Seiten unbearbeitet.",
+              "glyph_height": 15.5,
+              "confidence": 92.2,
+              "uppercase_ratio": 0.04,
+              "word_count": 4,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.07,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                76,
+                321,
+                643,
+                347
+              ],
+              "text": "Die ganz schlichte architektonische Durchbildung, die fast rohe tech-",
+              "glyph_height": 14.0,
+              "confidence": 94.3,
+              "uppercase_ratio": 0.03,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                75,
+                345,
+                643,
+                378
+              ],
+              "text": "nische Behandlung lassen zunächst auf ein hohes Alter dieses Portals",
+              "glyph_height": 14.5,
+              "confidence": 94.9,
+              "uppercase_ratio": 0.05,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                74,
+                364,
+                643,
+                396
+              ],
+              "text": "schließen. Wie man aus den Einzelformen besonders im Innern der",
+              "glyph_height": 14.0,
+              "confidence": 95.1,
+              "uppercase_ratio": 0.06,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 4.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                75,
+                391,
+                642,
+                416
+              ],
+              "text": "Kirche auf das gleichzeitig mit ihr errichtete Portal schließen kann,",
+              "glyph_height": 14.0,
+              "confidence": 94.8,
+              "uppercase_ratio": 0.03,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                73,
+                414,
+                641,
+                442
+              ],
+              "text": "dürfte es kaum vor dem Jahre 1300 entstanden sein. Es gehört somit",
+              "glyph_height": 14.0,
+              "confidence": 95.1,
+              "uppercase_ratio": 0.04,
+              "word_count": 12,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                73,
+                438,
+                641,
+                462
+              ],
+              "text": "nicht zu den ältesten steinernen Werken Oberschlesiens. Die Urkun-",
+              "glyph_height": 14.0,
+              "confidence": 92.9,
+              "uppercase_ratio": 0.07,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                71,
+                461,
+                621,
+                494
+              ],
+              "text": "den geben über den Baubeginn der Kirche leider keinen Aufschluß.",
+              "glyph_height": 15.0,
+              "confidence": 94.1,
+              "uppercase_ratio": 0.06,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                72,
+                484,
+                639,
+                509
+              ],
+              "text": "Wenn auch reicher in der Einzeldurchbildung, so doch in der Gesamt-",
+              "glyph_height": 14.0,
+              "confidence": 93.5,
+              "uppercase_ratio": 0.05,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                70,
+                508,
+                638,
+                531
+              ],
+              "text": "anordnung verwandt mit dem Pitschener Werk sind die Portale in",
+              "glyph_height": 14.0,
+              "confidence": 93.7,
+              "uppercase_ratio": 0.06,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                71,
+                527,
+                639,
+                558
+              ],
+              "text": "Bösdorf, Ritterswalde, Friedland OS, sowie dieChorportale",
+              "glyph_height": 16.0,
+              "confidence": 74.0,
+              "uppercase_ratio": 0.12,
+              "word_count": 6,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.1,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                69,
+                553,
+                638,
+                582
+              ],
+              "text": "der Pfarrkirche in Barzdorf und der Friedhofskapelle in Jauernig.",
+              "glyph_height": 15.0,
+              "confidence": 93.8,
+              "uppercase_ratio": 0.07,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                70,
+                577,
+                637,
+                604
+              ],
+              "text": "Die beiden letzteren im Nachbargebiet der Tschechoslowakei (ehemals",
+              "glyph_height": 15.0,
+              "confidence": 78.0,
+              "uppercase_ratio": 0.05,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 4.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                68,
+                599,
+                638,
+                627
+              ],
+              "text": "Österreich-Schlesien). Sie besitzen ebenfalls nur eine Abstufung. Hier",
+              "glyph_height": 14.5,
+              "confidence": 93.1,
+              "uppercase_ratio": 0.08,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                68,
+                624,
+                637,
+                650
+              ],
+              "text": "sind aber Dienste in die einspringende Gewändedecke gestellt mit",
+              "glyph_height": 15.0,
+              "confidence": 93.9,
+              "uppercase_ratio": 0.04,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                68,
+                648,
+                636,
+                679
+              ],
+              "text": "entsprechendem Rundstab in den Archivolten. Sockel und Kämpfer",
+              "glyph_height": 15.0,
+              "confidence": 91.4,
+              "uppercase_ratio": 0.07,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                67,
+                671,
+                636,
+                697
+              ],
+              "text": "werden durch besondere Gesimsung betont. Die Profilierung aller",
+              "glyph_height": 14.5,
+              "confidence": 86.8,
+              "uppercase_ratio": 0.05,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                67,
+                694,
+                635,
+                717
+              ],
+              "text": "Architekturteile, trotz des verwendeten Granits, von feinster Durch-",
+              "glyph_height": 15.0,
+              "confidence": 90.0,
+              "uppercase_ratio": 0.05,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                65,
+                712,
+                634,
+                747
+              ],
+              "text": "arbeitung. Besonders eigenartig die Gesimsung der Kämpfer. Sie zei-",
+              "glyph_height": 17.0,
+              "confidence": 92.1,
+              "uppercase_ratio": 0.07,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.17,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                66,
+                740,
+                633,
+                767
+              ],
+              "text": "gen die Form der im Übergangsstil so beliebten Säulenschaftringe in",
+              "glyph_height": 14.0,
+              "confidence": 93.7,
+              "uppercase_ratio": 0.05,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                64,
+                758,
+                634,
+                790
+              ],
+              "text": "den verschiedensten Gestaltungen. Die Sockel der Dienste mit Aus-",
+              "glyph_height": 15.0,
+              "confidence": 89.1,
+              "uppercase_ratio": 0.09,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                65,
+                786,
+                633,
+                811
+              ],
+              "text": "nahme vom Portal in Friedland OS, das dem Sockelgesims die Form",
+              "glyph_height": 14.0,
+              "confidence": 95.1,
+              "uppercase_ratio": 0.12,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                63,
+                810,
+                633,
+                835
+              ],
+              "text": "eines lesbischen Kymas gegeben hat haben die übrigen attischen",
+              "glyph_height": 14.0,
+              "confidence": 82.1,
+              "uppercase_ratio": 0.02,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                64,
+                828,
+                632,
+                862
+              ],
+              "text": "Basen in mittelalterlicher Umprägung. Während die Basis in Bösdorf,",
+              "glyph_height": 15.0,
+              "confidence": 88.9,
+              "uppercase_ratio": 0.09,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                62,
+                856,
+                631,
+                887
+              ],
+              "text": "Abb. 40, noch stark an das antike Vorbild erinnert, Ritterswalde,",
+              "glyph_height": 14.0,
+              "confidence": 94.8,
+              "uppercase_ratio": 0.06,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                62,
+                879,
+                631,
+                905
+              ],
+              "text": "Abb. 39, eine recht unbeholfene Form zeigt, hat Barzdorf, Abb. 41,",
+              "glyph_height": 15.0,
+              "confidence": 79.6,
+              "uppercase_ratio": 0.09,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                62,
+                901,
+                631,
+                927
+              ],
+              "text": "bereits die tief unterschnittene schüsselförmige Gestaltung, die für",
+              "glyph_height": 15.0,
+              "confidence": 94.0,
+              "uppercase_ratio": 0.02,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                62,
+                925,
+                305,
+                944
+              ],
+              "text": "lie Gotik charakteristisch ist.",
+              "glyph_height": 15.0,
+              "confidence": 89.2,
+              "uppercase_ratio": 0.04,
+              "word_count": 4,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "paragraph",
+          "bbox": [
+            62,
+            948,
+            629,
+            997
+          ],
+          "text": "DieDurcbildung der Gewändeprofilierung, bei der der Rundstab und\nlie aus dem Viertelkreis gebildete Hohlkehle überwiegen, die Ge-",
+          "line_count": 2,
+          "median_relative_size": 1.0,
+          "lines": [
+            {
+              "bbox": [
+                62,
+                948,
+                629,
+                972
+              ],
+              "text": "DieDurcbildung der Gewändeprofilierung, bei der der Rundstab und",
+              "glyph_height": 14.0,
+              "confidence": 83.6,
+              "uppercase_ratio": 0.07,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 10.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                62,
+                971,
+                629,
+                997
+              ],
+              "text": "lie aus dem Viertelkreis gebildete Hohlkehle überwiegen, die Ge-",
+              "glyph_height": 15.0,
+              "confidence": 92.6,
+              "uppercase_ratio": 0.06,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 8.8
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "paragraph",
+          "bbox": [
+            62,
+            996,
+            628,
+            1114
+          ],
+          "text": "imsung von Sockel und Kämpfer kennzeichnen die Portale als früh-\nzotisch. Sie liegen zeitlich in der zweiten Hälfte des 13. Jahrhunderts\nind gehören damit zu den ältesten monumentalen Zeugen des Landes.\ndie Portalanlage der ehemaligen Zisterzienser-KlosterkircheSt. Mariä\nu Rauden OS gehört mit den Portalen in Ziegenhals, Münsterberg,",
+          "line_count": 5,
+          "median_relative_size": 1.0,
+          "lines": [
+            {
+              "bbox": [
+                62,
+                996,
+                628,
+                1017
+              ],
+              "text": "imsung von Sockel und Kämpfer kennzeichnen die Portale als früh-",
+              "glyph_height": 14.5,
+              "confidence": 90.5,
+              "uppercase_ratio": 0.06,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                62,
+                1019,
+                628,
+                1042
+              ],
+              "text": "zotisch. Sie liegen zeitlich in der zweiten Hälfte des 13. Jahrhunderts",
+              "glyph_height": 14.0,
+              "confidence": 93.9,
+              "uppercase_ratio": 0.05,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                63,
+                1042,
+                628,
+                1071
+              ],
+              "text": "ind gehören damit zu den ältesten monumentalen Zeugen des Landes.",
+              "glyph_height": 14.5,
+              "confidence": 94.9,
+              "uppercase_ratio": 0.04,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                62,
+                1063,
+                627,
+                1093
+              ],
+              "text": "die Portalanlage der ehemaligen Zisterzienser-KlosterkircheSt. Mariä",
+              "glyph_height": 19.5,
+              "confidence": 68.0,
+              "uppercase_ratio": 0.08,
+              "word_count": 6,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.34,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 8.8
+            },
+            {
+              "bbox": [
+                62,
+                1088,
+                627,
+                1114
+              ],
+              "text": "u Rauden OS gehört mit den Portalen in Ziegenhals, Münsterberg,",
+              "glyph_height": 14.0,
+              "confidence": 85.5,
+              "uppercase_ratio": 0.12,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 8.8
+            }
+          ]
+        }
+      ],
+      "line_count": 41
+    }
+  ]
+}

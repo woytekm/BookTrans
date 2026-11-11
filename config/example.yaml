@@ -1,0 +1,22 @@
+# Planned configuration structure; not yet consumed by the prototype scripts.
+input:
+  languages: [deu]
+  spread_mode: auto
+
+translation:
+  endpoint: http://127.0.0.1:8000/translate
+  source_language: de
+  target_language: pl
+  # prompt_template: config/translation_prompt.txt
+
+typography:
+  body:
+    font_file: fonts/EBGaramond-Regular.ttf
+  heading:
+    font_file: fonts/EBGaramond-SemiBold.ttf
+  caption:
+    font_file: fonts/EBGaramond-Regular.ttf
+
+rendering:
+  output_format: pdf
+  preserve_original_illustrations: true

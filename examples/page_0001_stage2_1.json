@@ -1,0 +1,1468 @@
+{
+  "schema_version": "0.2.1",
+  "source_file": "/mnt/data/0001.tif",
+  "pages": [
+    {
+      "page": 1,
+      "side": "L",
+      "x_offset": 0,
+      "width": 925,
+      "height": 1315,
+      "estimated_body_glyph_height": 14.0,
+      "regions": [
+        {
+          "bbox": [
+            242,
+            146,
+            523,
+            575
+          ],
+          "type": "illustration",
+          "id": 1
+        },
+        {
+          "id": 2,
+          "type": "caption",
+          "bbox": [
+            532,
+            552,
+            632,
+            560
+          ],
+          "text": "37 PITSCHEN O8",
+          "line_count": 1,
+          "median_relative_size": 0.57,
+          "lines": [
+            {
+              "bbox": [
+                532,
+                552,
+                632,
+                560
+              ],
+              "text": "37 PITSCHEN O8",
+              "glyph_height": 8.0,
+              "confidence": 73.0,
+              "uppercase_ratio": 1.0,
+              "word_count": 3,
+              "caption_band_candidate": true,
+              "type": "caption_line",
+              "classification_reason": "OCR from illustration caption band",
+              "classification_confidence": 0.72,
+              "relative_size": 0.57,
+              "style": "unknown"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "author_byline_candidate",
+          "bbox": [
+            533,
+            566,
+            794,
+            575
+          ],
+          "text": "PORTAL DER EVANGELISCHEN PFARRKIRCHE",
+          "line_count": 1,
+          "median_relative_size": 0.61,
+          "lines": [
+            {
+              "bbox": [
+                533,
+                566,
+                794,
+                575
+              ],
+              "text": "PORTAL DER EVANGELISCHEN PFARRKIRCHE",
+              "glyph_height": 8.5,
+              "confidence": 88.2,
+              "uppercase_ratio": 1.0,
+              "word_count": 4,
+              "caption_band_candidate": true,
+              "type": "author_byline_candidate",
+              "classification_reason": "right-aligned line immediately before heading",
+              "classification_confidence": 0.72,
+              "relative_size": 0.61,
+              "style": "unknown"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "author_byline_candidate",
+          "bbox": [
+            643,
+            617,
+            808,
+            630
+          ],
+          "text": "FRANZ BOROWSKI",
+          "line_count": 1,
+          "median_relative_size": 0.93,
+          "lines": [
+            {
+              "bbox": [
+                643,
+                617,
+                808,
+                630
+              ],
+              "text": "FRANZ BOROWSKI",
+              "glyph_height": 13.0,
+              "confidence": 92.5,
+              "uppercase_ratio": 1.0,
+              "word_count": 2,
+              "type": "author_byline_candidate",
+              "classification_reason": "right-aligned line immediately before heading",
+              "classification_confidence": 0.72,
+              "relative_size": 0.93,
+              "style": "unknown"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "heading",
+          "bbox": [
+            239,
+            638,
+            651,
+            676
+          ],
+          "text": "MITTELALTERLICHE KIRCHENPORTALE\nIN OBERSCHLESIEN",
+          "line_count": 2,
+          "median_relative_size": 1.06,
+          "lines": [
+            {
+              "bbox": [
+                239,
+                638,
+                651,
+                655
+              ],
+              "text": "MITTELALTERLICHE KIRCHENPORTALE",
+              "glyph_height": 15.5,
+              "confidence": 91.5,
+              "uppercase_ratio": 1.0,
+              "word_count": 2,
+              "type": "heading_line",
+              "classification_reason": "predominantly uppercase",
+              "classification_confidence": 0.84,
+              "relative_size": 1.11,
+              "style": "unknown"
+            },
+            {
+              "bbox": [
+                239,
+                661,
+                445,
+                676
+              ],
+              "text": "IN OBERSCHLESIEN",
+              "glyph_height": 14.0,
+              "confidence": 81.0,
+              "uppercase_ratio": 1.0,
+              "word_count": 2,
+              "type": "heading_line",
+              "classification_reason": "predominantly uppercase",
+              "classification_confidence": 0.84,
+              "relative_size": 1.0,
+              "style": "unknown"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "paragraph",
+          "bbox": [
+            237,
+            708,
+            812,
+            1098
+          ],
+          "text": "Den politischen und sozialen Verhältnissen ist es wohl zumeist zuzu-\nschreiben, daß Oberschlesien nicht reich an monumentalen Werken\ndes frühen Mittelalters ist. Leider ist nun auch das Wenige, was wir\naus jener frühen Zeit besitzen, - es handelt sich im wesentlichen um\nKirchen —, vielfach durch nachträgliche Um- und Erweiterungsbauten\nbesonders in neuerer Zeit so enistellt, daß der ursprüngliche Zustand\nschwer festgestellt werden kann.\nOhne Abschlagen des Putzes, Entfernen des neueren Mauerwerks und\nanderer kostspieliger Vorbereitungsarbeiten ist der alte Zustand, be-\nsondersderaufschlußreichen konstruktiven Einzelheiten desursprüng-\nlichen Bestandes, oft nichtmehr zu ermitteln.\nDie ältesten auf uns gekommenen Werke gehören der zweiten Hälfte\ndes 13. Jahrhunderts an, für oberschlesisches Gebiet die Epoche der\nbeginnenden Gotik. Reine romanische Baudenkmäler, wie wir sie in\nNiederschlesien, wenigstens in Überzesten noch häufig antreffen, sind\nmir nicht bekannt. Diese frühen Werke sind aus Backstein und auch\naus Bruchsteinen errichtet unter Verwendung von Werk- und Form-",
+          "line_count": 17,
+          "median_relative_size": 1.0,
+          "lines": [
+            {
+              "bbox": [
+                239,
+                708,
+                810,
+                725
+              ],
+              "text": "Den politischen und sozialen Verhältnissen ist es wohl zumeist zuzu-",
+              "glyph_height": 13.0,
+              "confidence": 95.4,
+              "uppercase_ratio": 0.03,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.93,
+              "style": "unknown"
+            },
+            {
+              "bbox": [
+                239,
+                730,
+                811,
+                748
+              ],
+              "text": "schreiben, daß Oberschlesien nicht reich an monumentalen Werken",
+              "glyph_height": 14.0,
+              "confidence": 93.1,
+              "uppercase_ratio": 0.04,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                238,
+                754,
+                811,
+                775
+              ],
+              "text": "des frühen Mittelalters ist. Leider ist nun auch das Wenige, was wir",
+              "glyph_height": 14.0,
+              "confidence": 93.6,
+              "uppercase_ratio": 0.05,
+              "word_count": 12,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                237,
+                768,
+                812,
+                803
+              ],
+              "text": "aus jener frühen Zeit besitzen, - es handelt sich im wesentlichen um",
+              "glyph_height": 14.0,
+              "confidence": 90.2,
+              "uppercase_ratio": 0.02,
+              "word_count": 12,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 10.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                238,
+                799,
+                810,
+                822
+              ],
+              "text": "Kirchen —, vielfach durch nachträgliche Um- und Erweiterungsbauten",
+              "glyph_height": 14.0,
+              "confidence": 92.9,
+              "uppercase_ratio": 0.05,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                238,
+                823,
+                809,
+                844
+              ],
+              "text": "besonders in neuerer Zeit so enistellt, daß der ursprüngliche Zustand",
+              "glyph_height": 14.0,
+              "confidence": 92.6,
+              "uppercase_ratio": 0.03,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                239,
+                846,
+                507,
+                864
+              ],
+              "text": "schwer festgestellt werden kann.",
+              "glyph_height": 14.5,
+              "confidence": 92.2,
+              "uppercase_ratio": 0.0,
+              "word_count": 4,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.04,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 11.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                239,
+                869,
+                809,
+                887
+              ],
+              "text": "Ohne Abschlagen des Putzes, Entfernen des neueren Mauerwerks und",
+              "glyph_height": 14.0,
+              "confidence": 93.0,
+              "uppercase_ratio": 0.09,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 12.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                238,
+                892,
+                811,
+                912
+              ],
+              "text": "anderer kostspieliger Vorbereitungsarbeiten ist der alte Zustand, be-",
+              "glyph_height": 14.0,
+              "confidence": 86.6,
+              "uppercase_ratio": 0.03,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 10.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                237,
+                915,
+                812,
+                936
+              ],
+              "text": "sondersderaufschlußreichen konstruktiven Einzelheiten desursprüng-",
+              "glyph_height": 15.0,
+              "confidence": 88.2,
+              "uppercase_ratio": 0.02,
+              "word_count": 4,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.07,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                238,
+                938,
+                603,
+                955
+              ],
+              "text": "lichen Bestandes, oft nichtmehr zu ermitteln.",
+              "glyph_height": 14.0,
+              "confidence": 90.8,
+              "uppercase_ratio": 0.03,
+              "word_count": 6,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                238,
+                962,
+                811,
+                982
+              ],
+              "text": "Die ältesten auf uns gekommenen Werke gehören der zweiten Hälfte",
+              "glyph_height": 14.0,
+              "confidence": 94.7,
+              "uppercase_ratio": 0.05,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 11.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                238,
+                986,
+                808,
+                1006
+              ],
+              "text": "des 13. Jahrhunderts an, für oberschlesisches Gebiet die Epoche der",
+              "glyph_height": 14.0,
+              "confidence": 91.6,
+              "uppercase_ratio": 0.06,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 10.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                238,
+                1009,
+                810,
+                1028
+              ],
+              "text": "beginnenden Gotik. Reine romanische Baudenkmäler, wie wir sie in",
+              "glyph_height": 14.0,
+              "confidence": 96.0,
+              "uppercase_ratio": 0.06,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                238,
+                1032,
+                810,
+                1052
+              ],
+              "text": "Niederschlesien, wenigstens in Überzesten noch häufig antreffen, sind",
+              "glyph_height": 14.5,
+              "confidence": 84.8,
+              "uppercase_ratio": 0.03,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.04,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 10.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                238,
+                1055,
+                811,
+                1072
+              ],
+              "text": "mir nicht bekannt. Diese frühen Werke sind aus Backstein und auch",
+              "glyph_height": 14.0,
+              "confidence": 92.5,
+              "uppercase_ratio": 0.06,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 12.8
+            },
+            {
+              "bbox": [
+                239,
+                1078,
+                812,
+                1098
+              ],
+              "text": "aus Bruchsteinen errichtet unter Verwendung von Werk- und Form-",
+              "glyph_height": 14.0,
+              "confidence": 91.6,
+              "uppercase_ratio": 0.08,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 11.0,
+              "paragraph_gap_threshold": 12.8
+            }
+          ]
+        }
+      ],
+      "line_count": 22
+    },
+    {
+      "page": 2,
+      "side": "R",
+      "x_offset": 925,
+      "width": 875,
+      "height": 1315,
+      "estimated_body_glyph_height": 14.5,
+      "regions": [
+        {
+          "id": 1,
+          "type": "paragraph",
+          "bbox": [
+            65,
+            154,
+            638,
+            379
+          ],
+          "text": "steinen für die Architekturformen. Vom Werkstein wurde dabei mehr\nGebrauch gemacht als von den Ziegelformsteinen, denn wir belinden\nuns in Oberschlesien nicht im reinen Backsteingebiet, wie z. B.in der\nProvinz Brandenburg oder in Oberitalien, sondern in einem Gebiet,\nwo außer den Granitfindlingen auch vielfach gewachsener Stein (Gra-\nnit, Kalk und Sandstein) anzutreffen ist. So wurden auch bei\nsteinkirchen aus Werkstein hergestellt die Sockel, die Binfassung der\nGebäudeecken, die Fenster- und Türeinrahmungen, vor allem aber\nfand er ausgiebigste Verwendung bei den Haupteineängen der Kir-\nchen, den Portalen.",
+          "line_count": 10,
+          "median_relative_size": 0.98,
+          "lines": [
+            {
+              "bbox": [
+                67,
+                154,
+                638,
+                179
+              ],
+              "text": "steinen für die Architekturformen. Vom Werkstein wurde dabei mehr",
+              "glyph_height": 15.0,
+              "confidence": 91.0,
+              "uppercase_ratio": 0.05,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown"
+            },
+            {
+              "bbox": [
+                68,
+                177,
+                637,
+                202
+              ],
+              "text": "Gebrauch gemacht als von den Ziegelformsteinen, denn wir belinden",
+              "glyph_height": 14.0,
+              "confidence": 88.3,
+              "uppercase_ratio": 0.04,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                67,
+                201,
+                637,
+                226
+              ],
+              "text": "uns in Oberschlesien nicht im reinen Backsteingebiet, wie z. B.in der",
+              "glyph_height": 14.0,
+              "confidence": 90.3,
+              "uppercase_ratio": 0.05,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                67,
+                223,
+                636,
+                250
+              ],
+              "text": "Provinz Brandenburg oder in Oberitalien, sondern in einem Gebiet,",
+              "glyph_height": 15.0,
+              "confidence": 93.1,
+              "uppercase_ratio": 0.07,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                66,
+                247,
+                636,
+                274
+              ],
+              "text": "wo außer den Granitfindlingen auch vielfach gewachsener Stein (Gra-",
+              "glyph_height": 14.0,
+              "confidence": 84.8,
+              "uppercase_ratio": 0.05,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 4.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                67,
+                270,
+                581,
+                294
+              ],
+              "text": "nit, Kalk und Sandstein) anzutreffen ist. So wurden auch bei",
+              "glyph_height": 14.0,
+              "confidence": 89.9,
+              "uppercase_ratio": 0.06,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                65,
+                293,
+                635,
+                322
+              ],
+              "text": "steinkirchen aus Werkstein hergestellt die Sockel, die Binfassung der",
+              "glyph_height": 15.0,
+              "confidence": 85.1,
+              "uppercase_ratio": 0.05,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                66,
+                315,
+                635,
+                342
+              ],
+              "text": "Gebäudeecken, die Fenster- und Türeinrahmungen, vor allem aber",
+              "glyph_height": 14.5,
+              "confidence": 93.4,
+              "uppercase_ratio": 0.06,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                65,
+                339,
+                634,
+                366
+              ],
+              "text": "fand er ausgiebigste Verwendung bei den Haupteineängen der Kir-",
+              "glyph_height": 14.0,
+              "confidence": 90.0,
+              "uppercase_ratio": 0.06,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                65,
+                362,
+                221,
+                379
+              ],
+              "text": "chen, den Portalen.",
+              "glyph_height": 15.0,
+              "confidence": 80.3,
+              "uppercase_ratio": 0.07,
+              "word_count": 3,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 9.5
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "paragraph",
+          "bbox": [
+            62,
+            386,
+            633,
+            571
+          ],
+          "text": "Es ist nun ein glücklicher Umstand, daß an vielen Baudenkmälern\nOberschlesiens die mittelalterlichen Portale erhalten sind, selbst an\nden Werken, wie unter anderem in Ziegenhals, Ritterswalde, Bösdorf,\nFriedland OS, an denen sonst so gut wie nichts mehr aus der frühen\nZeit vorhanden ist. Sie bildeten meist den am reichsten durcheebil-\ndeten Bauteil der Kirche. Aus ihnen können wir daher das technische\nund künstlerische Können, die Eigenart der Baustoffbehandlung und\ndie Formensprache der Zeit recht gut ablesen.",
+          "line_count": 8,
+          "median_relative_size": 1.03,
+          "lines": [
+            {
+              "bbox": [
+                65,
+                386,
+                633,
+                411
+              ],
+              "text": "Es ist nun ein glücklicher Umstand, daß an vielen Baudenkmälern",
+              "glyph_height": 14.0,
+              "confidence": 92.0,
+              "uppercase_ratio": 0.06,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 13.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                64,
+                409,
+                632,
+                435
+              ],
+              "text": "Oberschlesiens die mittelalterlichen Portale erhalten sind, selbst an",
+              "glyph_height": 15.0,
+              "confidence": 90.9,
+              "uppercase_ratio": 0.03,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 4.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                64,
+                432,
+                632,
+                458
+              ],
+              "text": "den Werken, wie unter anderem in Ziegenhals, Ritterswalde, Bösdorf,",
+              "glyph_height": 15.0,
+              "confidence": 88.9,
+              "uppercase_ratio": 0.07,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                64,
+                455,
+                632,
+                480
+              ],
+              "text": "Friedland OS, an denen sonst so gut wie nichts mehr aus der frühen",
+              "glyph_height": 14.0,
+              "confidence": 94.6,
+              "uppercase_ratio": 0.06,
+              "word_count": 13,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 0.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                63,
+                478,
+                631,
+                506
+              ],
+              "text": "Zeit vorhanden ist. Sie bildeten meist den am reichsten durcheebil-",
+              "glyph_height": 14.0,
+              "confidence": 91.7,
+              "uppercase_ratio": 0.04,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                63,
+                501,
+                631,
+                526
+              ],
+              "text": "deten Bauteil der Kirche. Aus ihnen können wir daher das technische",
+              "glyph_height": 15.0,
+              "confidence": 94.1,
+              "uppercase_ratio": 0.05,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 4.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                525,
+                630,
+                552
+              ],
+              "text": "und künstlerische Können, die Eigenart der Baustoffbehandlung und",
+              "glyph_height": 15.0,
+              "confidence": 85.0,
+              "uppercase_ratio": 0.05,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 4.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                547,
+                442,
+                571
+              ],
+              "text": "die Formensprache der Zeit recht gut ablesen.",
+              "glyph_height": 15.0,
+              "confidence": 94.4,
+              "uppercase_ratio": 0.05,
+              "word_count": 7,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 9.5
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "paragraph",
+          "bbox": [
+            62,
+            570,
+            630,
+            657
+          ],
+          "text": "Da von dem Holzbau eine bauliche Kultur im Lande nicht\nvorhanden war, ist ein Anschluß an fortgeschrittenere Nachbargebiete\nVoraussetzung. Für Niederschlesien ist diese Frage im wesentlichen\nzeklärt.",
+          "line_count": 4,
+          "median_relative_size": 1.0,
+          "lines": [
+            {
+              "bbox": [
+                62,
+                570,
+                630,
+                596
+              ],
+              "text": "Da von dem Holzbau eine bauliche Kultur im Lande nicht",
+              "glyph_height": 14.5,
+              "confidence": 93.4,
+              "uppercase_ratio": 0.09,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 10.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                594,
+                629,
+                621
+              ],
+              "text": "vorhanden war, ist ein Anschluß an fortgeschrittenere Nachbargebiete",
+              "glyph_height": 13.5,
+              "confidence": 85.4,
+              "uppercase_ratio": 0.03,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.93,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                617,
+                628,
+                642
+              ],
+              "text": "Voraussetzung. Für Niederschlesien ist diese Frage im wesentlichen",
+              "glyph_height": 14.5,
+              "confidence": 95.8,
+              "uppercase_ratio": 0.07,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                640,
+                124,
+                657
+              ],
+              "text": "zeklärt.",
+              "glyph_height": 17.0,
+              "confidence": 64.0,
+              "uppercase_ratio": 0.0,
+              "word_count": 1,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.17,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 9.5
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "paragraph",
+          "bbox": [
+            62,
+            663,
+            628,
+            1057
+          ],
+          "text": "Außer den Zisterziensern, die meist aus Frankreich kamen, stammten\nlie Deutschen, welche die Piasten zur Besiedelung ihrer in Nieder.\n‚chlesien liegenden Fürstentümern herbeiriefen, meist aus Thüringen,\nSachsen und Franken. Der Kulturstrom, der nach Oberschlesien ein.\nIrang, kam aber nicht nur aus den oben genannten Gebieten, son-\nlern, wie wir an den Denkmälern feststellen werden, auch aus Süd.\nvesten, aus Niederösterreich, Mähren, Böhmen und auch aus Ungarn,\nvon denen es auch abwechselnd mit Polen politisch abhängig\nvar. Wobei zu beachten ist, daß diese Länder ebenfalls Kolonialge-\niete waren, Pflanzstätten westlicher Kultur, und zwar im wesentli-\nhen befruchtet von Süddeutschland, sowie von Frankreich\nda in der vorliegenden Studie, welche die mittelalterlichen Kirchen-\nortale von 1250-1350 behandelt, die stilistische Zusammengehörig-\neit der Denkmäler - ein möglichst geschlossener\nelt werden soll, ist es selbstverständlich, daß an den heutigen poli-\nschen Grenzen Oberschlesiens nicht Halt gemacht werden konnte,\nondern daß auch die Randzonen der Nachbargebiete (Niederschlesien",
+          "line_count": 17,
+          "median_relative_size": 1.0,
+          "lines": [
+            {
+              "bbox": [
+                62,
+                663,
+                627,
+                688
+              ],
+              "text": "Außer den Zisterziensern, die meist aus Frankreich kamen, stammten",
+              "glyph_height": 15.0,
+              "confidence": 93.1,
+              "uppercase_ratio": 0.05,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": true,
+              "paragraph_gap": 23.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                686,
+                628,
+                711
+              ],
+              "text": "lie Deutschen, welche die Piasten zur Besiedelung ihrer in Nieder.",
+              "glyph_height": 14.5,
+              "confidence": 86.1,
+              "uppercase_ratio": 0.07,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                710,
+                627,
+                737
+              ],
+              "text": "‚chlesien liegenden Fürstentümern herbeiriefen, meist aus Thüringen,",
+              "glyph_height": 16.0,
+              "confidence": 55.9,
+              "uppercase_ratio": 0.03,
+              "word_count": 7,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.1,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                733,
+                627,
+                757
+              ],
+              "text": "Sachsen und Franken. Der Kulturstrom, der nach Oberschlesien ein.",
+              "glyph_height": 15.0,
+              "confidence": 84.0,
+              "uppercase_ratio": 0.09,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                757,
+                626,
+                782
+              ],
+              "text": "Irang, kam aber nicht nur aus den oben genannten Gebieten, son-",
+              "glyph_height": 14.0,
+              "confidence": 94.0,
+              "uppercase_ratio": 0.04,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 9.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                63,
+                780,
+                626,
+                803
+              ],
+              "text": "lern, wie wir an den Denkmälern feststellen werden, auch aus Süd.",
+              "glyph_height": 14.0,
+              "confidence": 81.7,
+              "uppercase_ratio": 0.04,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                806,
+                626,
+                829
+              ],
+              "text": "vesten, aus Niederösterreich, Mähren, Böhmen und auch aus Ungarn,",
+              "glyph_height": 14.0,
+              "confidence": 92.7,
+              "uppercase_ratio": 0.08,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                131,
+                829,
+                626,
+                853
+              ],
+              "text": "von denen es auch abwechselnd mit Polen politisch abhängig",
+              "glyph_height": 14.0,
+              "confidence": 87.9,
+              "uppercase_ratio": 0.02,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                851,
+                625,
+                876
+              ],
+              "text": "var. Wobei zu beachten ist, daß diese Länder ebenfalls Kolonialge-",
+              "glyph_height": 14.0,
+              "confidence": 89.3,
+              "uppercase_ratio": 0.06,
+              "word_count": 10,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 6.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                874,
+                624,
+                895
+              ],
+              "text": "iete waren, Pflanzstätten westlicher Kultur, und zwar im wesentli-",
+              "glyph_height": 14.0,
+              "confidence": 90.4,
+              "uppercase_ratio": 0.04,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                889,
+                523,
+                924
+              ],
+              "text": "hen befruchtet von Süddeutschland, sowie von Frankreich",
+              "glyph_height": 15.0,
+              "confidence": 80.6,
+              "uppercase_ratio": 0.04,
+              "word_count": 7,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                920,
+                624,
+                942
+              ],
+              "text": "da in der vorliegenden Studie, welche die mittelalterlichen Kirchen-",
+              "glyph_height": 15.0,
+              "confidence": 89.4,
+              "uppercase_ratio": 0.03,
+              "word_count": 9,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                944,
+                625,
+                973
+              ],
+              "text": "ortale von 1250-1350 behandelt, die stilistische Zusammengehörig-",
+              "glyph_height": 14.0,
+              "confidence": 88.7,
+              "uppercase_ratio": 0.02,
+              "word_count": 7,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 8.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                966,
+                454,
+                987
+              ],
+              "text": "eit der Denkmäler - ein möglichst geschlossener",
+              "glyph_height": 15.0,
+              "confidence": 89.7,
+              "uppercase_ratio": 0.03,
+              "word_count": 7,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                989,
+                623,
+                1015
+              ],
+              "text": "elt werden soll, ist es selbstverständlich, daß an den heutigen poli-",
+              "glyph_height": 14.0,
+              "confidence": 93.7,
+              "uppercase_ratio": 0.0,
+              "word_count": 11,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 0.97,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                1012,
+                622,
+                1038
+              ],
+              "text": "schen Grenzen Oberschlesiens nicht Halt gemacht werden konnte,",
+              "glyph_height": 15.0,
+              "confidence": 86.0,
+              "uppercase_ratio": 0.06,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.03,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 7.0,
+              "paragraph_gap_threshold": 9.5
+            },
+            {
+              "bbox": [
+                62,
+                1035,
+                621,
+                1057
+              ],
+              "text": "ondern daß auch die Randzonen der Nachbargebiete (Niederschlesien",
+              "glyph_height": 14.5,
+              "confidence": 80.4,
+              "uppercase_ratio": 0.05,
+              "word_count": 8,
+              "type": "body_line",
+              "classification_reason": "default text line",
+              "classification_confidence": 0.65,
+              "relative_size": 1.0,
+              "style": "unknown",
+              "paragraph_break": false,
+              "paragraph_gap": 5.0,
+              "paragraph_gap_threshold": 9.5
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "footnote_or_footer",
+          "bbox": [
+            62,
+            1085,
+            601,
+            1104
+          ],
+          "text": "Siehe deutsche und französische Kunst im Mittelalter von Richard Hamann II. 1923,",
+          "line_count": 1,
+          "median_relative_size": 0.79,
+          "lines": [
+            {
+              "bbox": [
+                62,
+                1085,
+                601,
+                1104
+              ],
+              "text": "Siehe deutsche und französische Kunst im Mittelalter von Richard Hamann II. 1923,",
+              "glyph_height": 11.5,
+              "confidence": 92.7,
+              "uppercase_ratio": 0.11,
+              "word_count": 12,
+              "type": "footnote_or_footer",
+              "classification_reason": "small text near bottom margin",
+              "classification_confidence": 0.78,
+              "relative_size": 0.79,
+              "style": "unknown"
+            }
+          ]
+        }
+      ],
+      "line_count": 40
+    }
+  ]
+}
