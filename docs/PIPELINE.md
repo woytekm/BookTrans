@@ -11,7 +11,8 @@ This document distinguishes the intended pipeline from the currently implemented
 5. Run Tesseract on text crops.
 6. In Stage 2, retain OCR lines with page-local bounding boxes, text, confidence and glyph-height estimates.
 7. Classify lines heuristically (body, heading, caption, footer/byline candidates).
-8. Infer paragraph boundaries using horizontal ink bands measured on the original scan.
+8. Infer paragraph boundaries per text column of the page (short last line, indent, spacing; never after a hyphen).
+8a. Stage 4: link paragraphs across page/spread breaks, dehyphenate, build translation units.
 9. Serialize page/region/line information to JSON and draw a diagnostic overlay.
 
 ## Intended full flow

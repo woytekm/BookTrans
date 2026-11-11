@@ -89,6 +89,26 @@
   hyphenated words. Stage 2 schema_version is now 0.3.0.
 - Tests: `tests/test_paragraphs.py`.
 
+### Cross-page links and translation units (Stage 4)
+
+- New `src/booktrans/stage4.py`: reads Stage 3 JSONs in book order and links the
+  last body paragraph of a page to the first of the next (also across spreads)
+  when the first ends in a hyphen or lacks sentence-final punctuation and the
+  second starts lower-case. Sets `continues_from` / `continues_to`.
+- Dehyphenation: `Spitz-`+`bogen` -> `Spitzbogen`; upper-case continuation keeps
+  the hyphen; `Werk-`+`und Form-` keeps the hyphen with a space. Every hyphen join
+  is recorded in `joins`. Output `units.json` (one unit per paragraph chain or caption).
+- Sample result: three cross-page chains found, matching the ones identified by
+  hand (`Werk- und Form-`/`steinen`, `(Niederschlesien`/`und die tschechoslowakische
+  Republik)` across the spread boundary, `Spitz-`/`bogen`).
+- Tests: `tests/test_stage4.py`.
+
+### Documentation
+
+- Corrected the DPI claim (effective ~135 DPI), described the new detectors,
+  paragraph rule and limitations; data model additions; README lists
+  hand-installed modules and MacPorts `tesseract` / `tesseract-deu`.
+
 ## 2026-11-11 — Documentation baseline and project consolidation
 
 - Created a persistent project tree and initial architecture/data-model/pipeline/decision/status documentation.
