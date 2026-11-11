@@ -30,6 +30,8 @@ are separate units.
 import argparse
 import json
 import re
+
+import log
 from pathlib import Path
 
 CONJ = {'und', 'oder', 'bzw', 'bzw.', 'sowie', 'noch'}
@@ -152,8 +154,14 @@ def main():
                     r['object_id'] = 's%d-%s' % (k, r['object_id'])
             pg['input_index'] = k
             pages.append(pg)
+    log.info('stage4','linking paragraphs across %d pages' % len(pages))
     link_pages(pages)
+    for pg in pages:
+        for r in pg['regions']:
+            if r.get('continues_to'):
+                log.info('stage4','  paragraph %s continues on the next page in %s' % (r['object_id'],r['continues_to']))
     units = build_units(pages)
+    log.info('stage4','%d translation units, %d with dehyphenation joins' % (len(units),sum(u['dehyphenated'] for u in units)))
     a.output.mkdir(parents=True, exist_ok=True)
     doc = {'schema_version': '0.4.0', 'stage': 'stage4_units',
            'inputs': [str(f) for f in a.inputs], 'units': units, 'pages': pages}

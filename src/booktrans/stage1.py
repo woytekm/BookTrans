@@ -12,6 +12,7 @@ from imgutil import crop_for_ocr, paper_color
 from deskew import deskew_page, correction_matrix, apply_correction
 from illustrations import detect_illustrations, mask_box, edge_margins
 from scale import estimate_scale
+import log
 
 
 def load_rgb(path):
@@ -197,11 +198,17 @@ def main():
                     help='spread: open book, split at the gutter (default); page: one whole page; crop: part of a page')
     args=ap.parse_args()
     args.output.mkdir(parents=True,exist_ok=True)
+    log.info('stage1','loading %s' % args.input)
     full=load_rgb(args.input)
+    log.info('stage1','image %dx%d px, layout=%s' % (full.shape[1],full.shape[0],args.layout))
     f,scale_info=estimate_scale(full,None if args.scale=='auto' else float(args.scale))
     # Layout analysis is tuned in pixels for the sample scans (body line pitch ~23 px). A larger scan is
     # analysed on an area-averaged working copy; full-resolution pixels are kept
     # for OCR and for the extracted figures (same split and the same affine map).
+    if f>1:
+        log.info('stage1','scale %.2f (body line pitch %s px): analysing a %dx%d working copy, OCR/figures use full resolution' % (f,scale_info.get('line_pitch_px'),round(full.shape[1]/f),round(full.shape[0]/f)))
+    else:
+        log.info('stage1','scale 1.0 (%s): analysing the scan as it is' % (('line pitch %s px' % scale_info['line_pitch_px']) if 'line_pitch_px' in scale_info else scale_info.get('note','forced')))
     rgb=cv2.resize(full,(int(round(full.shape[1]/f)),int(round(full.shape[0]/f))),interpolation=cv2.INTER_AREA) if f>1 else full
     spread={'file':str(args.input),'width':rgb.shape[1],'height':rgb.shape[0],'scale':f,'scale_info':scale_info,
             'full_width':full.shape[1],'full_height':full.shape[0],'pages':[]}
@@ -211,8 +218,14 @@ def main():
         # Skew differs per page (0.4-1.0 deg in the samples), so each page is
         # straightened on its own before any analysis. All coordinates below
         # refer to the deskewed page image saved next to the JSON.
+        log.info('stage1','page %d (%s, x=%d, %dx%d): deskew...' % (page_no,side,offset,page.shape[1],page.shape[0]))
         page,skew=deskew_page(page)
+        log.info('stage1','  skew: baselines %.2f deg, column edges %.2f deg (%s, %d lines)' % (skew['angle_deg'],skew['edge_tilt_deg'],skew['edge_model'],skew['lines_used']))
+        log.info('stage1','  detecting illustrations and text regions...')
         regions=process_page(page,side,offset,args.lang)
+        nimg=sum('image' in r['type'] or 'drawing' in r['type'] for r in regions)
+        log.info('stage1','  found %d illustrations, %d text regions' % (nimg,len(regions)-nimg))
+        for r in regions: log.debug('stage1','%s %s %s' % (r['id'],r['type'],[int(v) for v in r['bbox']]))
         name=f"page_{page_no:02d}_{side}.png"
         Image.fromarray(page).save(args.output/name)
         deskewed.append(page)
@@ -224,6 +237,7 @@ def main():
             m=correction_matrix(skew['baseline_slope'],skew['edge_slope'],fp.shape)
             fp=apply_correction(fp,m) if (abs(skew['baseline_slope'])>=.0005 or abs(skew['edge_slope'])>=.0005) else fp
             fname=f"page_{page_no:02d}_{side}_full.png"
+            log.info('stage1','  writing full-resolution page %s (%dx%d)' % (fname,fp.shape[1],fp.shape[0]))
             Image.fromarray(fp).save(args.output/fname,compress_level=1)
             rec.update({'page_image_full':fname,'full_width':fp.shape[1],'full_height':fp.shape[0]})
         spread['pages'].append(rec)

@@ -109,6 +109,16 @@
   paragraph rule and limitations; data model additions; README lists
   hand-installed modules and MacPorts `tesseract` / `tesseract-deu`.
 
+### Progress and debug output
+
+- New `src/booktrans/log.py`: timestamped progress lines on stderr (one shared clock
+  for all stages). Every stage reports what it is doing: scale estimate, deskew
+  angles, illustrations and text regions found, OCR progress per region, line
+  counts by type, regions built, classification counts, paragraph links, units.
+- Wrapper prints stage headers (`=== stage 2/4 ... ===`) and a final summary;
+  `-v` / `--verbose` also lists every detected region and every OCR line with its
+  confidence. Stage stdout JSON summaries are shown only when a stage fails.
+
 ### High-resolution scans, crops and single pages
 
 - Scale is measured from the text, not the page height: `src/booktrans/scale.py`

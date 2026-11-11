@@ -16,6 +16,7 @@ from pytesseract import Output
 
 from imgutil import crop_for_ocr, load_pages, load_full_pages, paper_color
 from illustrations import mask_box
+import log
 
 
 SEGMENT_GAP_FACTOR = 3.0   # a gap wider than this many glyph heights splits a line
@@ -305,12 +306,16 @@ def main():
     base=json.loads(a.stage1_json.read_text(encoding='utf8'))
     # Analyse the exact (deskewed) page images Stage 1 saved; ``a.input`` is only
     # the fallback for old Stage 1 JSON without page images.
+    log.info('stage2','loading deskewed pages from %s' % a.stage1_json.parent)
     page_imgs=load_pages(base,a.stage1_json.parent,a.input)
     full_imgs=load_full_pages(base,a.stage1_json.parent)
     src=np.hstack(page_imgs)
     a.output.mkdir(parents=True,exist_ok=True); result={'schema_version':'0.3.0','source_file':str(a.input),'pages':[]}
     for p,page,fullpage in zip(base['pages'],page_imgs,full_imgs):
         side=p['side']; xoff=p['x_offset']; f=p.get('scale',1.0) or 1.0
+        todo=[r for r in p['regions'] if r['type'] in ('text','heading','caption','text_candidate')]
+        log.info('stage2','page %d (%s): OCR of %d text regions%s, ocr-scale %.1f' % (p['page'],side,len(todo),' from full-resolution pixels' if fullpage is not None else '',a.ocr_scale))
+        n_done=0
         all_lines=[]; image_boxes=[]
         # Text is OCR'd from a copy of the page with every illustration painted
         # over in paper colour: OCR crops carry real context pixels, and the edge
@@ -329,14 +334,23 @@ def main():
                     image_boxes.append({'bbox':r['bbox'],'type':'illustration'})
                 continue
             ls=ocr_lines(ocr_page,r['bbox'],a.lang,scale=a.ocr_scale,hires=ocr_full,f=f); all_lines.extend(ls)
+            n_done+=1
+            log.info('stage2','  region %d/%d %s: %d lines' % (n_done,len(todo),r['bbox'],len(ls)))
+        n_raw=len(all_lines)
         all_lines=dedupe_lines(all_lines)
+        if n_raw!=len(all_lines): log.info('stage2','  removed %d duplicate lines' % (n_raw-len(all_lines)))
         all_lines.sort(key=lambda z:(z['bbox'][1],z['bbox'][0]))
         lines,body=classify_lines(all_lines,image_boxes,page.shape[0])
+        kinds={}
+        for ln in lines: kinds[ln['type']]=kinds.get(ln['type'],0)+1
+        log.info('stage2','  %d lines (%s), body glyph height %.1f px' % (len(lines),', '.join('%d %s' % (v,k.replace('_line','')) for k,v in sorted(kinds.items())),body))
+        for ln in lines: log.debug('stage2','%-14s conf %3d %s' % (ln['type'],ln['confidence'],ln['text'][:70]))
         for i,ln in enumerate(lines):
             if ln['type']!='caption_line' and i+1<len(lines) and ln['bbox'][1]<page.shape[0]*.55 and ln['bbox'][0]>page.shape[1]*.45:
                 if lines[i+1]['type']=='heading_line':
                     ln['type']='author_byline_candidate'; ln['classification_reason']='right-aligned line immediately before heading'; ln['classification_confidence']=.72
         regs=build_regions(lines,body)
+        log.info('stage2','  built %d regions: %s' % (len(regs),', '.join('%d %s' % (sum(r['type']==t for r in regs),t) for t in sorted({r['type'] for r in regs}))))
         for im in image_boxes: regs.append(im)
         regs.sort(key=lambda r:(r['bbox'][1],r['bbox'][0]))
         for i,r in enumerate(regs,1): r['id']=i

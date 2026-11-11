@@ -23,6 +23,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+import log
+
 from imgutil import paper_color
 
 SCHEMA = '1.0'
@@ -108,6 +110,7 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_
         x2, y2 = min(w, x2 + FIG_PAD), min(h, y2 + FIG_PAD)
         fn = '%s_fig_%02d.png' % (stem, k)
         # Cut from the full-resolution page when there is one (boxes are working-scale).
+        log.debug('docmodel', 'cropping figure %s from %s' % (ill['object_id'], 'full-resolution page' if full_img is not None else 'page'))
         if full_img is not None:
             fh, fw = full_img.shape[:2]
             Image.fromarray(full_img[max(0, int(round(y1 * f))):min(fh, int(round(y2 * f))),
