@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""BookTrans stage 2.1: OCR lines, typography candidates and paragraph decomposition.
+"""BookTrans stage 2: OCR lines, line classification and paragraph/caption regions.
 
-The important change from stage 2.0 is paragraph detection. Tesseract's line
-bounding boxes are retained, but paragraph boundaries are inferred from the
-original scan's horizontal ink projection. This is much more reliable for old
-books because Tesseract boxes can overlap vertically or use inconsistent box
-heights.
+Tesseract's line bounding boxes are retained as permanent objects. Lines are
+classified (body, heading, caption, footnote/byline) and grouped into regions
+*at page level*. Paragraph boundaries come from line geometry on the deskewed
+page - a line that stops short of the column's right edge ends a paragraph - and
+not from vertical gaps, because the sample book has no extra paragraph spacing
+and no first-line indent. See ``mark_paragraph_breaks``.
 """
 import argparse, json, re
 from pathlib import Path
@@ -89,48 +90,6 @@ def ocr_lines(page, bbox, lang, context=10, scale=2.0):
     return sorted(out,key=lambda x:(x['bbox'][1],x['bbox'][0]))
 
 
-def visual_text_bands(page_gray, bbox):
-    """Return horizontal ink bands inside a text bbox in page coordinates.
-
-    Illumination normalization is used because the paper is not perfectly flat
-    or uniformly lit. The threshold is deliberately based on page width so that
-    small isolated specks don't become lines.
-    """
-    x1,y1,x2,y2=bbox
-    crop=page_gray[y1:y2,x1:x2]
-    if crop.size==0: return []
-    bg=cv2.GaussianBlur(crop,(0,0),15)
-    norm=cv2.divide(crop,bg,scale=220)
-    _,bw=cv2.threshold(norm,170,255,cv2.THRESH_BINARY_INV)
-    proj=(bw>0).sum(axis=1)
-    threshold=max(8,int(crop.shape[1]*0.025))
-    on=proj>threshold
-    bands=[]; s=None
-    for i,v in enumerate(on):
-        if v and s is None: s=i
-        elif not v and s is not None:
-            bands.append([s,i-1]); s=None
-    if s is not None: bands.append([s,len(on)-1])
-    merged=[]
-    for a,b in bands:
-        if merged and a-merged[-1][1]-1<=2:
-            merged[-1][1]=b
-        else:
-            merged.append([a,b])
-    return [[x1,a+y1,x2,b+y1] for a,b in merged]
-
-
-def assign_visual_bands(lines, bands):
-    if not lines or not bands: return lines
-    centers=np.array([(b[1]+b[3])/2 for b in bands],dtype=float)
-    for ln in lines:
-        cy=(ln['bbox'][1]+ln['bbox'][3])/2
-        j=int(np.argmin(np.abs(centers-cy)))
-        ln['_visual_band']=j
-        ln['_visual_band_bbox']=bands[j]
-    return lines
-
-
 # Caption lines are smaller than body text, but an accent (Ä, Ü) in a small-caps
 # caption makes OCR report a taller line, so allow a little headroom.
 CAPTION_MAX_REL = 1.15
@@ -209,65 +168,6 @@ def classify_lines(lines, images, page_h):
     return lines,body
 
 
-def split_body_lines_into_paragraphs(lines, page_gray, text_bbox):
-    """Return body-line groups using visual inter-line spacing.
-
-    The scan is authoritative for paragraph spacing. We calculate the median
-    visual gap between neighbouring printed lines and mark a break when the
-    gap is substantially larger than normal. Tesseract's own bbox gap is kept
-    as a secondary signal but is *not* used as the primary measurement.
-    """
-    body=[l for l in lines if l['type']=='body_line']
-    if not body: return []
-    bands=visual_text_bands(page_gray,text_bbox)
-    assign_visual_bands(body,bands)
-
-    # One OCR line normally maps to one visual band. If not, retain the closest
-    # band and let the OCR ordering remain authoritative.
-    band_ids=[l.get('_visual_band') for l in body]
-    valid=[i for i in band_ids if i is not None]
-    if len(valid)<2:
-        return [body]
-
-    # Calculate visual gaps only between successive *used* bands.
-    gaps=[]
-    for i in range(1,len(body)):
-        a=body[i-1].get('_visual_band'); b=body[i].get('_visual_band')
-        if a is None or b is None or b==a: continue
-        if b<a: continue
-        # If a line was skipped by OCR, sum all intervening gaps rather than
-        # pretending it is a paragraph break.
-        gap=bands[b][1]-bands[a][3]
-        gaps.append(max(0,gap))
-    normal=float(np.median(gaps)) if gaps else 0.0
-    # A ratio of ~1.5 works well on the supplied book: normal gaps are about
-    # 6-9 px, while clear paragraph gaps are 10-35 px.
-    threshold=max(3.0,normal*1.35)
-
-    groups=[]; cur=[body[0]]
-    for i,ln in enumerate(body[1:],1):
-        prev=body[i-1]
-        a=prev.get('_visual_band'); b=ln.get('_visual_band')
-        gap=0.0
-        if a is not None and b is not None and b>a:
-            gap=max(0,bands[b][1]-bands[a][3])
-        # Preserve the diagnostic decision on the line starting the new paragraph.
-        ln['paragraph_break'] = bool(gap>threshold)
-        ln['paragraph_gap'] = round(float(gap),1)
-        ln['paragraph_gap_threshold'] = round(float(threshold),1)
-        if gap>threshold:
-            groups.append(cur); cur=[ln]
-        else:
-            cur.append(ln)
-    groups.append(cur)
-
-    # Remove internal helper fields; keep useful paragraph diagnostics.
-    for g in groups:
-        for ln in g:
-            ln.pop('_visual_band',None); ln.pop('_visual_band_bbox',None)
-    return groups
-
-
 def make_region(g,n,typ):
     x1=min(z['bbox'][0] for z in g); y1=min(z['bbox'][1] for z in g)
     x2=max(z['bbox'][2] for z in g); y2=max(z['bbox'][3] for z in g)
@@ -282,12 +182,11 @@ def make_region(g,n,typ):
             'lines':g}
 
 
-def group_caption_lines(lines):
-    """Group caption lines into captions, one per column.
+def group_stacked_lines(lines):
+    """Group lines of one kind into blocks: stacked closely and sharing a column.
 
-    Lines belong to the same caption when they are stacked (small vertical gap)
-    and share a column (horizontal overlap or the same left edge). This keeps
-    five side-by-side figure captions apart and keeps two-line captions whole.
+    Used for captions (keeps five side-by-side captions apart and two-line
+    captions whole), multi-line headings and footnotes.
     """
     groups=[]
     for ln in sorted(lines,key=lambda z:(z['bbox'][1],z['bbox'][0])):
@@ -303,36 +202,87 @@ def group_caption_lines(lines):
     return groups
 
 
-def group_semantic_regions(lines, body, page_gray, text_bbox):
-    """Group lines while splitting body text at visual paragraph breaks."""
-    if not lines:return []
-    cap=[l for l in lines if l['type']=='caption_line']
-    if cap:
-        regs=[make_region(g,0,'caption_line') for g in group_caption_lines(cap)]
-        rest=[l for l in lines if l['type']!='caption_line']
-        regs.extend(group_semantic_regions(rest,body,page_gray,text_bbox) if rest else [])
-        regs.sort(key=lambda r:(r['bbox'][1],r['bbox'][0]))
-        for i,r in enumerate(regs,1): r['id']=i
-        return regs
-    # First identify paragraph groups among body lines belonging to this coarse
-    # text area. Other semantic line types remain grouped by type transitions.
-    body_groups=split_body_lines_into_paragraphs(lines,page_gray,text_bbox)
-    body_lookup={id(l):gidx for gidx,g in enumerate(body_groups) for l in g}
-    out=[]; cur=[]; last_kind=None; last_body_group=None
-    for ln in lines:
-        kind=ln['type']
-        if kind=='body_line':
-            bg=body_lookup[id(ln)]
-            if cur and (last_kind!='body_line' or bg!=last_body_group):
-                out.append(make_region(cur,len(out)+1,last_kind))
-                cur=[]
-            cur.append(ln); last_kind=kind; last_body_group=bg
+def body_columns(lines):
+    """Cluster body lines into text columns by horizontal extent."""
+    cols=[]
+    for ln in sorted(lines,key=lambda z:(z['bbox'][1],z['bbox'][0])):
+        x1,_,x2,_=ln['bbox']; w=x2-x1
+        best=None
+        for c in cols:
+            ov=max(0,min(x2,c['r'])-max(x1,c['l']))/max(1,min(w,c['r']-c['l']))
+            if ov>=.5 and (best is None or ov>best[0]): best=(ov,c)
+        if best:
+            c=best[1]; c['lines'].append(ln); c['l']=min(c['l'],x1); c['r']=max(c['r'],x2)
         else:
-            if cur and last_kind!=kind:
-                out.append(make_region(cur,len(out)+1,last_kind)); cur=[]
-            cur.append(ln); last_kind=kind; last_body_group=None
-    if cur: out.append(make_region(cur,len(out)+1,last_kind))
-    return out
+            cols.append({'l':x1,'r':x2,'lines':[ln]})
+    return [c['lines'] for c in cols]
+
+
+def _ends_with_hyphen(text):
+    return text.rstrip().endswith(('-','\u2010','\u00ac'))
+
+
+def mark_paragraph_breaks(col, body):
+    """Mark the first line of every paragraph in one text column.
+
+    Evidence, in this order (the first that applies wins):
+
+    * **short last line** - in justified text every full line ends on the
+      column's right edge, so a line that stops clearly short ends a paragraph.
+      This is the signal the sample book uses (it has neither first-line indents
+      nor extra paragraph spacing). After deskew, full lines end within ~3 px of
+      the edge while real paragraph-final lines are >= 19 px short.
+    * **first-line indent** - the next line starts clearly right of the column's
+      left edge.
+    * **extra line spacing** - clearly more than the normal line pitch.
+
+    A line that ends in a hyphen never ends a paragraph, so a paragraph is never
+    cut inside a hyphenated word. Every marked line gets ``paragraph_break`` and
+    ``paragraph_break_reason``; the first line of the column is a break by definition.
+    """
+    ls=sorted(col,key=lambda z:z['bbox'][1])
+    x1=np.array([l['bbox'][0] for l in ls],float); x2=np.array([l['bbox'][2] for l in ls],float)
+    L=float(np.median(x1[x1<=np.percentile(x1,50)])); R=float(np.median(x2[x2>=np.percentile(x2,60)]))
+    short=R-x2
+    full=short[short<=6]
+    sd=float(np.std(full)) if len(full)>=3 else 1.5
+    short_thr=max(8.0,5.0*sd); indent_thr=max(10.0,1.2*body)
+    cy=np.array([(l['bbox'][1]+l['bbox'][3])/2 for l in ls],float)
+    pitch=float(np.median(np.diff(cy))) if len(ls)>2 else 0.0
+    ls[0]['paragraph_break']=True; ls[0]['paragraph_break_reason']='column_start'
+    for i in range(1,len(ls)):
+        prev,cur=ls[i-1],ls[i]; reason=None
+        if not _ends_with_hyphen(prev['text']):
+            if R-prev['bbox'][2]>short_thr: reason='short_last_line'
+            elif cur['bbox'][0]-L>indent_thr: reason='first_line_indent'
+            elif pitch>0 and (cy[i]-cy[i-1])>1.4*pitch: reason='extra_line_spacing'
+        cur['paragraph_break']=reason is not None; cur['paragraph_break_reason']=reason
+    return ls
+
+
+def build_regions(lines, body):
+    """Turn classified lines into semantic regions, at page level.
+
+    Paragraphs are built per text *column* of the whole page, not per coarse
+    Stage 1 box: box boundaries are arbitrary and used to cut paragraphs in the
+    wrong place (and split ``mu\u00dften.`` from its own paragraph).
+    """
+    regs=[]
+    caps=[l for l in lines if l['type']=='caption_line']
+    for g in group_stacked_lines(caps): regs.append(make_region(g,0,'caption_line'))
+    bodyl=[l for l in lines if l['type']=='body_line']
+    for col in body_columns(bodyl):
+        cur=[]
+        for ln in mark_paragraph_breaks(col,body):
+            if ln['paragraph_break'] and cur:
+                regs.append(make_region(cur,0,'body_line')); cur=[]
+            cur.append(ln)
+        if cur: regs.append(make_region(cur,0,'body_line'))
+    for kind in ('heading_line','footnote_or_footer','author_byline_candidate'):
+        for g in group_stacked_lines([l for l in lines if l['type']==kind]): regs.append(make_region(g,0,kind))
+    regs.sort(key=lambda r:(r['bbox'][1],r['bbox'][0]))
+    for i,r in enumerate(regs,1): r['id']=i
+    return regs
 
 
 def main():
@@ -344,10 +294,10 @@ def main():
     # the fallback for old Stage 1 JSON without page images.
     page_imgs=load_pages(base,a.stage1_json.parent,a.input)
     src=np.hstack(page_imgs)
-    a.output.mkdir(parents=True,exist_ok=True); result={'schema_version':'0.2.1','source_file':str(a.input),'pages':[]}
+    a.output.mkdir(parents=True,exist_ok=True); result={'schema_version':'0.3.0','source_file':str(a.input),'pages':[]}
     for p,page in zip(base['pages'],page_imgs):
-        side=p['side']; xoff=p['x_offset']; page_gray=cv2.cvtColor(page,cv2.COLOR_RGB2GRAY)
-        page_regions=[]; all_lines=[]; image_boxes=[]; text_bboxes=[]
+        side=p['side']; xoff=p['x_offset']
+        all_lines=[]; image_boxes=[]
         # Text is OCR'd from a copy of the page with every illustration painted
         # over in paper colour: OCR crops carry real context pixels, and the edge
         # of a neighbouring drawing used to come back as junk "captions".
@@ -360,7 +310,7 @@ def main():
                 if 'image' in r['type'] or 'drawing' in r['type']:
                     image_boxes.append({'bbox':r['bbox'],'type':'illustration'})
                 continue
-            ls=ocr_lines(ocr_page,r['bbox'],a.lang,scale=a.ocr_scale); all_lines.extend(ls); text_bboxes.append(r['bbox'])
+            ls=ocr_lines(ocr_page,r['bbox'],a.lang,scale=a.ocr_scale); all_lines.extend(ls)
         all_lines=dedupe_lines(all_lines)
         all_lines.sort(key=lambda z:(z['bbox'][1],z['bbox'][0]))
         lines,body=classify_lines(all_lines,image_boxes,page.shape[0])
@@ -368,21 +318,7 @@ def main():
             if ln['type']!='caption_line' and i+1<len(lines) and ln['bbox'][1]<page.shape[0]*.55 and ln['bbox'][0]>page.shape[1]*.45:
                 if lines[i+1]['type']=='heading_line':
                     ln['type']='author_byline_candidate'; ln['classification_reason']='right-aligned line immediately before heading'; ln['classification_confidence']=.72
-        # Each original Stage-1 text box is processed independently so columns
-        # and unrelated text areas cannot create paragraph boundaries together.
-        regs=[]; claimed=set()
-        for tb in text_bboxes:
-            x1,y1,x2,y2=tb
-            # A line is claimed by the first coarse box that contains it, so
-            # overlapping boxes cannot emit it twice.
-            local=[ln for ln in lines if id(ln) not in claimed and x1-8<=ln['bbox'][0]<=x2+8 and y1-8<=ln['bbox'][1]<=y2+8]
-            claimed.update(id(ln) for ln in local)
-            if local: regs.extend(group_semantic_regions(local,body,page_gray,tb))
-        # Captions/author lines not belonging to a Stage-1 text box.
-        assigned={id(l) for r in regs for l in r['lines']}
-        leftovers=[l for l in lines if id(l) not in assigned]
-        if leftovers:
-            regs.extend(group_semantic_regions(leftovers,body,page_gray,[0,0,page.shape[1],page.shape[0]]))
+        regs=build_regions(lines,body)
         for im in image_boxes: regs.append(im)
         regs.sort(key=lambda r:(r['bbox'][1],r['bbox'][0]))
         for i,r in enumerate(regs,1): r['id']=i

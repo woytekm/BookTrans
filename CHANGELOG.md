@@ -74,6 +74,21 @@
   separate two-line captions, plus the two plate captions 38/39.
 - Tests: `tests/test_illustrations.py` (synthetic pages); `test_stage3.py` updated.
 
+### Paragraph detection (page-level)
+
+- Paragraphs are now built per text *column of the whole page*, not per coarse
+  Stage 1 box (box edges cut paragraphs at arbitrary places). The visual
+  "horizontal ink band" heuristic and the footnote-marker split are removed.
+- Break evidence, first match wins: a line that stops short of the column's right
+  edge (threshold max(8 px, 5 x std of full-line shortfall); after deskew full
+  lines are within ~3 px and real paragraph ends are >= 19 px short), a
+  first-line indent, extra line spacing. A line ending in a hyphen never ends a
+  paragraph. Each line records `paragraph_break` and `paragraph_break_reason`.
+- Sample result: paragraph counts 3 / 4 / 3 / 4 on the four sample pages (page 51
+  has four paragraphs; an earlier note claiming five was wrong), no cuts inside
+  hyphenated words. Stage 2 schema_version is now 0.3.0.
+- Tests: `tests/test_paragraphs.py`.
+
 ## 2026-11-11 — Documentation baseline and project consolidation
 
 - Created a persistent project tree and initial architecture/data-model/pipeline/decision/status documentation.
