@@ -80,6 +80,8 @@ def main():
                     help='full px per working px (auto = measured from the body line pitch; 1 = analyse as is). Larger scans are analysed downscaled; OCR and figures use full resolution')
     ap.add_argument('--layout', choices=['spread', 'page', 'crop'], default='spread',
                     help='spread: open book split at the gutter (default); page: one whole page; crop: part of a page')
+    ap.add_argument('--translations', type=Path, help='translations JSON ({"units": {unit_id: {"pl": text}}}); if given, the pages are also rebuilt into <out>/<name>/render/')
+    ap.add_argument('--background', choices=['paper', 'scan'], default='paper', help='for --translations: clean paper canvas or the scan with text wiped')
     ap.add_argument('-v', '--verbose', action='store_true', help='also print every region and every OCR line with its confidence')
     a = ap.parse_args()
     os.environ.setdefault('BOOKTRANS_T0', str(__import__('time').time()))
@@ -92,6 +94,15 @@ def main():
             nt = sum(b['kind'] == 'text' for b in p['blocks'])
             log.info('wrap', '%s page %d%s: %d text blocks, %d figures' % (f.name, p['page'], p['side'], nt, nf))
         log.info('wrap', 'done: %s (%d pages, %d units)' % (out, len(doc['pages']), len(doc['units'])))
+        if a.translations:
+            from render import render, Fonts
+            log.info('wrap', '=== page assembly (render.py) ===')
+            doc['_dir'] = str(out)
+            trans = json.loads(a.translations.read_text(encoding='utf-8'))
+            names, rep = render(doc, trans, out / 'render', Fonts(), a.background)
+            for w in rep['warnings']:
+                log.info('wrap', 'WARNING ' + w)
+            log.info('wrap', 'rebuilt pages: %s in %s' % (', '.join(names), out / 'render'))
         print(out)
 
 

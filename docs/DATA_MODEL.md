@@ -206,5 +206,6 @@ Written by `booktrans.py`. Top level: `schema_version`, `source_file`, `coordina
 `blocks[]` (in `reading_order`): `block_id`, `kind` (`text` | `figure`), `role`, `bbox`.
 - text: `text`, `lines[]` (`bbox`, `text`, `confidence`, `glyph_height_px`, `paragraph_start`), `unit_id`, `continues_from`/`continues_to`, `figure_ids`, `translation_status`, `content_context`, `typography` (`glyph_height_px`, `relative_size`, `line_pitch_px`, `style`, `uppercase_ratio`, `alignment` [`justified`/`left`/`center`], `alignment_measured`, `first_line_indent_px`, `last_line_shortfall_px`, `gap_above_px`).
 - figure: `file` (relative path), `crop_bbox`, `detector`, `captions[]` (block ids).
+- graphic (`kind: graphic`, `role`: `page_mark` | `rule`): `file`, `crop_bbox`; page numbers, printer's marks and horizontal rules (e.g. above a footnote), kept as image crops.
 
 `units[]`: `unit_id`, `type`, `text` (dehyphenated), `source_block_ids`, `dehyphenated`, `joins`.

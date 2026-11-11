@@ -24,6 +24,7 @@ import numpy as np
 from PIL import Image
 
 import log
+from marks import find_marks
 
 from imgutil import paper_color
 
@@ -79,6 +80,18 @@ def _nid(i):
     return i[3:] if i and i[:1] == 's' and i[1:2].isdigit() and i[2:3] == '-' else i
 
 
+def _save_crop(page_img, full_img, f, bbox, path):
+    """Crop ``bbox`` (working px) from the full-resolution page when there is one."""
+    x1, y1, x2, y2 = bbox
+    if full_img is not None:
+        fh, fw = full_img.shape[:2]
+        crop = full_img[max(0, int(round(y1 * f))):min(fh, int(round(y2 * f))),
+                        max(0, int(round(x1 * f))):min(fw, int(round(x2 * f)))]
+    else:
+        crop = page_img[max(0, y1):y2, max(0, x1):x2]
+    Image.fromarray(crop).save(path)
+
+
 def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_rel=None):
     """Return the nested model of one page; writes figure crops into ``fig_dir``."""
     h, w = page['height'], page['width']
@@ -111,12 +124,7 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_
         fn = '%s_fig_%02d.png' % (stem, k)
         # Cut from the full-resolution page when there is one (boxes are working-scale).
         log.debug('docmodel', 'cropping figure %s from %s' % (ill['object_id'], 'full-resolution page' if full_img is not None else 'page'))
-        if full_img is not None:
-            fh, fw = full_img.shape[:2]
-            Image.fromarray(full_img[max(0, int(round(y1 * f))):min(fh, int(round(y2 * f))),
-                                     max(0, int(round(x1 * f))):min(fw, int(round(x2 * f)))]).save(fig_dir / fn)
-        else:
-            Image.fromarray(page_img[y1:y2, x1:x2]).save(fig_dir / fn)
+        _save_crop(page_img, full_img, f, [x1, y1, x2, y2], fig_dir / fn)
         fig_of[ill['object_id']] = {
             'block_id': ill['object_id'], 'kind': 'figure', 'role': 'illustration',
             'bbox': ill['bbox'], 'crop_bbox': [x1, y1, x2, y2],
@@ -147,6 +155,14 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_
                        'paragraph_start': l.get('paragraph_break', False)} for l in r['lines']]
         blocks.append(b)
     blocks += list(fig_of.values())
+    layout_cols = [{'left': round(L, 1), 'right': round(R, 1)}] if edges else []
+    boxes = [b['bbox'] for b in blocks]
+    for k, m in enumerate(find_marks(page_img, boxes, content_area, layout_cols), 1):
+        fn = '%s_%s_%02d.png' % (stem, m['role'], k)
+        _save_crop(page_img, full_img, f, m['bbox'], fig_dir / fn)
+        blocks.append({'block_id': 'p%d-%s-%d' % (page['page'], m['role'], k), 'kind': 'graphic',
+                       'role': m['role'], 'bbox': m['bbox'], 'crop_bbox': m['bbox'], 'file': 'figures/' + fn})
+        log.debug('docmodel', 'found %s at %s' % (m['role'], m['bbox']))
     blocks.sort(key=lambda b: (b['bbox'][1], b['bbox'][0]))
     for i, b in enumerate(blocks, 1):
         b['reading_order'] = i

@@ -109,6 +109,35 @@
   paragraph rule and limitations; data model additions; README lists
   hand-installed modules and MacPorts `tesseract` / `tesseract-deu`.
 
+### Translation of the first spread and page assembly (`render.py`)
+
+- `prompts/translate_pl.txt` (the translation prompt) and `examples/0001.pl.json`:
+  Polish translation of the ten units of `0001.tif` (post-1945 place names:
+  Byczyna, Głuchołazy, Domaszkowice, Pakosławice, Korfantów, Górny/Dolny Śląsk;
+  obvious OCR slips were corrected before translating, listed in the file's notes).
+- New `src/booktrans/render.py`: rebuilds pages from `document.json` + translations.
+  Clean paper canvas (or `--background scan`: scan with text blocks wiped and filled
+  with the local paper tone), figures and page furniture pasted back, text typeset by
+  optimum-fit line breaking with justification, Polish hyphenation (optional `pyphen`),
+  no line ending in a one-letter word, original line pitch and anchoring.
+  Body paragraphs flow through the page columns and over page breaks (a shorter
+  translation leaves space at the end instead of gaps inside the page); headings,
+  captions, bylines and footnotes keep their own frames; capitals are letter-spaced up
+  to the original line width. Font size comes from the original line widths (same
+  typographic colour) within 15 % of the size implied by the glyph height; if the
+  text needs more lines than the page has, the size shrinks up to 10 %, then overflows
+  and a warning is reported. Units without translation keep their original pixels.
+- Default font Crimson Text (SIL OFL) bundled in `fonts/`.
+- New `src/booktrans/marks.py`: page numbers, printer's marks and horizontal rules
+  (including faint hairlines such as the footnote rule) are detected and stored as
+  `graphic` blocks with image crops in `document.json`, pasted back by the renderer.
+- Wrapper: `--translations FILE` also runs the page assembly.
+- Result on `0001.tif`: both pages reproduce the original layout (photo, caption,
+  byline, heading, justified body, footnote with rule, page number); the Polish body
+  needs 49 lines where the German set 56, so page 2 ends 7 lines early. The paragraph
+  cut at the spread boundary (`(Dolny Śląsk`) needs the next spread.
+- Tests: `tests/test_render.py`, `tests/test_marks.py`.
+
 ### Progress and debug output
 
 - New `src/booktrans/log.py`: timestamped progress lines on stderr (one shared clock
