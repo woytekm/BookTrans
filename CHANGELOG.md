@@ -109,6 +109,21 @@
   paragraph rule and limitations; data model additions; README lists
   hand-installed modules and MacPorts `tesseract` / `tesseract-deu`.
 
+### One-command wrapper and nested document model
+
+- New `src/booktrans/booktrans.py`: runs stages 1-4 on a TIFF and writes
+  `<out>/<tiff name>/` with `document.json`, `pages/`, `figures/`, `debug/` and
+  `stages/` (raw stage JSON).
+- New `src/booktrans/docmodel.py` builds `document.json` (schema 1.0): per page
+  layout (size, paper colour, text/content area, column edges, default
+  alignment), reading-ordered blocks (text: role, OCR text, unit id, continuation
+  links, typography = glyph height, relative size, line pitch, alignment,
+  first-line indent, last-line shortfall, gap above; lines with boxes and
+  confidence; figures: cropped file, detector, caption block ids), plus the
+  translation units.
+- Not included yet: page numbers/printer marks, curvature correction.
+- Tests: `tests/test_docmodel.py`.
+
 ## 2026-11-11 — Documentation baseline and project consolidation
 
 - Created a persistent project tree and initial architecture/data-model/pipeline/decision/status documentation.

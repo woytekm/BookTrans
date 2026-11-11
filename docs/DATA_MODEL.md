@@ -194,3 +194,17 @@ Per page (Stage 1, carried forward): `skew_deg`, `deskew` (`angle_deg`, `edge_ti
 Per OCR line (Stage 2): `paragraph_break` (first line of a paragraph) and `paragraph_break_reason` (`column_start`, `short_last_line`, `first_line_indent`, `extra_line_spacing`); caption lines have `type: caption_line` and get `associated_illustration_id` in Stage 3.
 
 Stage 4 (`units.json`, schema 0.4.0): paragraph regions get `continues_from` / `continues_to` (object ids, made unique per input file as `sN-pM-reg-K`). `units[]` hold `unit_id`, `type`, dehyphenated `text`, `source_object_ids`, `pages` as `[input_index, page]`, `joins[]` (rule `removed_hyphen`, `kept_hyphen_uppercase` or `suspended_compound`; `across_page` for joins over a page break) and `dehyphenated`.
+
+## Page-recreation document model (`document.json`, schema 1.0)
+
+Written by `booktrans.py`. Top level: `schema_version`, `source_file`, `coordinate_system`, `pages[]`, `units[]`.
+
+`pages[]`: `page`, `side`, `image` (relative path of the deskewed page PNG), `width`, `height`, `skew_deg`, `deskew`, `layout`, `blocks[]`.
+
+`layout`: `paper_color_rgb`, `text_area` (body/heading/footnote text), `content_area` (everything incl. figures), `columns[]` (`left`, `right` edge of justified text), `body_glyph_height_px`, `default_alignment`.
+
+`blocks[]` (in `reading_order`): `block_id`, `kind` (`text` | `figure`), `role`, `bbox`.
+- text: `text`, `lines[]` (`bbox`, `text`, `confidence`, `glyph_height_px`, `paragraph_start`), `unit_id`, `continues_from`/`continues_to`, `figure_ids`, `translation_status`, `content_context`, `typography` (`glyph_height_px`, `relative_size`, `line_pitch_px`, `style`, `uppercase_ratio`, `alignment` [`justified`/`left`/`center`], `alignment_measured`, `first_line_indent_px`, `last_line_shortfall_px`, `gap_above_px`).
+- figure: `file` (relative path), `crop_bbox`, `detector`, `captions[]` (block ids).
+
+`units[]`: `unit_id`, `type`, `text` (dehyphenated), `source_block_ids`, `dehyphenated`, `joins`.

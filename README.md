@@ -10,6 +10,8 @@ A Python-based document reconstruction and translation project for historical bo
 - `src/booktrans/deskew.py`, `illustrations.py`, `imgutil.py` — helpers for per-page skew/shear correction, geometric illustration detection (before OCR) and OCR crops.
 - `src/booktrans/stage2.py` — OCR line extraction (padded, 2x upscaled crops), line classification, geometric caption model, page-level paragraph detection, JSON output and diagnostic overlay.
 - `src/booktrans/stage3.py` — illustration objects, caption/line association and translation status.
+- `src/booktrans/booktrans.py` — **one-command wrapper**: runs stages 1–4 on a TIFF and writes the result folder described below.
+- `src/booktrans/docmodel.py` — builds the nested page model (`document.json`) and crops the figures.
 - `src/booktrans/stage4.py` — cross-page paragraph links, dehyphenation and translation units (`units.json`).
 - `examples/` — representative JSON and diagnostic outputs from the Stage 2.1 experiments. These are examples, not golden test fixtures.
 - `docs/` — architecture, pipeline, data model, decisions and development status.
@@ -25,6 +27,15 @@ sudo port install tesseract tesseract-deu
 ```
 
 ## Running the current prototype
+
+One command per TIFF (spread or single page):
+
+```bash
+cd src/booktrans
+python booktrans.py /path/to/0001.tif -o /path/to/output
+```
+
+creates `output/0001/` with `document.json` (nested model: pages → blocks → lines, layout, typography, figure links, translation units), `pages/` (deskewed page images; all coordinates refer to them), `figures/` (every illustration cropped to a PNG), `debug/` (overlays) and `stages/` (raw JSON of stages 1–4). Each TIFF is processed on its own; to link paragraphs across spreads, run `stage4.py` over the `stages/s3` JSON files of consecutive spreads. The individual stages can still be run separately:
 
 Stage 1:
 
