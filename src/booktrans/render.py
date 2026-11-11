@@ -491,16 +491,27 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
         Ws = [W0]
         if col:
             avail = (col['right'] - first['bbox'][0]) if anchor == 'left' else (first['bbox'][2] - col['left'])
+            # do not grow into a neighbouring block on the same rows (side-by-side captions)
+            fx1, fy1, fx2, fy2 = first['bbox']
+            for ob in doc['pages'][frames[0][0]]['blocks']:
+                if ob is first or ob['kind'] not in ('text', 'figure'):
+                    continue
+                ox1, oy1, ox2, oy2 = ob['bbox']
+                if min(fy2, oy2) - max(fy1, oy1) > 0.3 * (fy2 - fy1):
+                    if anchor == 'left' and ox1 >= fx2:
+                        avail = min(avail, ox1 - 6 - fx1)
+                    elif anchor == 'right' and ox2 <= fx1:
+                        avail = min(avail, fx2 - ox2 - 6)
             Ws = [W0 * k for k in (1.0, 1.06, 1.12, 1.2, 1.3) if W0 * k <= avail + 0.5] or [W0]
         chosen = None
-        for shrink in (1.0, 0.98, 0.96, 0.94, 0.92, 0.9):
+        for shrink in (1.0, 0.98, 0.96, 0.94, 0.92, 0.9, 0.86, 0.82):
             size = size0 * shrink
             font = fonts.get(style, size * 8)
-            track = 0.0
+            track0 = 0.0
             if tracking is not None:
-                track = tracking * size
+                track0 = tracking * size
             elif not upper:                               # fit the letter-spacing to the original line widths
-                track = fit_track([first], font, 8, size)
+                track0 = fit_track([first], font, 8, size)
             else:                                         # letter-space capitals up to the original line widths
                 gaps = []
                 for ln in first['lines']:
@@ -508,15 +519,19 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
                     if n > 3:
                         nat = font.getlength(ln['text'].strip()) / 8
                         gaps.append(((ln['bbox'][2] - ln['bbox'][0]) - nat) / (n - 1))
-                track = float(min(max(np.median(gaps) if gaps else 0.0, 0.0), 0.25 * size))
-            for Wc in Ws:
-                lines, relaxed = typeset(text, font, Wc * 8, 0.0, False, space_factor=word_space, track=track * 8)
-                if len(lines) <= capacity:
-                    chosen = (shrink, Wc, lines, relaxed, size, track); break
+                track0 = float(min(max(np.median(gaps) if gaps else 0.0, 0.0), 0.25 * size))
+            for tf in ((1.0, 0.5, 0.0) if track0 > 0 else (1.0,)):
+                track = track0 * tf
+                for Wc in Ws:
+                    lines, relaxed = typeset(text, font, Wc * 8, 0.0, False, space_factor=word_space, track=track * 8)
+                    if len(lines) <= capacity and max(l['width'] for l in lines) / 8 <= Wc + 0.5:
+                        chosen = (shrink, Wc, lines, relaxed, size, track); break
+                if chosen:
+                    break
             if chosen:
                 break
         if not chosen:
-            shrink, Wc = 0.9, Ws[-1]; size = size0 * shrink
+            shrink, Wc = 0.82, Ws[-1]; size = size0 * shrink
             font = fonts.get(style, size * 8)
             lines, relaxed = typeset(text, font, Wc * 8, 0.0, False, space_factor=word_space, track=0.0)
             chosen = (shrink, Wc, lines, relaxed, size, 0.0)

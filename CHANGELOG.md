@@ -10,6 +10,10 @@
 - New options `--tracking EM`, `--size-scale`, `--word-space`; `booktrans.py` passes
   `--font/--bold-font/--italic-font` and these to the renderer. `--tracking 0` = previous look.
 - `report.json` gains `tracking_em` and `lines_original`.
+- Fixed frames (captions, headings) no longer widen into a neighbouring block on the same
+  rows and no longer overflow their width: tracking, then size, is reduced until every line fits
+  (fixes side-by-side captions colliding on 0002).
+- `examples/0002.pl.json`: translation of the second sample spread (joins the sentence cut at the end of 0001).
 
 ### OCR crops and Stage 1 clean-up
 

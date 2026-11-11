@@ -1,0 +1,66 @@
+{
+  "schema": "1.0",
+  "target_language": "pl",
+  "prompt": "You are a highly educated polish art and architecture historian translating a german art history and architecture related literature to polish. The literature is mostly related to Lower Silesia. For geographical names, use names assigned to places after 1945 where this apply. Language used should be appropriate for first half of XX century. Translate following text to polish:",
+  "notes": [
+    "OCR slips corrected in the source before translation (Südportal, Portalkämpfer, Stadtmauer, \"Fin\"/\"Ein\", \"s ist\"/\"Es ist\", Kinfassung, dürfie, \"Abb.538,39\" = Abb. 38, 39, Abb. 59 for Ritterswalde = 39).",
+    "u0008 is the end of the sentence begun in 0001 u0009 (\"(Niederschlesien und die tschechoslowakische Republik)\"): joined it reads \"(Dolny Śląsk i Republika Czechosłowacka) musiały zostać wzięte pod uwagę\".",
+    "u0013 stops after \"Münsterberg,\" because the sentence continues on the next spread.",
+    "Place names post-1945: Ritterswalde = Domaszkowice, Bösdorf = Pakosławice, Friedland OS = Korfantów, Pitschen = Byczyna, Ziegenhals = Głuchołazy, Münsterberg = Ziębice, Rauden OS = Rudy. Barzdorf and Jauernig lie in Czechoslovakia: Czech names Bartultovice and Javorník. Politz was rendered \"Police\" and should be checked (unverified).",
+    "Wording to check: \"Abtreppung\" = uskok, \"Kämpfer\" = impost, \"Schaftring\" = pierścień trzonu kolumny."
+  ],
+  "units": {
+    "u0001": {
+      "source": "39 RITTERSWALDE, SÜDPORTAL DER KATHOLISCHEN PFARRKIRCHE",
+      "pl": "39 DOMASZKOWICE, PORTAL POŁUDNIOWY KATOLICKIEGO KOŚCIOŁA PARAFIALNEGO"
+    },
+    "u0002": {
+      "source": "38 FRIEDLAND OS, WESTPORTAL DER KATHOLISCHEN PFARRKIRCHE",
+      "pl": "38 KORFANTÓW, PORTAL ZACHODNI KATOLICKIEGO KOŚCIOŁA PARAFIALNEGO"
+    },
+    "u0003": {
+      "source": "40 BÖSDORF, PORTALSOCKEL",
+      "pl": "40 PAKOSŁAWICE, COKÓŁ PORTALU"
+    },
+    "u0004": {
+      "source": "58 BÖSDORF, PORTALKÄMPFER",
+      "pl": "58 PAKOSŁAWICE, IMPOST PORTALU"
+    },
+    "u0005": {
+      "source": "59 POLITZ, SCHAFTRING",
+      "pl": "59 POLICE, PIERŚCIEŃ TRZONU"
+    },
+    "u0006": {
+      "source": "41 BARZDORF, PORTALSOCKEL",
+      "pl": "41 BARTULTOVICE, COKÓŁ PORTALU"
+    },
+    "u0007": {
+      "source": "57 FRIEDLAND OS, PORTALKÄMPFER",
+      "pl": "57 KORFANTÓW, IMPOST PORTALU"
+    },
+    "u0008": {
+      "source": "und die tschechoslowakische Republik) in Betracht gezogen werden mußten.",
+      "pl": "i Republika Czechosłowacka) musiały zostać wzięte pod uwagę."
+    },
+    "u0009": {
+      "source": "Die Gliederung des Stoffes erfolgte bei dem fast gänzlichen Fehlen von Archivalien nicht in chronologischer Reihenfolge, sondern nach der Art ihrer Anlage. Es werden zunächst die einfacheren und dann die reicheren Portale behandelt werden.",
+      "pl": "Wobec niemal całkowitego braku materiałów archiwalnych układ materiału nie jest chronologiczny, lecz oparty na rodzaju założenia portali. Omówione zostaną najpierw portale prostsze, a następnie bogatsze."
+    },
+    "u0010": {
+      "source": "Das mit seiner mittelalterlichen Stadtmauer und seinen stattlichen Wehrtürmen ebenso einheitlich wie malerisch wirkende Städtchen Pitschen zeigt uns an seiner mittelalterlichen Backsteinkirche St. Petri bzw. Nikolai die einfachste Form eines gotischen Portals mit einer Abtreppung. Abb. 37. Es ist dem in seinem Untergeschoß aus Bruchsteinen bestehenden Westturm der Kirche eingefügt. Ein mit steilem Spitzbogen gewölbtes Portal mit einer Abtreppung ohne eingestellten Runddienst und ohne Markierung von Sockel und Kämpfer, die Ecken durch eine einfache Phase gebrochen. Die mit der Mauer bündig liegende Einfassung aus dem gleichen Baustoff wie das Untergeschoß des Turmes, nur aus größeren Werkstücken zusammengefügt. Werkmäßig bearbeitet nur in den Leibungen und an der Vorderseite. Die an das Bruchsteinmauerwerk anstoßenden Seiten unbearbeitet.",
+      "pl": "Miasteczko Byczyna, o równie jednolitym, co malowniczym wyglądzie dzięki średniowiecznym murom miejskim i okazałym basztom obronnym, ukazuje nam na swym średniowiecznym ceglanym kościele św. Piotra, czyli św. Mikołaja, najprostszą postać portalu gotyckiego z jednym uskokiem (il. 37). Wprawiony jest on w zachodnią wieżę kościoła, której przyziemie wzniesiono z kamienia łamanego. Portal sklepiony stromym ostrołukiem, z jednym uskokiem, bez wstawionej kolumienki i bez zaznaczenia cokołu i impostu; narożniki złamane prostą fazą. Obramienie, licujące z murem, wykonane z tego samego budulca co przyziemie wieży, tylko z większych ciosów. Obrobione warsztatowo jedynie w ościeżach i od przodu; boki przylegające do muru z kamienia łamanego pozostawiono nieobrobione."
+    },
+    "u0011": {
+      "source": "Die ganz schlichte architektonische Durchbildung, die fast rohe technische Behandlung lassen zunächst auf ein hohes Alter dieses Portals schließen. Wie man aus den Einzelformen besonders im Innern der Kirche auf das gleichzeitig mit ihr errichtete Portal schließen kann, dürfte es kaum vor dem Jahre 1500 entstanden sein. Es gehört somit nicht zu den ältesten steinernen Werken Oberschlesiens. Die Urkunden geben über den Baubeginn der Kirche leider keinen Aufschluß.",
+      "pl": "Całkowicie skromne ukształtowanie architektoniczne i niemal surowa obróbka techniczna każą z początku przypuszczać, że portal ten jest bardzo stary. Jeśli jednak z form szczegółowych, zwłaszcza we wnętrzu kościoła, można wnosić o portalu wzniesionym równocześnie z nim, to powstał on zapewne nie wcześniej niż około roku 1500. Nie należy więc do najstarszych kamiennych dzieł Górnego Śląska. Dokumenty niestety nie dają żadnych wiadomości o początku budowy kościoła."
+    },
+    "u0012": {
+      "source": "Wenn auch reicher in der Einzeldurchbildung, so doch in der Gesamtanordnung verwandt mit dem Pitschener Werk sind die Portale in Bösdorf, Ritterswalde, Friedland OS, Abb. 38, 39, sowie die Chorportale der Pfarrkirche in Barzdorf und der Friedhofskapelle in Jauernig. Die beiden letzteren im Nachbargebiet der Tschechoslowakei (ehemals Österreich-Schlesien). Sie besitzen ebenfalls nur eine Abstufung. Hier sind aber Dienste in die einspringende Gewändedecke gestellt mit entsprechendem Rundstab in den Archivolten. Sockel und Kämpfer werden durch besondere Gesimsung betont. Die Profilierung aller Architekturteile, trotz des verwendeten Granits, von feinster Durcharbeitung. Besonders eigenartig die Gesimsung der Kämpfer. Sie zeigen die Form der im Übergangsstil so beliebten Säulenschaftringe in den verschiedensten Gestaltungen. Die Sockel der Dienste — mit Ausnahme vom Portal in Friedland OS, das dem Sockelgesims die Form eines lesbischen Kymas gegeben hat — haben die übrigen attischen Basen in mittelalterlicher Umprägung. Während die Basis in Bösdorf, Abb. 40, noch stark an das antike Vorbild erinnert, Ritterswalde, Abb. 39, eine recht unbeholfene Form zeigt, hat Barzdorf, Abb. 41, bereits die tief unterschnittene schüsselförmige Gestaltung, die für die Gotik charakteristisch ist.",
+      "pl": "Choć bogatsze w szczegółach, to jednak w ogólnym układzie spokrewnione z byczyńskim dziełem są portale w Pakosławicach, Domaszkowicach i Korfantowie (il. 38, 39) oraz portale prezbiterium kościoła parafialnego w Bartultovicach i kaplicy cmentarnej w Javorníku. Dwa ostatnie leżą na sąsiednim obszarze Czechosłowacji (dawniej Śląsk Austriacki). Mają one również tylko jeden uskok. Tu jednak kolumienki ustawiono w załamaniu węgarów, a w archiwoltach odpowiada im pałąk. Cokół i impost uwydatnia osobne gzymsowanie. Profilowanie wszystkich części architektonicznych, mimo użycia granitu, jest niezwykle staranne. Szczególnie osobliwe jest gzymsowanie impostów: przybiera ono formę pierścieni trzonu kolumny, tak ulubionych w stylu przejściowym, w najrozmaitszych ujęciach. Cokoły kolumienek — z wyjątkiem portalu w Korfantowie, w którym gzyms cokołu otrzymał kształt kymationu lesbijskiego — mają pozostałe bazy attyckie w średniowiecznym przekształceniu. Podczas gdy baza w Pakosławicach (il. 40) przypomina jeszcze silnie wzór antyczny, a w Domaszkowicach (il. 39) ma formę dość niezgrabną, w Bartultovicach (il. 41) występuje już głęboko podcięte, miskowate ukształtowanie, charakterystyczne dla gotyku."
+    },
+    "u0013": {
+      "source": "Die Durchbildung der Gewändeprofilierung, bei der der Rundstab und die aus dem Viertelkreis gebildete Hohlkehle überwiegen, die Gesimsung von Sockel und Kämpfer kennzeichnen die Portale als frühgotisch. Sie liegen zeitlich in der zweiten Hälfte des 13. Jahrhunderts und gehören damit zu den ältesten monumentalen Zeugen des Landes. Die Portalanlage der ehemaligen Zisterzienser-Klosterkirche St. Mariä zu Rauden OS gehört mit den Portalen in Ziegenhals, Münsterberg,",
+      "pl": "Ukształtowanie profilowania węgarów, w którym przeważają pałąk i wklęskę z ćwierćkola, oraz gzymsowanie cokołu i impostu znamionują te portale jako wczesnogotyckie. Powstały one w drugiej połowie XIII wieku i należą tym samym do najstarszych monumentalnych świadectw kraju. Założenie portalowe dawnego kościoła klasztornego cystersów pw. Wniebowzięcia Najświętszej Marii Panny w Rudach należy wraz z portalami w Głuchołazach, Ziębicach,"
+    }
+  }
+}
