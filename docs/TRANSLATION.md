@@ -114,6 +114,15 @@ Settings: `--temperature` (0.2), `--max-tokens` (4096), `--timeout` (600 s per r
 
 Diagnostics: every request logs its time, prompt and answer token counts, tokens per second, the finish reason and any hidden reasoning (`reasoning_content`); an empty answer is explained (thinking model that used its tokens for reasoning, or cut off by the token/context limit). Use it to judge a model's real speed before changing anything.
 
+Reasoning models: a "thinking" model can spend all `--max-tokens` on hidden reasoning and return an empty
+answer. Seen with `google/gemma-4-12b` in LM Studio: 15,000 characters of reasoning, 4095 tokens, 420 s at
+9.7 tok/s, empty answer. **Gemma 4 thinks by default.** In LM Studio, open the model's settings (Custom
+Fields) and switch **"Enable Thinking" off** (default on, per the model page). Google's documentation
+describes the same switch as the chat-template flag `enable_thinking`. `--no-think` sends
+`chat_template_kwargs.enable_thinking=false` and `reasoning_effort=none` with each request; whether LM
+Studio passes them to the template is unverified, so check the `model call` log line for hidden reasoning.
+`--extra-body JSON` adds any other request field.
+
 Known limits: units are translated independently (one sentence of context only); no batching, no
 streaming; the source stored in the output is the raw OCR text, not the corrected German; a model that
 ignores "answer only with the translation" is only partly caught by `clean()`; the length check cannot
