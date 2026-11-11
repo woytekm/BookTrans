@@ -1,3 +1,9 @@
+# !Coded by AI  
+This project aims for recreation of a pre war, public domain books with translation to another language in the process. 
+Translated book should keep a look and feel of an original (font and layout wise).
+I am focusing on a German pre war literature related to architecture and art history of Lower Silesia. 
+Coded using Claude AI @2026
+
 # BookTrans
 
 A Python-based document reconstruction and translation project for historical books. The initial target is a pre-war German architecture book to be translated into Polish while retaining original illustrations, page composition and an approximate historical typographic character.
