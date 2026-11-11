@@ -177,11 +177,10 @@ def run(doc, a, call=None):
     cache_path = a.output.with_suffix('.cache.json')
     cache = json.loads(cache_path.read_text(encoding='utf-8')) if cache_path.exists() else {}
     extra = json.loads(a.extra_body) if getattr(a, 'extra_body', None) else {}
-    if getattr(a, 'no_think', False):                  # Qwen3-style switches; servers ignore what they do not know
+    if getattr(a, 'no_think', False):                  # servers ignore what they do not know
         extra.setdefault('chat_template_kwargs', {'enable_thinking': False})
         extra.setdefault('reasoning_effort', 'none')
-    call = call or (lambda prompt: chat(a.endpoint, a.model, prompt + ('\n\n/no_think' if getattr(a, 'no_think', False) else ''),
-                                        a.temperature, a.max_tokens, a.timeout, a.api_key, extra))
+    call = call or (lambda prompt: chat(a.endpoint, a.model, prompt, a.temperature, a.max_tokens, a.timeout, a.api_key, extra))
     units = collect(doc)
     todo = [u for u in units if u[4] == 'translate' and (not a.only or u[0] in a.only)]
     skipped = [u[0] for u in units if u[4] != 'translate']
@@ -256,7 +255,7 @@ def main():
     ap.add_argument('--timeout', type=float, default=600, help='seconds per request')
     ap.add_argument('--retries', type=int, default=2, help='extra attempts when a check fails (default 2)')
     ap.add_argument('--only', nargs='*', help='translate only these unit ids')
-    ap.add_argument('--no-think', action='store_true', help='ask a reasoning model not to think (sends enable_thinking=false, reasoning_effort=none and appends /no_think; only some models obey)')
+    ap.add_argument('--no-think', action='store_true', help='ask a reasoning model not to think (sends chat_template_kwargs.enable_thinking=false and reasoning_effort=none; whether the server passes them on depends on the server and model; in LM Studio the reliable switch is the model\'s "Enable Thinking" custom field)')
     ap.add_argument('--extra-body', help='JSON merged into every request body, e.g. \'{"top_p": 0.9}\'')
     ap.add_argument('--dry-run', action='store_true', help='write the prompts, do not call the model')
     a = ap.parse_args()
