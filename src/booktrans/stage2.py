@@ -13,7 +13,7 @@ import cv2, numpy as np, pytesseract
 from PIL import Image
 from pytesseract import Output
 
-from imgutil import crop_for_ocr
+from imgutil import crop_for_ocr, load_pages
 
 
 def ocr_lines(page, bbox, lang, context=10):
@@ -215,11 +215,14 @@ def group_semantic_regions(lines, body, page_gray, text_bbox):
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('input',type=Path); ap.add_argument('--stage1-json',type=Path,default=Path('out1/page_structure.json'))
     ap.add_argument('-o','--output',type=Path,default=Path('stage2_out')); ap.add_argument('--lang',default='deu'); a=ap.parse_args()
-    src=np.asarray(Image.open(a.input).convert('RGB')); gray=cv2.cvtColor(src,cv2.COLOR_RGB2GRAY)
     base=json.loads(a.stage1_json.read_text(encoding='utf8'))
+    # Analyse the exact (deskewed) page images Stage 1 saved; ``a.input`` is only
+    # the fallback for old Stage 1 JSON without page images.
+    page_imgs=load_pages(base,a.stage1_json.parent,a.input)
+    src=np.hstack(page_imgs)
     a.output.mkdir(parents=True,exist_ok=True); result={'schema_version':'0.2.1','source_file':str(a.input),'pages':[]}
-    for p in base['pages']:
-        side=p['side']; xoff=p['x_offset']; page=src[:,xoff:xoff+p['width']]; page_gray=gray[:,xoff:xoff+p['width']]
+    for p,page in zip(base['pages'],page_imgs):
+        side=p['side']; xoff=p['x_offset']; page_gray=cv2.cvtColor(page,cv2.COLOR_RGB2GRAY)
         page_regions=[]; all_lines=[]; image_boxes=[]; text_bboxes=[]
         for r in p['regions']:
             if r['type'] not in ('text','heading','caption','text_candidate'):
@@ -259,6 +262,7 @@ def main():
         regs.sort(key=lambda r:(r['bbox'][1],r['bbox'][0]))
         for i,r in enumerate(regs,1): r['id']=i
         result['pages'].append({'page':p['page'],'side':side,'x_offset':xoff,'width':p['width'],'height':p['height'],
+                                'skew_deg':p.get('skew_deg'),'deskew':p.get('deskew'),'page_image':p.get('page_image'),
                                 'estimated_body_glyph_height':round(body,1),'regions':regs,'line_count':len(lines)})
     (a.output/'page_structure_stage2.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8')
     dbg=cv2.cvtColor(src,cv2.COLOR_RGB2BGR).copy()

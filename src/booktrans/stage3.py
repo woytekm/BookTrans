@@ -12,6 +12,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from imgutil import load_pages
+
 
 def area(b):
     return max(0, b[2]-b[0]) * max(0, b[3]-b[1])
@@ -163,8 +165,7 @@ def main():
     # Diagnostic overlay on the original spread: illustration geometry is
     # emphasized, and OCR lines are coloured by translation eligibility.
     try:
-        src_path=Path(data['source_file'])
-        src=np.asarray(Image.open(src_path).convert('RGB'))
+        src=np.hstack(load_pages(stage1,a.stage1_json.parent,data['source_file']))
         dbg=cv2.cvtColor(src,cv2.COLOR_RGB2BGR).copy()
         for p in data['pages']:
             ox=p['x_offset']

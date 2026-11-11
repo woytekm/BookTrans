@@ -16,6 +16,31 @@
 - Sample result (`0001.tif`, page 2): 12 of 40 OCR lines changed, the large
   majority of them line-initial fixes.
 
+### Per-page deskew (skew + shear)
+
+- New `src/booktrans/deskew.py`. Each page is corrected on its own right after the
+  spread is split, before any analysis. Two numbers are estimated per page: the
+  text-baseline slope and the column-edge slope (from full-width justified
+  lines), and one small affine map makes baselines horizontal and edges vertical.
+  A pure rotation was not enough: on the left page of `0001.tif` the baselines
+  slope 0.45 deg while the column edges are already vertical, so rotating alone
+  tilted the edges by the same amount. Pages with fewer than 8 full-width lines
+  fall back to rotation; pages with fewer than 6 text lines are left untouched.
+- Measured on the sample spreads (baseline / edge tilt before correction):
+  0001 L 0.45 / 0.00 deg, 0001 R 1.01 / -0.94, 0002 L 0.75 / 0.01, 0002 R 0.94 / -1.30.
+  After correction all residuals are < 0.05 deg; right-page column-edge drift fell
+  from about -16 and -24 px per 1000 px to under 1 px.
+- Stage 1 saves the deskewed page (`page_image`) and records `skew_deg` and a
+  `deskew` block (angles, edge model, source-to-destination matrix) per page.
+  Stages 2 and 3 now analyse those saved pixels; all JSON coordinates refer to
+  them. Debug overlays are drawn on the deskewed spread.
+- OCR text accuracy is roughly unchanged by deskew at the current scan resolution
+  (some line-initial and word fixes, some new digit confusions such as 3/5); the
+  gain is geometric and matters for paragraph detection and reconstruction.
+- Tests: `tests/test_deskew.py` (synthetic page with known skew/shear),
+  `tests/conftest.py` puts the stage directory on the path; `test_stage3.py`
+  imports `stage3` directly.
+
 ## 2026-11-11 — Documentation baseline and project consolidation
 
 - Created a persistent project tree and initial architecture/data-model/pipeline/decision/status documentation.

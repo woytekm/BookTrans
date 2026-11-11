@@ -9,6 +9,7 @@ import pytesseract
 from pytesseract import Output
 
 from imgutil import crop_for_ocr, paper_color
+from deskew import deskew_page
 
 
 def load_rgb(path):
@@ -190,15 +191,22 @@ def main():
     args.output.mkdir(parents=True,exist_ok=True)
     rgb=load_rgb(args.input)
     spread={'file':str(args.input),'width':rgb.shape[1],'height':rgb.shape[0], 'pages':[]}
+    deskewed=[]
     for side,page,offset in split_spread(rgb):
         page_no=len(spread['pages'])+1
+        # Skew differs per page (0.4-1.0 deg in the samples), so each page is
+        # straightened on its own before any analysis. All coordinates below
+        # refer to the deskewed page image saved next to the JSON.
+        page,skew=deskew_page(page)
         regions=process_page(page,side,offset,args.lang)
-        # Save cropped page image for later stages.
-        Image.fromarray(page).save(args.output/f"page_{page_no:02d}_{side}.png")
-        spread['pages'].append({'page':page_no,'side':side,'x_offset':offset,'width':page.shape[1],'height':page.shape[0],'regions':regions})
-    # Debug overlay on the original spread.
+        name=f"page_{page_no:02d}_{side}.png"
+        Image.fromarray(page).save(args.output/name)
+        deskewed.append(page)
+        spread['pages'].append({'page':page_no,'side':side,'x_offset':offset,'width':page.shape[1],'height':page.shape[0],
+                                'skew_deg':skew['angle_deg'],'deskew':skew,'page_image':name,'regions':regions})
+    # Debug overlay on the deskewed spread (same geometry as the original).
     all_regions=[r for p in spread['pages'] for r in p['regions']]
-    draw_debug(rgb,all_regions,args.output/'debug_layout.png')
+    draw_debug(np.hstack(deskewed),all_regions,args.output/'debug_layout.png')
     with open(args.output/'page_structure.json','w',encoding='utf-8') as f:
         json.dump(spread,f,ensure_ascii=False,indent=2,default=lambda o: o.item() if hasattr(o, 'item') else str(o))
     print(json.dumps({'input':str(args.input),'pages':len(spread['pages']),'regions':len(all_regions),'output':str(args.output/'page_structure.json')},indent=2))

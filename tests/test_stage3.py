@@ -1,8 +1,4 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parents[1] / 'src'))
-
-from booktrans.stage3 import overlap_ratio, center_inside, associate_line, stage1_illustration_candidates
+from stage3 import overlap_ratio, center_inside, associate_line, stage1_illustration_candidates
 
 
 def test_overlap_and_center():

@@ -4,8 +4,11 @@
 Kept dependency-free apart from numpy/OpenCV so the stage scripts stay
 runnable straight from the source directory (no package install needed).
 """
+from pathlib import Path
+
 import cv2
 import numpy as np
+from PIL import Image
 
 
 def paper_color(img):
@@ -46,3 +49,24 @@ def crop_for_ocr(page, bbox, context=10, pad=24, color=None):
         color = paper_color(page)
     padded = cv2.copyMakeBorder(crop, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=color)
     return padded, (cx1 - pad, cy1 - pad)
+
+
+def load_pages(stage1, base_dir, fallback_src=None):
+    """Return the RGB page images listed in a Stage 1 JSON structure.
+
+    Stage 1 saves each (deskewed) page as ``page_image`` next to its JSON; later
+    stages must analyse exactly those pixels, because every coordinate in the
+    JSON refers to them.  For older JSON without ``page_image`` the pages are
+    cut from ``fallback_src`` (the original spread) instead.
+    """
+    pages = []
+    src = None
+    for p in stage1['pages']:
+        name = p.get('page_image')
+        if name and (Path(base_dir) / name).exists():
+            pages.append(np.asarray(Image.open(Path(base_dir) / name).convert('RGB')))
+        else:
+            if src is None:
+                src = np.asarray(Image.open(fallback_src).convert('RGB'))
+            pages.append(src[:, p['x_offset']:p['x_offset'] + p['width']])
+    return pages
