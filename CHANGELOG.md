@@ -109,6 +109,24 @@
   paragraph rule and limitations; data model additions; README lists
   hand-installed modules and MacPorts `tesseract` / `tesseract-deu`.
 
+### High-resolution scans (working copy + full-resolution OCR and figures)
+
+- Stage 1 `--work-height` (default 1315, the sample scans' size; wrapper passes it
+  through). A scan taller than 1.4x that is analysed on an area-averaged working
+  copy, because every geometric threshold is a pixel value tuned at that size; the
+  same split and the same affine deskew are applied to the full-resolution page
+  (`page_NN_X_full.png`, `scale` = full px per working px in the JSON).
+- Stage 2 OCRs crops cut from the full-resolution pixels, resized so that
+  `--ocr-scale` keeps its meaning (OCR pixels per working pixel; default 2 is
+  about 270 DPI for a 600 DPI scan). Boxes and glyph heights stay in working px.
+- Figures are cropped from the full-resolution page; `document.json` pages carry
+  `scale` and `image_full`.
+- Verified mechanically only (scans upscaled from the samples): coordinates map
+  correctly and native-size scans are unchanged. Detection quality on real 600 DPI
+  scans is NOT tuned yet: on a synthetic 5x upscale one drawing plate was split into
+  pieces (its gaps sit at the 40 px merge limit), so thresholds need tuning on a real file.
+- Tests: `tests/test_scale.py`, full-resolution figure crop in `tests/test_docmodel.py`.
+
 ### One-command wrapper and nested document model
 
 - New `src/booktrans/booktrans.py`: runs stages 1-4 on a TIFF and writes

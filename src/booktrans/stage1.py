@@ -9,7 +9,7 @@ import pytesseract
 from pytesseract import Output
 
 from imgutil import crop_for_ocr, paper_color
-from deskew import deskew_page
+from deskew import deskew_page, correction_matrix, apply_correction
 from illustrations import detect_illustrations, mask_box
 
 
@@ -27,6 +27,14 @@ def detect_gutter(rgb):
     profile = np.median(gray[60:h-60, a:b], axis=0).astype(np.float32)
     profile = cv2.GaussianBlur(profile.reshape(1, -1), (0, 0), 7).ravel()
     return a + int(np.argmin(profile))
+
+WORK_HEIGHT = 1315     # px: the resolution all geometric thresholds were tuned for
+
+
+def working_scale(height, work_height=WORK_HEIGHT):
+    """Full px per working px. Scans not clearly larger than the working size are used as is."""
+    return height / float(work_height) if height > 1.4 * work_height else 1.0
+
 
 def split_spread(rgb):
     h, w = rgb.shape[:2]
@@ -183,10 +191,18 @@ def main():
     ap.add_argument('input', type=Path)
     ap.add_argument('-o','--output', type=Path, default=Path('output'))
     ap.add_argument('--lang', default='deu')
+    ap.add_argument('--work-height', type=int, default=WORK_HEIGHT,
+                    help='height in px of the working copy used for layout analysis (default %d, the size of the sample scans); larger scans are analysed downscaled and OCR/figures use the full-resolution pixels' % WORK_HEIGHT)
     args=ap.parse_args()
     args.output.mkdir(parents=True,exist_ok=True)
-    rgb=load_rgb(args.input)
-    spread={'file':str(args.input),'width':rgb.shape[1],'height':rgb.shape[0], 'pages':[]}
+    full=load_rgb(args.input)
+    f=working_scale(full.shape[0],args.work_height)
+    # Layout analysis is tuned in pixels for ~1300 px tall pages. A larger scan is
+    # analysed on an area-averaged working copy; full-resolution pixels are kept
+    # for OCR and for the extracted figures (same split and the same affine map).
+    rgb=cv2.resize(full,(int(round(full.shape[1]/f)),int(round(full.shape[0]/f))),interpolation=cv2.INTER_AREA) if f>1 else full
+    spread={'file':str(args.input),'width':rgb.shape[1],'height':rgb.shape[0],'scale':f,
+            'full_width':full.shape[1],'full_height':full.shape[0],'pages':[]}
     deskewed=[]
     for side,page,offset in split_spread(rgb):
         page_no=len(spread['pages'])+1
@@ -198,8 +214,17 @@ def main():
         name=f"page_{page_no:02d}_{side}.png"
         Image.fromarray(page).save(args.output/name)
         deskewed.append(page)
-        spread['pages'].append({'page':page_no,'side':side,'x_offset':offset,'width':page.shape[1],'height':page.shape[0],
-                                'skew_deg':skew['angle_deg'],'deskew':skew,'page_image':name,'regions':regions})
+        rec={'page':page_no,'side':side,'x_offset':offset,'width':page.shape[1],'height':page.shape[0],
+             'skew_deg':skew['angle_deg'],'deskew':skew,'page_image':name,'scale':f,'regions':regions}
+        if f>1:
+            x0=int(round(offset*f)); x1=int(round((offset+page.shape[1])*f))
+            fp=full[:,x0:x1]
+            m=correction_matrix(skew['baseline_slope'],skew['edge_slope'],fp.shape)
+            fp=apply_correction(fp,m) if (abs(skew['baseline_slope'])>=.0005 or abs(skew['edge_slope'])>=.0005) else fp
+            fname=f"page_{page_no:02d}_{side}_full.png"
+            Image.fromarray(fp).save(args.output/fname,compress_level=1)
+            rec.update({'page_image_full':fname,'full_width':fp.shape[1],'full_height':fp.shape[0]})
+        spread['pages'].append(rec)
     # Debug overlay on the deskewed spread (same geometry as the original).
     all_regions=[r for p in spread['pages'] for r in p['regions']]
     draw_debug(np.hstack(deskewed),all_regions,args.output/'debug_layout.png')

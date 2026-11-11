@@ -14,7 +14,7 @@ import cv2, numpy as np, pytesseract
 from PIL import Image
 from pytesseract import Output
 
-from imgutil import crop_for_ocr, load_pages, paper_color
+from imgutil import crop_for_ocr, load_pages, load_full_pages, paper_color
 from illustrations import mask_box
 
 
@@ -44,19 +44,31 @@ def split_at_gaps(ids, d):
     return segs
 
 
-def ocr_lines(page, bbox, lang, context=10, scale=2.0):
+def ocr_lines(page, bbox, lang, context=10, scale=2.0, hires=None, f=1.0):
     """OCR one coarse region of ``page`` and return line objects in page coordinates.
 
     The region is cut with real context pixels and surrounded by paper-coloured
     padding (see imgutil.crop_for_ocr); a bare crop made Tesseract drop or
     misread line-initial letters that touch the crop border.
     """
-    crop,offset=crop_for_ocr(page,bbox,context=context,pad=24)
-    gray=cv2.cvtColor(crop,cv2.COLOR_RGB2GRAY)
+    # ``bbox`` and the result are in working-scale pixels. With a full-resolution
+    # page (``hires``, ``f`` full px per working px) the crop is cut from the real
+    # pixels and resized by scale/f, so ``scale`` keeps its meaning (OCR pixels
+    # per working pixel) whatever the scan resolution.
+    if hires is not None and f>1:
+        crop,(ox,oy)=crop_for_ocr(hires,[v*f for v in bbox],context=int(round(context*f)),pad=int(round(24*f)))
+        offset=(ox/f,oy/f)
+        gray=cv2.cvtColor(crop,cv2.COLOR_RGB2GRAY)
+        gray=cv2.resize(gray,None,fx=scale/f,fy=scale/f,interpolation=cv2.INTER_AREA if scale<f else cv2.INTER_CUBIC)
+        scale_done=True
+    else:
+        crop,offset=crop_for_ocr(page,bbox,context=context,pad=24)
+        gray=cv2.cvtColor(crop,cv2.COLOR_RGB2GRAY)
+        scale_done=False
     # The sample scans are ~135 DPI: body glyphs are ~8 px, captions ~6 px (x-height),
     # far below what Tesseract likes. Upscaling the crop first improves small text
     # (captions) clearly and leaves body text unchanged. Boxes are mapped back.
-    if scale!=1: gray=cv2.resize(gray,None,fx=scale,fy=scale,interpolation=cv2.INTER_CUBIC)
+    if scale!=1 and not scale_done: gray=cv2.resize(gray,None,fx=scale,fy=scale,interpolation=cv2.INTER_CUBIC)
     gray=cv2.createCLAHE(clipLimit=1.5,tileGridSize=(8,8)).apply(gray)
     d=pytesseract.image_to_data(gray,lang=lang,config='--psm 6',output_type=Output.DICT)
     if scale!=1:
@@ -83,7 +95,7 @@ def ocr_lines(page, bbox, lang, context=10, scale=2.0):
         hs=[d['height'][i] for i in ids if d['height'][i]>0]
         chars=re.sub(r'[^A-Za-zÄÖÜäöüß]','',txt)
         caps=sum(c.isupper() for c in chars)/max(1,len(chars))
-        out.append({'bbox':[x1+ox,y1+oy,x2+ox,y2+oy],'text':txt,
+        out.append({'bbox':[int(round(x1+ox)),int(round(y1+oy)),int(round(x2+ox)),int(round(y2+oy))],'text':txt,
                     'glyph_height':round(float(np.median(hs)),1) if hs else 0,
                     'confidence':round(float(np.mean([float(d['conf'][i]) for i in ids])),1),
                     'uppercase_ratio':round(caps,2),'word_count':len(ids)})
@@ -293,24 +305,29 @@ def main():
     # Analyse the exact (deskewed) page images Stage 1 saved; ``a.input`` is only
     # the fallback for old Stage 1 JSON without page images.
     page_imgs=load_pages(base,a.stage1_json.parent,a.input)
+    full_imgs=load_full_pages(base,a.stage1_json.parent)
     src=np.hstack(page_imgs)
     a.output.mkdir(parents=True,exist_ok=True); result={'schema_version':'0.3.0','source_file':str(a.input),'pages':[]}
-    for p,page in zip(base['pages'],page_imgs):
-        side=p['side']; xoff=p['x_offset']
+    for p,page,fullpage in zip(base['pages'],page_imgs,full_imgs):
+        side=p['side']; xoff=p['x_offset']; f=p.get('scale',1.0) or 1.0
         all_lines=[]; image_boxes=[]
         # Text is OCR'd from a copy of the page with every illustration painted
         # over in paper colour: OCR crops carry real context pixels, and the edge
         # of a neighbouring drawing used to come back as junk "captions".
         ocr_page=page.copy(); paper=paper_color(page)
+        ocr_full=fullpage.copy() if fullpage is not None else None
+        paper_full=paper_color(fullpage) if fullpage is not None else None
         for r in p['regions']:
             if 'image' in r['type'] or 'drawing' in r['type']:
                 x1,y1,x2,y2=mask_box(r); ocr_page[max(0,y1):y2,max(0,x1):x2]=paper
+                if fullpage is not None:
+                    X1,Y1,X2,Y2=[int(round(v*f)) for v in (x1,y1,x2,y2)]; ocr_full[max(0,Y1):Y2,max(0,X1):X2]=paper_full
         for r in p['regions']:
             if r['type'] not in ('text','heading','caption','text_candidate'):
                 if 'image' in r['type'] or 'drawing' in r['type']:
                     image_boxes.append({'bbox':r['bbox'],'type':'illustration'})
                 continue
-            ls=ocr_lines(ocr_page,r['bbox'],a.lang,scale=a.ocr_scale); all_lines.extend(ls)
+            ls=ocr_lines(ocr_page,r['bbox'],a.lang,scale=a.ocr_scale,hires=ocr_full,f=f); all_lines.extend(ls)
         all_lines=dedupe_lines(all_lines)
         all_lines.sort(key=lambda z:(z['bbox'][1],z['bbox'][0]))
         lines,body=classify_lines(all_lines,image_boxes,page.shape[0])
@@ -324,6 +341,7 @@ def main():
         for i,r in enumerate(regs,1): r['id']=i
         result['pages'].append({'page':p['page'],'side':side,'x_offset':xoff,'width':p['width'],'height':p['height'],
                                 'skew_deg':p.get('skew_deg'),'deskew':p.get('deskew'),'page_image':p.get('page_image'),
+                                'scale':f,'page_image_full':p.get('page_image_full'),
                                 'estimated_body_glyph_height':round(body,1),'regions':regs,'line_count':len(lines)})
     (a.output/'page_structure_stage2.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8')
     dbg=cv2.cvtColor(src,cv2.COLOR_RGB2BGR).copy()

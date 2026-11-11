@@ -17,6 +17,7 @@ depends on translation or rendering; the renderer will place translated unit
 text into the block boxes and paste the figure files back.
 """
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -76,9 +77,10 @@ def _nid(i):
     return i[3:] if i and i[:1] == 's' and i[1:2].isdigit() and i[2:3] == '-' else i
 
 
-def build_page(page, image_rel, page_img, fig_dir, unit_of):
+def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_rel=None):
     """Return the nested model of one page; writes figure crops into ``fig_dir``."""
     h, w = page['height'], page['width']
+    f = float(page.get('scale') or 1.0)
     regions = page['regions']
     paras = [r for r in regions if r['type'] == 'paragraph']
     edges = _col_edges(paras)
@@ -105,7 +107,13 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of):
         x1, y1 = max(0, x1 - FIG_PAD), max(0, y1 - FIG_PAD)
         x2, y2 = min(w, x2 + FIG_PAD), min(h, y2 + FIG_PAD)
         fn = '%s_fig_%02d.png' % (stem, k)
-        Image.fromarray(page_img[y1:y2, x1:x2]).save(fig_dir / fn)
+        # Cut from the full-resolution page when there is one (boxes are working-scale).
+        if full_img is not None:
+            fh, fw = full_img.shape[:2]
+            Image.fromarray(full_img[max(0, int(round(y1 * f))):min(fh, int(round(y2 * f))),
+                                     max(0, int(round(x1 * f))):min(fw, int(round(x2 * f)))]).save(fig_dir / fn)
+        else:
+            Image.fromarray(page_img[y1:y2, x1:x2]).save(fig_dir / fn)
         fig_of[ill['object_id']] = {
             'block_id': ill['object_id'], 'kind': 'figure', 'role': 'illustration',
             'bbox': ill['bbox'], 'crop_bbox': [x1, y1, x2, y2],
@@ -155,6 +163,8 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of):
     return {
         'page': page['page'], 'side': page['side'],
         'image': image_rel, 'width': w, 'height': h,
+        'scale': f, 'image_full': full_rel,
+        'full_width': page.get('full_width'), 'full_height': page.get('full_height'),
         'source_x_offset': page['x_offset'], 'skew_deg': page.get('skew_deg'),
         'deskew': page.get('deskew'),
         'layout': {
@@ -179,12 +189,17 @@ def build_document(units_doc, stage1_dir, out_dir, source_file):
         dst = out_dir / 'pages' / page['page_image']
         arr = np.asarray(Image.open(src).convert('RGB'))
         Image.fromarray(arr).save(dst)
-        pages.append(build_page(page, 'pages/' + page['page_image'], arr, out_dir / 'figures', unit_of))
+        full_arr = full_rel = None
+        if page.get('page_image_full') and (Path(stage1_dir) / page['page_image_full']).exists():
+            full_rel = 'pages/' + page['page_image_full']
+            shutil.copy(Path(stage1_dir) / page['page_image_full'], out_dir / full_rel)
+            full_arr = np.asarray(Image.open(out_dir / full_rel).convert('RGB'))
+        pages.append(build_page(page, 'pages/' + page['page_image'], arr, out_dir / 'figures', unit_of, full_arr, full_rel))
     units = []
     for u in units_doc['units']:
         d = {k: u[k] for k in ('unit_id', 'type', 'text', 'dehyphenated', 'joins')}
         d['source_block_ids'] = [_nid(i) for i in u['source_object_ids']]
         units.append(d)
     return {'schema_version': SCHEMA, 'source_file': str(source_file),
-            'coordinate_system': 'pixels of each page image (deskewed)',
+            'coordinate_system': 'pixels of each page image (deskewed, working scale); multiply by page.scale for page.image_full',
             'pages': pages, 'units': units}

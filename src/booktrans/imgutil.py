@@ -25,6 +25,22 @@ def paper_color(img):
     return tuple(int(np.median(img[..., c][mask])) for c in range(img.shape[2]))
 
 
+def load_full_pages(stage1, base_dir):
+    """Full-resolution deskewed pages (``page_image_full``), or ``None`` per page.
+
+    Present only when Stage 1 analysed a downscaled working copy of a high
+    resolution scan; ``scale`` in the page record is full px per working px.
+    """
+    out = []
+    for p in stage1['pages']:
+        name = p.get('page_image_full')
+        if name and (Path(base_dir) / name).exists():
+            out.append(np.asarray(Image.open(Path(base_dir) / name).convert('RGB')))
+        else:
+            out.append(None)
+    return out
+
+
 def crop_for_ocr(page, bbox, context=10, pad=24, color=None):
     """Crop ``bbox`` (x1,y1,x2,y2) from ``page`` for Tesseract.
 

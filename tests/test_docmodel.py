@@ -40,3 +40,16 @@ def test_page_model(tmp_path):
 
 def test_nid():
     assert _nid('s1-p1-reg-2') == 'p1-reg-2' and _nid('p1-ill-1') == 'p1-ill-1'
+
+
+def test_figures_cut_from_full_resolution(tmp_path):
+    img = np.full((400, 700, 3), 240, np.uint8)
+    full = np.full((2000, 3500, 3), 200, np.uint8)          # 5x the working page
+    page = {'page': 1, 'side': 'L', 'x_offset': 0, 'width': 700, 'height': 400, 'scale': 5.0,
+            'regions': [], 'illustrations': [{'object_id': 'p1-ill-1', 'bbox': [100, 20, 400, 140],
+                                              'classification_reason': 'stage1_tonal'}]}
+    m = build_page(page, 'pages/p.png', img, tmp_path / 'figures', {}, full, 'pages/p_full.png')
+    fig = m['blocks'][0]
+    w, h = Image.open(tmp_path / 'figures' / fig['file'].split('/')[-1]).size
+    assert (w, h) == (1520, 620) and fig['bbox'] == [100, 20, 400, 140]   # (300+4)*5, (120+4)*5
+    assert m['scale'] == 5.0 and m['image_full'] == 'pages/p_full.png'

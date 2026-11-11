@@ -34,14 +34,14 @@ def run(cmd):
         raise SystemExit('stage failed: %s' % ' '.join(str(c) for c in cmd[:2]))
 
 
-def process(tiff, out_root, lang='deu', ocr_scale=2.0):
+def process(tiff, out_root, lang='deu', ocr_scale=2.0, work_height=1315):
     tiff = Path(tiff)
     out = Path(out_root) / tiff.stem
     if out.exists():
         shutil.rmtree(out)
     st = out / 'stages'
     s1, s2, s3, s4 = (st / n for n in ('s1', 's2', 's3', 's4'))
-    run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang])
+    run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang, '--work-height', work_height])
     run([HERE / 'stage2.py', tiff, '--stage1-json', s1 / 'page_structure.json', '-o', s2,
          '--lang', lang, '--ocr-scale', ocr_scale])
     run([HERE / 'stage3.py', s2 / 'page_structure_stage2.json', '--stage1-json', s1 / 'page_structure.json', '-o', s3])
@@ -60,9 +60,11 @@ def main():
     ap.add_argument('-o', '--output', type=Path, default=Path('output'))
     ap.add_argument('--lang', default='deu')
     ap.add_argument('--ocr-scale', type=float, default=2.0)
+    ap.add_argument('--work-height', type=int, default=1315,
+                    help='page height in px used for layout analysis; larger scans are analysed downscaled, OCR and figures use full resolution')
     a = ap.parse_args()
     for f in a.inputs:
-        out, doc = process(f, a.output, a.lang, a.ocr_scale)
+        out, doc = process(f, a.output, a.lang, a.ocr_scale, a.work_height)
         for p in doc['pages']:
             nf = sum(b['kind'] == 'figure' for b in p['blocks'])
             nt = sum(b['kind'] == 'text' for b in p['blocks'])
