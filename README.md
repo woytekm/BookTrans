@@ -6,25 +6,22 @@ A Python-based document reconstruction and translation project for historical bo
 
 ## Current prototype
 
-- `src/booktrans/stage1.py` — open-spread TIFF loading, gutter estimation, page splitting, coarse text/image candidate detection and initial OCR.
-- `src/booktrans/stage2.py` — OCR within coarse text regions, OCR-line geometry, basic line classification, paragraph grouping based on visual horizontal ink bands, JSON output and diagnostic overlay.
+- `src/booktrans/stage1.py` — open-spread TIFF loading, gutter estimation, page splitting, per-page deskew, illustration detection and coarse text regions.
+- `src/booktrans/deskew.py`, `illustrations.py`, `imgutil.py` — helpers for per-page skew/shear correction, geometric illustration detection (before OCR) and OCR crops.
+- `src/booktrans/stage2.py` — OCR line extraction (padded, 2x upscaled crops), line classification, geometric caption model, page-level paragraph detection, JSON output and diagnostic overlay.
+- `src/booktrans/stage3.py` — illustration objects, caption/line association and translation status.
+- `src/booktrans/stage4.py` — cross-page paragraph links, dehyphenation and translation units (`units.json`).
 - `examples/` — representative JSON and diagnostic outputs from the Stage 2.1 experiments. These are examples, not golden test fixtures.
 - `docs/` — architecture, pipeline, data model, decisions and development status.
 
 ## Environment
 
-Python 3.10+ is expected. Install the Python requirements:
+Python 3.10+ is expected. The scripts are plain standalone files meant to be run from the source directory; no virtual environment or package install is needed. Install the modules listed in `requirements.txt` (numpy, opencv-python, Pillow, pytesseract; `pytest` for the tests) by hand.
+
+Tesseract is an external system dependency. Install Tesseract and German language data (`deu`). With MacPorts:
 
 ```bash
-python -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Tesseract is an external system dependency. Install Tesseract and German language data (`deu`) using your operating system's package manager. For Debian/Ubuntu:
-
-```bash
-sudo apt install tesseract-ocr tesseract-ocr-deu
+sudo port install tesseract tesseract-deu
 ```
 
 ## Running the current prototype
