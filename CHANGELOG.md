@@ -2,6 +2,17 @@
 
 ## Unreleased — stage2-rework
 
+### Batch mode (books)
+
+- `booktrans.py` takes a folder of TIFFs or several files and writes one book folder: stages 1-3 per
+  spread in `stages/<tiff>/`, stage 4 once over all spreads (paragraphs cut at a spread boundary become
+  one unit), one `document.json` with consecutive page numbers and unique block ids.
+  Options `--name`, `--resume`, `--separate`.
+- `docmodel.build_document(book=True)`; `render.py` writes `page_NNN_X.png` and per-page
+  `compare_page_NNN.png` for books (`compare.png` up to 4 pages).
+- `examples/book_0001-0002.pl.json`: both sample spreads as one book. 2 new tests (37).
+- Docs: glossary design (lookup, not RAG) in `docs/TRANSLATION.md`.
+
 ### Documentation
 
 - New `docs/HANDOFF.md` (start here), `docs/TRANSLATION.md` (translation service contract), `docs/RENDERING.md`.
