@@ -112,6 +112,8 @@ units where it matched). Delete the file to force a fresh translation.
 Settings: `--temperature` (0.2), `--max-tokens` (4096), `--timeout` (600 s per request), `--glossary`
 (default `glossary/*.csv`), `--prompt`, `--rules`.
 
+Diagnostics: every request logs its time, prompt and answer token counts, tokens per second, the finish reason and any hidden reasoning (`reasoning_content`); an empty answer is explained (thinking model that used its tokens for reasoning, or cut off by the token/context limit). Use it to judge a model's real speed before changing anything.
+
 Known limits: units are translated independently (one sentence of context only); no batching, no
 streaming; the source stored in the output is the raw OCR text, not the corrected German; a model that
 ignores "answer only with the translation" is only partly caught by `clean()`; the length check cannot

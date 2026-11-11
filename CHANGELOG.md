@@ -4,6 +4,8 @@
 
 ### Translation script
 
+- Per-request diagnostics (time, token counts, tok/s, finish reason, hidden reasoning, why an answer was empty).
+
 - `src/booktrans/translate.py`: one request per unit to an OpenAI-compatible endpoint (LM Studio), with
   the glossary block of the matching entries, rules (`prompts/translate_rules_pl.txt`), the kind of text and
   the previous sentence as context; answer cleaning; checks (glossary terms, length ratio, digits) with up to

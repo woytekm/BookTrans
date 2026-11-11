@@ -94,8 +94,27 @@ def chat(endpoint, model, prompt, temperature, max_tokens, timeout, api_key=None
     req = urllib.request.Request(endpoint.rstrip('/') + '/chat/completions', json.dumps(body).encode('utf-8'),
                                  {'Content-Type': 'application/json',
                                   'Authorization': 'Bearer ' + (api_key or 'lm-studio')})
+    t0 = time.time()
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode('utf-8'))['choices'][0]['message']['content']
+        data = json.loads(r.read().decode('utf-8'))
+    dt = time.time() - t0
+    choice = data['choices'][0]
+    msg = choice['message']
+    content = msg.get('content') or ''
+    use = data.get('usage') or {}
+    pt, ct = use.get('prompt_tokens'), use.get('completion_tokens')
+    reasoning = msg.get('reasoning_content') or msg.get('reasoning') or ''
+    log.info('translate', '  model call: %.1fs, prompt %s tok, answer %s tok%s, finish=%s%s' % (
+        dt, pt if pt is not None else '?', ct if ct is not None else '?',
+        (' (%.1f tok/s)' % (ct / dt)) if ct and dt > 0 else '', choice.get('finish_reason'),
+        ', %d chars of hidden reasoning' % len(reasoning) if reasoning else ''))
+    if not content.strip():
+        if reasoning:
+            log.info('translate', '  empty answer but the model produced reasoning text: it is a "thinking" model that spent its '
+                                  'tokens on reasoning; disable thinking for it or use a non-reasoning model')
+        elif choice.get('finish_reason') == 'length':
+            log.info('translate', '  empty answer, cut off by the token limit (max_tokens %d or the context length set in LM Studio)' % max_tokens)
+    return content
 
 
 def list_models(endpoint, timeout=15):
@@ -185,6 +204,7 @@ def run(doc, a, call=None):
             log.info('translate', '[%d/%d] %s cached' % (n, len(todo), uid))
         else:
             remark, flags = None, []
+            log.info('translate', '[%d/%d] %s %s: sending %d chars (waiting for the model ...)' % (n, len(todo), uid, role, len(text)))
             for attempt in range(a.retries + 1):
                 try:
                     answer = clean(call(build_prompt(base, rules, block, role, upper, text, ctx, remark)))
