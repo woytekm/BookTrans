@@ -2,6 +2,33 @@
 
 ## Unreleased — stage2-rework
 
+### Translation script
+
+- `src/booktrans/translate.py`: one request per unit to an OpenAI-compatible endpoint (LM Studio), with
+  the glossary block of the matching entries, rules (`prompts/translate_rules_pl.txt`), the kind of text and
+  the previous sentence as context; answer cleaning; checks (glossary terms, length ratio, digits) with up to
+  two retries; cache (`<output>.cache.json`); `--dry-run`, `--only`, `--model`, `--endpoint`.
+  Tested with a mock HTTP server (5 tests, 48 in total); not yet run against a real model.
+
+### Glossary
+
+- `src/booktrans/glossary.py` and `glossary/terms.csv`: German -> Polish place names and terms. Lookup
+  before translation (normalised, compound- and OCR-tolerant matching), `prompt_block`, post-translation
+  `check` (inflected forms accepted), `import-places` for a `german,polish` CSV (duplicates dropped,
+  names with several Polish forms marked `ambiguous`), `match` and `candidates` reports. 6 new tests (43).
+  On the sample book `check` flagged a caption translated more briefly than the glossary term.
+
+### Batch mode (books)
+
+- `booktrans.py` takes a folder of TIFFs or several files and writes one book folder: stages 1-3 per
+  spread in `stages/<tiff>/`, stage 4 once over all spreads (paragraphs cut at a spread boundary become
+  one unit), one `document.json` with consecutive page numbers and unique block ids.
+  Options `--name`, `--resume`, `--separate`.
+- `docmodel.build_document(book=True)`; `render.py` writes `page_NNN_X.png` and per-page
+  `compare_page_NNN.png` for books (`compare.png` up to 4 pages).
+- `examples/book_0001-0002.pl.json`: both sample spreads as one book. 2 new tests (37).
+- Docs: glossary design (lookup, not RAG) in `docs/TRANSLATION.md`.
+
 ### Documentation
 
 - New `docs/HANDOFF.md` (start here), `docs/TRANSLATION.md` (translation service contract), `docs/RENDERING.md`.

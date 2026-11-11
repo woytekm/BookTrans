@@ -1,0 +1,7 @@
+Rules:
+- Answer with the Polish translation only: no comments, no notes, no quotation marks around it, no "Here is the translation".
+- The German text comes from OCR of an old print and may contain obvious reading errors (for example "Fin" for "Ein", "s ist" for "Es ist", "Kinfassung", "dürfie", missing spaces, "0S" or "O05" for "OS", a stray digit in a figure number). Correct them silently and translate what the author meant.
+- Do not add, drop or merge sentences. If the text breaks off in the middle of a sentence, translate up to the break and stop; do not complete it.
+- "Abb. 37" becomes "il. 37"; keep all figure numbers, page numbers, years and other digits unchanged.
+- A footnote reference mark after a word (the OCR may show it as an apostrophe or a digit) is kept as a superscript digit, for example "¹".
+- Keep the register and the technical terminology of an art-history monograph of the first half of the 20th century.

@@ -90,7 +90,12 @@ The translation is fitted to the original line widths by per-block tracking (cap
 
 ## ADR-013 — The translation service is a separate stage with a JSON contract
 
-**Status:** Accepted (service not built)
+**Status:** Accepted; implemented as `translate.py` (LM Studio endpoint)
 
 Input `document.json` units; output a translations JSON in the format of `examples/*.pl.json`. A local LLM behind an OpenAI-compatible endpoint is the intended backend. See `TRANSLATION.md`. **Reason:** keeps geometry deterministic, allows hand editing and re-rendering, and lets the backend change.
 
+## ADR-014 — Glossary is a deterministic lookup, not RAG
+
+**Status:** Accepted
+
+German text is matched against a CSV glossary (normalised, compound- and OCR-tolerant); only matching `confirmed`/`proposed` entries go into the prompt, and a post-check verifies them in the Polish output. **Reason:** thousands of names fit in no prompt but cost nothing as a lookup; no embedding model or large context is needed, so it runs on a small local model. Ambiguous and disputed entries are never given to the model.

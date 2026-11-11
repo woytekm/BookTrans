@@ -8,7 +8,7 @@ Coded using Claude AI @2026
 
 A Python-based document reconstruction and translation project for historical books. The initial target is a pre-war German architecture book to be translated into Polish while retaining original illustrations, page composition and an approximate historical typographic character.
 
-**Current status:** working prototype for one book. Layout analysis, OCR, the page-recreation model (`document.json`) and page reconstruction with fitted fonts work on the two supplied sample spreads (translated by hand). The automated translation service is the next piece and is not built yet. The code is tuned to the sample scans and is not yet a general-purpose application. **New session? Read `docs/HANDOFF.md` first.**
+**Current status:** working prototype for one book. Layout analysis, OCR, the page-recreation model (`document.json`) and page reconstruction with fitted fonts work on the two supplied sample spreads (translated by hand). The translation script (`translate.py`, LM Studio endpoint, glossary-aware) exists but has not been run against a real model yet. The code is tuned to the sample scans and is not yet a general-purpose application. **New session? Read `docs/HANDOFF.md` first.**
 
 ## Current prototype
 
@@ -43,6 +43,22 @@ cd src/booktrans
 python booktrans.py /path/to/0001.tif -o /path/to/output
 ```
 
+A whole book (several spreads, or a folder of TIFFs in name order) in one go:
+
+```bash
+python booktrans.py /scans/mybook/ -o output                  # -> output/mybook/  (one document.json for the book)
+python booktrans.py 0001.tif 0002.tif 0003.tif -o output --name part1
+python booktrans.py /scans/mybook/ -o output --resume         # skip spreads whose stages 1-3 already exist
+```
+
+Pages are numbered consecutively, paragraphs cut at a spread boundary are joined into one translation unit, and the per-spread files are in `stages/<tiff name>/`. `--separate` gives one result folder per TIFF instead.
+
+Translating the units (LM Studio running with a model loaded and its server started):
+
+```bash
+python translate.py output/mybook/document.json -o output/mybook/translations.json [--endpoint URL] [--model NAME] [--dry-run]
+```
+
 Rebuilding the pages with a translation (one command, or `render.py` separately):
 
 ```bash
@@ -56,7 +72,7 @@ python render.py output/0001/document.json translations.json -o output/0001/rend
 
 Useful options: `--layout spread|page|crop` (open book split at the gutter / one whole page / part of a page), `--scale auto|N` (how much larger than the sample scans the input is; auto measures the line pitch, so 600 DPI scans and crops are handled by analysing a downscaled working copy while OCR and figures use the full-resolution pixels), `--ocr-scale`, `--lang` (default `deu`), `-v` (print every region and OCR line with its confidence). Progress with timings is printed to the terminal while it runs.
 
-This creates `output/0001/` with `document.json` (nested model: pages → blocks → lines, layout, typography, figure links, translation units), `pages/` (deskewed page images; all coordinates refer to them), `figures/` (every illustration cropped to a PNG), `debug/` (overlays) and `stages/` (raw JSON of stages 1–4). Each TIFF is processed on its own; to link paragraphs across spreads, run `stage4.py` over the `stages/s3` JSON files of consecutive spreads (a batch mode is planned, see `docs/HANDOFF.md` section 8). The individual stages can still be run separately:
+This creates `output/0001/` with `document.json` (nested model: pages → blocks → lines, layout, typography, figure links, translation units), `pages/` (deskewed page images; all coordinates refer to them), `figures/` (every illustration cropped to a PNG), `debug/` (overlays) and `stages/` (raw JSON of stages 1–4). With several inputs the result is one book folder (see above). The individual stages can still be run separately:
 
 Stage 1:
 
@@ -89,6 +105,7 @@ Start with `docs/HANDOFF.md` (what works, how to run it, repository map, open is
 
 - `docs/TRANSLATION.md`: contract and design for the translation service (input units, output JSON, glossary and prompt rules).
 - `docs/RENDERING.md`: page assembly, line breaking and font fitting.
+- `glossary/` and `src/booktrans/glossary.py`: German -> Polish place names and terms (lookup before translation, check after).
 - `docs/PIPELINE.md`, `docs/DATA_MODEL.md`: stages and every JSON schema (including `document.json` and the translations/report files).
 - `docs/DECISIONS.md`: durable decisions (ADR-001 ... ADR-013). `docs/DEVELOPMENT.md`: status log. `CHANGELOG.md`: what changed.
 

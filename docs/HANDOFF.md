@@ -22,8 +22,8 @@ automation over by-hand tuning).
 
 **Status:** detection, OCR, the document model and page reconstruction work on the sample pages
 (`0001.tif`, `0002.tif`, pages 50-53). The translation service (a local LLM) is the next big piece and
-does not exist yet; the two samples were translated by hand in a chat session
-(`examples/0001.pl.json`, `examples/0002.pl.json`).
+exists as `translate.py` but has **not been run against a real model yet**; the two samples were
+translated by hand in a chat session (`examples/0001.pl.json`, `examples/0002.pl.json`).
 
 ## 2. Working with the owner (preferences)
 
@@ -46,8 +46,10 @@ does not exist yet; the two samples were translated by hand in a chat session
 cd src/booktrans
 python booktrans.py /path/to/0001.tif -o /path/to/output                       # stages 1-4 -> document.json
 python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.json   # ... and rebuild the pages
+python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
-python -m pytest -q ../../tests                                                # 35 tests, a few seconds
+python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
+python -m pytest -q ../../tests                                                # 48 tests, a few seconds
 ```
 
 Useful options: `--layout spread|page|crop`, `--scale auto|N`, `--ocr-scale`, `--lang`, `-v`,
@@ -72,6 +74,8 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/marks.py` | page numbers, printer's marks, rules (kept as image crops) |
 | `src/booktrans/render.py` | page assembly: typesetting of Polish text, font fitting, compositing |
 | `src/booktrans/scale.py` | resolution detection from the body line pitch |
+| `src/booktrans/translate.py` | translation through an OpenAI-compatible endpoint (LM Studio): glossary block, checks, retries, cache |
+| `src/booktrans/glossary.py`, `glossary/` | German -> Polish names and terms: lookup before translation, check after (`TRANSLATION.md`) |
 | `src/booktrans/illustrations.py`, `deskew.py`, `imgutil.py`, `log.py` | helpers |
 | `fonts/` | bundled Crimson Text (SIL OFL) |
 | `prompts/translate_pl.txt` | the translation prompt |
@@ -109,9 +113,8 @@ Full detail: `PIPELINE.md`, `RENDERING.md`, `DATA_MODEL.md`.
 - Tuned to one book. Two-column pages, same-size captions, ragged-right or indented paragraphs,
   running heads and multi-line footnotes are not covered (the owner will supply more samples).
 - Reading order and multi-column layouts are not modelled.
-- The wrapper processes each TIFF alone; paragraphs cut at a spread boundary are not joined
-  automatically (see section 8). `stage4.py` can link several spreads when run by hand over the
-  `stages/s3` files.
+- A paragraph that starts as the only line at the bottom of a page (an orphan) is not avoided: the body
+  flows through the page capacity without widow/orphan control.
 - OCR at ~135 DPI makes slips: digit confusions (3/5), lost spaces ("Portalmiteiner"), `F`/`E`, `k`/`E`
   ("Fin", "Kinfassung"), "s ist" for "Es ist". Higher resolution did not measurably improve clean
   text; its gain is in figure crops.
@@ -122,27 +125,34 @@ Full detail: `PIPELINE.md`, `RENDERING.md`, `DATA_MODEL.md`.
   real data.
 - Tesseract confidence is not a calibrated probability; there is no human review tool.
 
-## 7. Translation: what the next session builds
+## 7. Translation
 
-See `TRANSLATION.md` for the contract. In short: read `document.json` units, call a local LLM with the
-prompt in `prompts/translate_pl.txt`, write a translations JSON in the format of `examples/*.pl.json`,
-which `render.py` consumes unchanged.
+`translate.py` reads the `document.json` units, looks each up in the glossary, calls an LM Studio
+(OpenAI-compatible) endpoint with the prompt in `prompts/translate_pl.txt` plus rules and glossary list,
+checks and retries, and writes the translations JSON that `render.py` consumes (`TRANSLATION.md`). Next:
+run it for real (Gemma 12B on the Mac), tune the rules prompt and the checks on what the model actually
+does, and fill the glossary.
 
-## 8. Open design issue: units cut at a spread boundary
+## 8. Batch mode (books) and units cut at a spread boundary
 
-`0001`'s last paragraph (`u0009`) ends inside a parenthesis and continues in `0002`
-(`u0008`: "und die tschechoslowakische Republik) in Betracht gezogen werden mußten."). Likewise
-`0002`'s last paragraph (`u0013`) stops at "Münsterberg,". The wrapper has no batch mode, so these are
-separate units, and the hand translations split the Polish sentence at the same place
-("... (Dolny Śląsk" | "i Republika Czechosłowacka) musiały zostać wzięte pod uwagę."). A translation
-service should either translate the joined sentence and split it by the source cut point, or take the
-previous spread's last unit as context. A batch mode of the wrapper that runs stage 4 over consecutive
-spreads is the natural place to fix it.
+`booktrans.py` takes a folder of TIFFs (name order) or several files and builds **one** `document.json`:
+stages 1-3 run per spread (`stages/<tiff name>/s1..s3`, `--resume` skips finished ones), stage 4 runs
+once over all spreads, pages are numbered consecutively (`page`; `spread`, `page_in_spread`,
+`source_tiff` say where they came from), block ids keep Stage 4's `sN-` prefix so they stay unique,
+and image/figure files are prefixed with the TIFF name. A paragraph cut at a spread boundary is a single
+unit (on the samples `0001` u0009 + `0002` u0008 = book unit `u0009`, one sentence:
+"(Dolny Śląsk i Republika Czechosłowacka) ..."). Translate such a unit whole; the renderer flows it across
+the pages. Sample: `examples/book_0001-0002.pl.json` (both spreads as one book; unit numbers differ
+from the per-spread files because they are renumbered across the book).
+
+Render output for a book: `page_NNN_X.png` for every page and one `compare_page_NNN.png` per page
+(`compare.png` only up to 4 pages).
 
 ## 9. Roadmap
 
-1. Translation service (`translate.py`), see `TRANSLATION.md`.
-2. Batch mode: several TIFFs in book order, cross-spread unit joins, shared glossary.
+1. First real run of `translate.py` against LM Studio; tune prompt, rules and checks on the output.
+2. Glossary content: import the place-name CSV, review `proposed` terms, resolve ambiguous places; (the glossary is already wired into
+   `translate.py`).
 3. Automatic font choice among supplied fonts (score x-height ratio, advance width, stem darkness
    against the scan; the tracking fit already exists).
 4. More samples: two-column pages, ragged right, footnotes, running heads; tune and add tests.
@@ -152,7 +162,7 @@ spreads is the natural place to fix it.
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (35 tests).
+- Run `python -m pytest -q` before every commit (48 tests).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
 - Check `render/report.json`: line counts against `lines_original`, `warnings`, `tracking_em`.

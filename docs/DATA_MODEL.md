@@ -212,6 +212,8 @@ Written by `booktrans.py`. Top level: `schema_version`, `source_file`, `coordina
 
 Per page also: `scale` (full px per working px, 1.0 at the sample resolution), `image_full` (full-resolution deskewed page, or null), `full_width`, `full_height`. Figure and graphic crops are cut from `image_full` when present. All coordinates in the model are working pixels.
 
+Book documents (batch mode) additionally: every page has `spread` (1-based input index), `page_in_spread` and `source_tiff`; `page` is the consecutive number over the book; block ids keep Stage 4's `sN-` prefix (e.g. `s2-p1-reg-14`, figures `s2-p1-ill-1`), page images are `pages/<tiff stem>_page_NN_X.png`; one `units[]` for all spreads, with units joined across spread boundaries.
+
 ## Translations JSON (input of `render.py`; output of the future translation service)
 
 ```json

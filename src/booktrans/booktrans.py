@@ -12,6 +12,12 @@ creates ``<output_root>/<tiff name>/``:
     debug/          diagnostic overlays
     stages/         raw JSON of stages 1-4 (s1..s4), for debugging
 
+Several TIFFs (or a folder of them) are processed as one book: ``python booktrans.py scans/ -o out``
+writes ``<out>/<folder name>/`` with the same layout but one ``document.json`` for all spreads (pages
+numbered consecutively, paragraphs joined across spread boundaries, one list of translation units),
+and the per-spread stage files in ``stages/<tiff name>/``. ``--resume`` skips spreads whose stages 1-3
+are already there; ``--separate`` keeps one folder per TIFF instead.
+
 The input may be an open-book spread (default, split at the gutter), a single
 whole page (``--layout page``) or a crop of a page (``--layout crop``).
 """
@@ -70,9 +76,69 @@ def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spr
     return out, doc
 
 
+def process_book(tiffs, out_root, name, lang='deu', ocr_scale=2.0, scale='auto', layout='spread', resume=False):
+    """Several spreads -> one document (stage 4 runs over all of them, in the order given)."""
+    out = Path(out_root) / name
+    if out.exists() and not resume:
+        shutil.rmtree(out)
+    s4 = out / 'stages' / 's4'
+    log.info('wrap', 'book %s: %d spreads -> %s' % (name, len(tiffs), out))
+    s3_files = []
+    for k, tiff in enumerate(tiffs, 1):
+        st = out / 'stages' / tiff.stem
+        s1, s2, s3 = st / 's1', st / 's2', st / 's3'
+        done = (s3 / 'page_structure_stage3.json').exists()
+        if resume and done:
+            log.info('wrap', '[%d/%d] %s: stages 1-3 present, skipped (--resume)' % (k, len(tiffs), tiff.name))
+        else:
+            log.info('wrap', '[%d/%d] %s' % (k, len(tiffs), tiff.name))
+            step(1, 'page split, deskew, illustrations, text regions')
+            run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang, '--scale', scale, '--layout', layout])
+            step(2, 'OCR lines, captions, paragraphs')
+            run([HERE / 'stage2.py', tiff, '--stage1-json', s1 / 'page_structure.json', '-o', s2,
+                 '--lang', lang, '--ocr-scale', ocr_scale])
+            step(3, 'classification and illustration association')
+            run([HERE / 'stage3.py', s2 / 'page_structure_stage2.json', '--stage1-json', s1 / 'page_structure.json', '-o', s3])
+        s3_files.append(s3 / 'page_structure_stage3.json')
+    log.info('wrap', '=== stage 4: cross-page and cross-spread links, translation units ===')
+    run([HERE / 'stage4.py'] + s3_files + ['-o', s4])
+    units_doc = json.loads((s4 / 'units.json').read_text(encoding='utf-8'))
+    for pg in units_doc['pages']:                    # tell docmodel where each page's files are
+        t = tiffs[pg['input_index'] - 1]
+        pg['source_tiff'] = str(t)
+        pg['stage1_dir'] = str(out / 'stages' / t.stem / 's1')
+    log.info('wrap', '=== building document.json and cropping figures ===')
+    doc = build_document(units_doc, None, out, name, book=True)
+    (out / 'document.json').write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding='utf-8')
+    log.info('wrap', 'wrote %s (%d pages, %d units)' % (out / 'document.json', len(doc['pages']), len(doc['units'])))
+    dbg = out / 'debug'; dbg.mkdir(exist_ok=True)
+    for t in tiffs:
+        st = out / 'stages' / t.stem
+        for src in list((st / 's1').glob('debug*.png')) + list((st / 's2').glob('*debug*.png')) + list((st / 's3').glob('debug*.png')):
+            shutil.copy(src, dbg / ('%s_%s_%s' % (t.stem, src.parent.name, src.name)))
+    return out, doc
+
+
+def expand_inputs(paths):
+    """Files as given; a folder stands for its TIFFs in name order."""
+    tiffs, folder = [], None
+    for p in paths:
+        if p.is_dir():
+            found = sorted(f for f in p.iterdir() if f.suffix.lower() in ('.tif', '.tiff') and not f.name.startswith('.'))
+            if not found:
+                raise SystemExit('no .tif/.tiff files in %s' % p)
+            tiffs += found; folder = p
+        else:
+            tiffs.append(p)
+    return tiffs, folder
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('inputs', nargs='+', type=Path)
+    ap.add_argument('inputs', nargs='+', type=Path, help='TIFF files and/or folders of TIFFs; several = one book (in name order for a folder, as given for files)')
+    ap.add_argument('--name', help='book folder name (default: the folder name, or first-last TIFF name)')
+    ap.add_argument('--separate', action='store_true', help='several inputs: one result folder per TIFF instead of one book')
+    ap.add_argument('--resume', action='store_true', help='book mode: skip spreads whose stages 1-3 are already in the output folder')
     ap.add_argument('-o', '--output', type=Path, default=Path('output'))
     ap.add_argument('--lang', default='deu')
     ap.add_argument('--ocr-scale', type=float, default=2.0)
@@ -93,12 +159,21 @@ def main():
     os.environ.setdefault('BOOKTRANS_T0', str(__import__('time').time()))
     if a.verbose:
         os.environ['BOOKTRANS_VERBOSE'] = '1'
-    for f in a.inputs:
-        out, doc = process(f, a.output, a.lang, a.ocr_scale, a.scale, a.layout)
+    tiffs, folder = expand_inputs(a.inputs)
+    jobs = []                                         # (label, out, doc)
+    if len(tiffs) > 1 and not a.separate:
+        name = a.name or (folder.resolve().name if folder else '%s-%s' % (tiffs[0].stem, tiffs[-1].stem))
+        out, doc = process_book(tiffs, a.output, name, a.lang, a.ocr_scale, a.scale, a.layout, a.resume)
+        jobs.append((name, out, doc))
+    else:
+        for f in tiffs:
+            out, doc = process(f, a.output, a.lang, a.ocr_scale, a.scale, a.layout)
+            jobs.append((f.name, out, doc))
+    for label, out, doc in jobs:
         for p in doc['pages']:
             nf = sum(b['kind'] == 'figure' for b in p['blocks'])
             nt = sum(b['kind'] == 'text' for b in p['blocks'])
-            log.info('wrap', '%s page %d%s: %d text blocks, %d figures' % (f.name, p['page'], p['side'], nt, nf))
+            log.info('wrap', '%s page %d%s: %d text blocks, %d figures' % (label, p['page'], p['side'], nt, nf))
         log.info('wrap', 'done: %s (%d pages, %d units)' % (out, len(doc['pages']), len(doc['units'])))
         if a.translations:
             from render import render, Fonts
@@ -110,9 +185,8 @@ def main():
                                size_scale=a.size_scale, word_space=a.word_space)
             for w in rep['warnings']:
                 log.info('wrap', 'WARNING ' + w)
-            log.info('wrap', 'rebuilt pages: %s in %s' % (', '.join(names), out / 'render'))
+            log.info('wrap', 'rebuilt %d pages in %s' % (len(names), out / 'render'))
         print(out)
-
 
 if __name__ == '__main__':
     main()

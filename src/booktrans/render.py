@@ -563,18 +563,24 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
     # ------------------------------------------------ outputs
     names = []
     for page, canvas in zip(doc['pages'], canvases):
-        name = 'page_%02d_%s.png' % (page['page'], page['side'])
+        name = 'page_%03d_%s.png' % (page['page'], page['side'])
         canvas.save(out_dir / name); names.append(name)
     H = 1100
     tiles = []
     for orig, canvas in zip(originals, canvases):
         for im in (orig, canvas):
             tiles.append(im.resize((int(im.width * H / im.height), H), Image.LANCZOS))
-    comp = Image.new('RGB', (sum(t.width for t in tiles) + 10 * (len(tiles) - 1), H), (90, 90, 90))
-    x = 0
-    for t in tiles:
-        comp.paste(t, (x, 0)); x += t.width + 10
-    comp.save(out_dir / 'compare.png')
+    def strip(ts):
+        comp = Image.new('RGB', (sum(t.width for t in ts) + 10 * (len(ts) - 1), H), (90, 90, 90))
+        x = 0
+        for t in ts:
+            comp.paste(t, (x, 0)); x += t.width + 10
+        return comp
+    if len(doc['pages']) <= 4:
+        strip(tiles).save(out_dir / 'compare.png')
+    else:                                             # a whole book: one comparison per page
+        for page, k in zip(doc['pages'], range(0, len(tiles), 2)):
+            strip(tiles[k:k + 2]).save(out_dir / ('compare_page_%03d.png' % page['page']))
     (out_dir / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     return names, report
 
