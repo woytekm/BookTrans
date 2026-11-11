@@ -15,6 +15,7 @@ import numpy as np
 from PIL import Image
 
 from imgutil import load_pages
+import log
 
 
 def area(b):
@@ -170,7 +171,11 @@ def main():
     a=ap.parse_args()
     data=json.loads(a.stage2_json.read_text(encoding='utf8'))
     stage1=json.loads(a.stage1_json.read_text(encoding='utf8'))
+    log.info('stage3','classifying lines and associating them with illustrations')
     data=classify(data,stage1,a.line_overlap_threshold)
+    for p in data['pages']:
+        c=p['classification']; lc=c['line_counts']
+        log.info('stage3','page %d: %d illustrations; lines: %d page text, %d caption, %d inside illustrations' % (p['page'],c['illustration_count'],lc['page_text'],lc['caption'],lc['illustration_text']))
     data['schema_version']='0.3.0'
     data['stage']='classification_and_association'
     data['policy']={'illustrations':'preserve_original_exclude_reconstruction',
