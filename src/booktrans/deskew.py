@@ -36,7 +36,7 @@ MIN_FULL_LINES = 8     # below this the edge slope falls back to rotation (s = -
 MAX_ABS_SLOPE = 0.07   # ~4 deg; anything steeper is not scanner skew
 
 
-def _ink_mask(gray):
+def ink_mask(gray):
     """Illumination-normalised binary ink mask (uint8 0/255)."""
     bg = cv2.GaussianBlur(gray, (0, 0), 25)
     norm = cv2.divide(gray, bg, scale=230)
@@ -52,7 +52,7 @@ def line_blobs(gray, ignore=(40, 40, 40, 40)):
     with ``blobs`` a list of ``(label, x, y, w, h)``.
     """
     h, w = gray.shape
-    ink = _ink_mask(gray)
+    ink = ink_mask(gray)
     l, t, r, b = ignore
     ink[:t, :] = 0; ink[h - b:, :] = 0; ink[:, :l] = 0; ink[:, w - r:] = 0
     closed = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (31, 1)))

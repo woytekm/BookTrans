@@ -13,10 +13,37 @@ import cv2, numpy as np, pytesseract
 from PIL import Image
 from pytesseract import Output
 
-from imgutil import crop_for_ocr, load_pages
+from imgutil import crop_for_ocr, load_pages, paper_color
+from illustrations import mask_box
 
 
-def ocr_lines(page, bbox, lang, context=10):
+SEGMENT_GAP_FACTOR = 3.0   # a gap wider than this many glyph heights splits a line
+
+
+def split_at_gaps(ids, d):
+    """Split one Tesseract "line" into segments at very wide horizontal gaps.
+
+    Tesseract (``--psm 6``) happily reads captions that are set side by side
+    (e.g. five figure captions in one row under a row of profile drawings) as a
+    single line. Word spacing is ~1/3 of a glyph height, justified stretching
+    stays below ~1.5 glyph heights, so a gap of 3 glyph heights is a column break.
+    """
+    ids=sorted(ids,key=lambda i:d['left'][i])
+    hs=[d['height'][i] for i in ids if d['height'][i]>0]
+    mh=float(np.median(hs)) if hs else 10.0
+    # Small text (captions, ~9 px) is split at ~1.8 glyph heights: side-by-side
+    # captions can be only ~20 px apart. Body text keeps the generous 3x rule,
+    # because justified word gaps can stretch to ~1.2 glyph heights.
+    thr=max(14.0,1.8*mh) if mh<=11 else max(24.0,SEGMENT_GAP_FACTOR*mh)
+    segs=[[ids[0]]]
+    for i in ids[1:]:
+        prev=segs[-1][-1]
+        if d['left'][i]-(d['left'][prev]+d['width'][prev])>thr: segs.append([i])
+        else: segs[-1].append(i)
+    return segs
+
+
+def ocr_lines(page, bbox, lang, context=10, scale=2.0):
     """OCR one coarse region of ``page`` and return line objects in page coordinates.
 
     The region is cut with real context pixels and surrounded by paper-coloured
@@ -25,18 +52,30 @@ def ocr_lines(page, bbox, lang, context=10):
     """
     crop,offset=crop_for_ocr(page,bbox,context=context,pad=24)
     gray=cv2.cvtColor(crop,cv2.COLOR_RGB2GRAY)
+    # The sample scans are ~135 DPI: body glyphs are ~8 px, captions ~6 px (x-height),
+    # far below what Tesseract likes. Upscaling the crop first improves small text
+    # (captions) clearly and leaves body text unchanged. Boxes are mapped back.
+    if scale!=1: gray=cv2.resize(gray,None,fx=scale,fy=scale,interpolation=cv2.INTER_CUBIC)
     gray=cv2.createCLAHE(clipLimit=1.5,tileGridSize=(8,8)).apply(gray)
     d=pytesseract.image_to_data(gray,lang=lang,config='--psm 6',output_type=Output.DICT)
+    if scale!=1:
+        for k in ('left','top','width','height'): d[k]=[int(round(v/scale)) for v in d[k]]
     groups={}
     for i,t in enumerate(d['text']):
         t=t.strip()
         try: conf=float(d['conf'][i])
         except: conf=-1
         if not t or conf<5: continue
+        # Stray dashes/bars/dots that Tesseract invents in blank gaps (typically
+        # between side-by-side captions) bridge the gaps and merge the captions.
+        if not re.search(r'[A-Za-zÄÖÜäöüß0-9]',t) and conf<50: continue
         key=(d['block_num'][i],d['par_num'][i],d['line_num'][i])
         groups.setdefault(key,[]).append(i)
     out=[]; ox,oy=offset
+    segments=[]
     for ids in groups.values():
+        segments.extend(split_at_gaps(ids,d))
+    for ids in segments:
         x1=min(d['left'][i] for i in ids); y1=min(d['top'][i] for i in ids)
         x2=max(d['left'][i]+d['width'][i] for i in ids); y2=max(d['top'][i]+d['height'][i] for i in ids)
         txt=' '.join(d['text'][i].strip() for i in ids)
@@ -92,26 +131,81 @@ def assign_visual_bands(lines, bands):
     return lines
 
 
+# Caption lines are smaller than body text, but an accent (Ä, Ü) in a small-caps
+# caption makes OCR report a taller line, so allow a little headroom.
+CAPTION_MAX_REL = 1.15
+
+
+def is_near(box, fig, gap):
+    """True if ``box`` touches the figure's side/top/bottom within ``gap`` px.
+
+    Captions sit below a figure (horizontal overlap, small vertical gap) or beside
+    it (vertical overlap, small horizontal gap); diagonal neighbours do not count.
+    """
+    dx=max(0,max(fig[0],box[0])-min(fig[2],box[2])); dy=max(0,max(fig[1],box[1])-min(fig[3],box[3]))
+    return (dx==0 and dy<=gap) or (dy==0 and dx<=gap) or (dx<=12 and dy<=12)
+
+
+def absorb_caption_continuations(lines, body):
+    """A small line directly under a caption line, in the same column, is part of it.
+
+    Second/third caption lines are not always near the figure themselves.
+    """
+    changed=True
+    while changed:
+        changed=False
+        for ln in lines:
+            if ln['type']!='body_line' and ln['type']!='heading_line': continue
+            if ln['glyph_height']>=body*CAPTION_MAX_REL: continue
+            x1,y1,x2,y2=ln['bbox']
+            for cp in lines:
+                if cp['type']!='caption_line': continue
+                a,b,c,d=cp['bbox']
+                ov=max(0,min(x2,c)-max(x1,a))/max(1,min(x2-x1,c-a))
+                if 0<=y1-d<=max(6,0.9*(d-b)) and ov>=.5:
+                    ln['type']='caption_line'; ln['classification_reason']='continuation of the caption line above'; ln['classification_confidence']=.7
+                    changed=True; break
+    return lines
+
+
+def _iou(a,b):
+    ix=max(0,min(a[2],b[2])-max(a[0],b[0])); iy=max(0,min(a[3],b[3])-max(a[1],b[1])); inter=ix*iy
+    return inter/max(1,(a[2]-a[0])*(a[3]-a[1])+(b[2]-b[0])*(b[3]-b[1])-inter)
+
+
+def dedupe_lines(lines, iou=0.5):
+    """Drop duplicate OCR lines produced by overlapping coarse text boxes.
+
+    Overlapping Stage 1 boxes are OCR'd separately and each used to emit its own
+    copy of the shared lines (and so each copy became a region to translate).
+    The more confident copy wins.
+    """
+    kept=[]
+    for ln in sorted(lines,key=lambda z:-z['confidence']*max(1,z['word_count'])):
+        if all(_iou(ln['bbox'],k['bbox'])<iou for k in kept): kept.append(ln)
+    return sorted(kept,key=lambda z:(z['bbox'][1],z['bbox'][0]))
+
+
 def classify_lines(lines, images, page_h):
     if not lines:return [],0
-    hs=[x['glyph_height'] for x in lines if x['glyph_height']>0]
+    # Body size from running text only: captions are small and, on a drawing
+    # page, can outnumber body lines, which would drag a plain median down.
+    longer=[x['glyph_height'] for x in lines if x['glyph_height']>0 and x['word_count']>=6]
+    hs=longer or [x['glyph_height'] for x in lines if x['glyph_height']>0]
     body=float(np.median(hs)) if hs else 12
     for ln in lines:
         x1,y1,x2,y2=ln['bbox']; h=ln['glyph_height']; txt=ln['text']
         typ='body_line'; reason='default text line'; conf=.65
-        if ln.get('caption_band_candidate'):
-            typ='caption_line'; reason='OCR from illustration caption band'; conf=.72
-        elif y1>page_h*.82 and h<body*.9:
+        if y1>page_h*.82 and h<body*.9:
             typ='footnote_or_footer'; reason='small text near bottom margin'; conf=.78
         elif ln['uppercase_ratio']>.72 and len(txt)<90 and h>=body*.92:
             typ='heading_line'; reason='predominantly uppercase'; conf=.84
         for im in images:
-            a,b,c,d=im['bbox']; horiz=max(0,min(x2,c)-max(x1,a))/max(1,min(x2-x1,c-a))
-            vgap=min(abs(y1-d),abs(b-y2))
-            if horiz>.25 and vgap<max(22,body*2.2) and h<body*1.05:
-                typ='caption_line'; reason='near illustration and smaller than body'; conf=.76; break
+            if h<body*CAPTION_MAX_REL and is_near(ln['bbox'],im['bbox'],max(26,body*2.2)):
+                typ='caption_line'; reason='beside/below an illustration and smaller than body'; conf=.76; break
         ln.update({'type':typ,'classification_reason':reason,'classification_confidence':conf,
                    'relative_size':round(h/max(body,1),2),'style':'unknown'})
+    absorb_caption_continuations(lines,body)
     return lines,body
 
 
@@ -188,9 +282,38 @@ def make_region(g,n,typ):
             'lines':g}
 
 
+def group_caption_lines(lines):
+    """Group caption lines into captions, one per column.
+
+    Lines belong to the same caption when they are stacked (small vertical gap)
+    and share a column (horizontal overlap or the same left edge). This keeps
+    five side-by-side figure captions apart and keeps two-line captions whole.
+    """
+    groups=[]
+    for ln in sorted(lines,key=lambda z:(z['bbox'][1],z['bbox'][0])):
+        x1,y1,x2,y2=ln['bbox']
+        for g in groups:
+            a,b,c,d=g[-1]['bbox']
+            ov=max(0,min(x2,c)-max(x1,a))/max(1,min(x2-x1,c-a))
+            same_left=abs(x1-a)<=6
+            if 0<=y1-d<=max(8,1.2*(d-b)) and (ov>=.3 or same_left):
+                g.append(ln); break
+        else:
+            groups.append([ln])
+    return groups
+
+
 def group_semantic_regions(lines, body, page_gray, text_bbox):
     """Group lines while splitting body text at visual paragraph breaks."""
     if not lines:return []
+    cap=[l for l in lines if l['type']=='caption_line']
+    if cap:
+        regs=[make_region(g,0,'caption_line') for g in group_caption_lines(cap)]
+        rest=[l for l in lines if l['type']!='caption_line']
+        regs.extend(group_semantic_regions(rest,body,page_gray,text_bbox) if rest else [])
+        regs.sort(key=lambda r:(r['bbox'][1],r['bbox'][0]))
+        for i,r in enumerate(regs,1): r['id']=i
+        return regs
     # First identify paragraph groups among body lines belonging to this coarse
     # text area. Other semantic line types remain grouped by type transitions.
     body_groups=split_body_lines_into_paragraphs(lines,page_gray,text_bbox)
@@ -214,7 +337,8 @@ def group_semantic_regions(lines, body, page_gray, text_bbox):
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument('input',type=Path); ap.add_argument('--stage1-json',type=Path,default=Path('out1/page_structure.json'))
-    ap.add_argument('-o','--output',type=Path,default=Path('stage2_out')); ap.add_argument('--lang',default='deu'); a=ap.parse_args()
+    ap.add_argument('-o','--output',type=Path,default=Path('stage2_out')); ap.add_argument('--lang',default='deu')
+    ap.add_argument('--ocr-scale',type=float,default=2.0,help='upscale factor applied to OCR crops (default 2.0; 1 = off)'); a=ap.parse_args()
     base=json.loads(a.stage1_json.read_text(encoding='utf8'))
     # Analyse the exact (deskewed) page images Stage 1 saved; ``a.input`` is only
     # the fallback for old Stage 1 JSON without page images.
@@ -224,34 +348,35 @@ def main():
     for p,page in zip(base['pages'],page_imgs):
         side=p['side']; xoff=p['x_offset']; page_gray=cv2.cvtColor(page,cv2.COLOR_RGB2GRAY)
         page_regions=[]; all_lines=[]; image_boxes=[]; text_bboxes=[]
+        # Text is OCR'd from a copy of the page with every illustration painted
+        # over in paper colour: OCR crops carry real context pixels, and the edge
+        # of a neighbouring drawing used to come back as junk "captions".
+        ocr_page=page.copy(); paper=paper_color(page)
+        for r in p['regions']:
+            if 'image' in r['type'] or 'drawing' in r['type']:
+                x1,y1,x2,y2=mask_box(r); ocr_page[max(0,y1):y2,max(0,x1):x2]=paper
         for r in p['regions']:
             if r['type'] not in ('text','heading','caption','text_candidate'):
                 if 'image' in r['type'] or 'drawing' in r['type']:
                     image_boxes.append({'bbox':r['bbox'],'type':'illustration'})
                 continue
-            ls=ocr_lines(page,r['bbox'],a.lang); all_lines.extend(ls); text_bboxes.append(r['bbox'])
-        for im in image_boxes:
-            x1,y1,x2,y2=im['bbox']; H,W=page.shape[:2]
-            bx1=min(W,x2+3); by1=max(0,y2-35); bx2=min(W,x2+360); by2=min(H,y2+8)
-            if bx2>bx1 and by2>by1:
-                cap=ocr_lines(page,[bx1,by1,bx2,by2],a.lang,context=0)
-                for ln in cap:
-                    if ln['glyph_height']<18 and not any(abs(ln['bbox'][1]-q['bbox'][1])<5 and ln['text']==q['text'] for q in all_lines):
-                        ln['caption_band_candidate']=True; all_lines.append(ln)
+            ls=ocr_lines(ocr_page,r['bbox'],a.lang,scale=a.ocr_scale); all_lines.extend(ls); text_bboxes.append(r['bbox'])
+        all_lines=dedupe_lines(all_lines)
         all_lines.sort(key=lambda z:(z['bbox'][1],z['bbox'][0]))
         lines,body=classify_lines(all_lines,image_boxes,page.shape[0])
         for i,ln in enumerate(lines):
-            if i+1<len(lines) and ln['bbox'][1]<page.shape[0]*.55 and ln['bbox'][0]>page.shape[1]*.45:
+            if ln['type']!='caption_line' and i+1<len(lines) and ln['bbox'][1]<page.shape[0]*.55 and ln['bbox'][0]>page.shape[1]*.45:
                 if lines[i+1]['type']=='heading_line':
                     ln['type']='author_byline_candidate'; ln['classification_reason']='right-aligned line immediately before heading'; ln['classification_confidence']=.72
         # Each original Stage-1 text box is processed independently so columns
         # and unrelated text areas cannot create paragraph boundaries together.
-        regs=[]
+        regs=[]; claimed=set()
         for tb in text_bboxes:
             x1,y1,x2,y2=tb
-            local=[ln for ln in lines if x1-8<=ln['bbox'][0]<=x2+8 and y1-8<=ln['bbox'][1]<=y2+8]
-            # Keep order and avoid duplicates between overlapping text boxes.
-            seen=set(); local=[ln for ln in local if not (id(ln) in seen or seen.add(id(ln)))]
+            # A line is claimed by the first coarse box that contains it, so
+            # overlapping boxes cannot emit it twice.
+            local=[ln for ln in lines if id(ln) not in claimed and x1-8<=ln['bbox'][0]<=x2+8 and y1-8<=ln['bbox'][1]<=y2+8]
+            claimed.update(id(ln) for ln in local)
             if local: regs.extend(group_semantic_regions(local,body,page_gray,tb))
         # Captions/author lines not belonging to a Stage-1 text box.
         assigned={id(l) for r in regs for l in r['lines']}

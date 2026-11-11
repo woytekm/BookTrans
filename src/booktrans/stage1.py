@@ -10,6 +10,7 @@ from pytesseract import Output
 
 from imgutil import crop_for_ocr, paper_color
 from deskew import deskew_page
+from illustrations import detect_illustrations, mask_box
 
 
 def load_rgb(path):
@@ -35,39 +36,6 @@ def split_spread(rgb):
     return [("L", left, 0), ("R", right, gutter)]
 
 
-def detect_image_regions(rgb, text_regions):
-    """Detect photographs/drawings as large contiguous dark/tonal regions.
-
-    Raw threshold contours are used here instead of aggressive morphology. On the
-    supplied book this cleanly separates the photograph from its small caption.
-    """
-    h,w=rgb.shape[:2]
-    gray=cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY)
-    # A dark-pixel contour is a useful first approximation for halftone photos and
-    # line drawings. Otsu is deliberately avoided because the paper is unevenly lit.
-    bw=cv2.threshold(gray,170,255,cv2.THRESH_BINARY_INV)[1]
-    # Don't let the physical page border become a candidate.
-    bw[:65,:]=0; bw[-65:,:]=0; bw[:,:65]=0; bw[:,-65:]=0
-    contours,_=cv2.findContours(bw,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
-    candidates=[]
-    for c in contours:
-        x,y,ww,hh=cv2.boundingRect(c)
-        if ww<120 or hh<120 or ww*hh < w*h*.01:
-            continue
-        density=float(np.mean(gray[y:y+hh,x:x+ww] < 170))
-        if density < .35:
-            continue
-        # If a candidate substantially overlaps an already detected text region,
-        # it is probably a text block rather than an image.
-        box_area=ww*hh; max_overlap=0
-        for r in text_regions:
-            a,b,c2,d=r['bbox']; ix=max(0,min(x+ww,c2)-max(x,a)); iy=max(0,min(y+hh,d)-max(y,b))
-            max_overlap=max(max_overlap,(ix*iy)/box_area)
-        if max_overlap < .20:
-            candidates.append({'type':'image_or_drawing','bbox':[int(x),int(y),int(x+ww),int(y+hh)],'ink_density':round(density,3)})
-    candidates.sort(key=lambda r:(r['bbox'][2]-r['bbox'][0])*(r['bbox'][3]-r['bbox'][1]),reverse=True)
-    return candidates
-
 OUTER_MARGIN = 65   # px: physical book edge / table on the outer side of a page
 INNER_MARGIN = 10   # px: gutter side. Text on the right-hand page starts only ~60 px
                     # from the gutter, so a symmetric 65 px margin clipped the first
@@ -79,7 +47,29 @@ def page_margins(side):
     return (OUTER_MARGIN, INNER_MARGIN) if side == 'L' else (INNER_MARGIN, OUTER_MARGIN)
 
 
-def detect_text_regions(rgb, lang='deu', side='L'):
+def merge_overlapping_boxes(boxes):
+    """Merge coarse text boxes whose areas overlap.
+
+    The one-pass merge above is order dependent and left overlapping boxes. Each
+    box is OCR'd on its own, so overlapping boxes produced duplicate (and
+    slightly different) copies of the same lines.
+    """
+    boxes=[{'bbox':list(b['bbox'])} for b in boxes]
+    changed=True
+    while changed:
+        changed=False
+        for i in range(len(boxes)):
+            for j in range(i+1,len(boxes)):
+                a,b=boxes[i]['bbox'],boxes[j]['bbox']
+                if min(a[2],b[2])>max(a[0],b[0]) and min(a[3],b[3])>max(a[1],b[1]):
+                    boxes[i]['bbox']=[min(a[0],b[0]),min(a[1],b[1]),max(a[2],b[2]),max(a[3],b[3])]
+                    boxes.pop(j); changed=True; break
+            if changed: break
+    boxes.sort(key=lambda z:(z['bbox'][1],z['bbox'][0]))
+    return boxes
+
+
+def detect_text_regions(rgb, lang='deu', side='L', exclude=()):
     """Find coarse printed-text blocks, then OCR each block.
 
     Morphological grouping is much more stable for this book than grouping
@@ -93,6 +83,10 @@ def detect_text_regions(rgb, lang='deu', side='L'):
     ml,mr=page_margins(side)
     mt=mb=OUTER_MARGIN
     bw[:mt,:]=0; bw[-mb:,:]=0; bw[:,:ml]=0; bw[:,-mr:]=0
+    # Illustrations were found first and are masked out: their fragments must
+    # never become text regions (and never reach OCR or translation).
+    for ex1,ey1,ex2,ey2 in exclude:
+        bw[max(0,ey1):ey2,max(0,ex1):ex2]=0
     # Connect characters into lines and nearby lines into paragraph-sized blocks.
     bw=cv2.morphologyEx(bw,cv2.MORPH_CLOSE,cv2.getStructuringElement(cv2.MORPH_RECT,(21,3)))
     grouped=cv2.dilate(bw,cv2.getStructuringElement(cv2.MORPH_RECT,(7,13)))
@@ -127,6 +121,7 @@ def detect_text_regions(rgb, lang='deu', side='L'):
         if not merged_into:
             merged.append({'bbox':[x,y,x2,y2]})
 
+    merged=merge_overlapping_boxes(merged)
     regions=[]
     paper=paper_color(rgb)
     for idx,r in enumerate(merged,1):
@@ -146,8 +141,9 @@ def detect_text_regions(rgb, lang='deu', side='L'):
     return regions
 
 def process_page(rgb, side, x_offset, lang):
-    text_regions = detect_text_regions(rgb, lang, side)
-    image_regions = detect_image_regions(rgb, text_regions)
+    # Illustrations first (geometry only), then text outside them.
+    image_regions = [dict(r, type='image_or_drawing') for r in detect_illustrations(rgb, side)]
+    text_regions = detect_text_regions(rgb, lang, side, exclude=[mask_box(r) for r in image_regions])
     # Estimate body line height and classify text regions by typography scale.
     hs=[r['ocr_line_height'] for r in text_regions if r['ocr_line_height']>0]
     body_h=float(np.median(hs)) if hs else 20

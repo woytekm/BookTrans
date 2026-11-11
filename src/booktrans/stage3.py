@@ -3,7 +3,9 @@
 
 This stage deliberately does not edit illustrations. OCR lines that fall inside
 an illustration are retained as evidence, but excluded from translation and
-page-text reconstruction for now.
+page-text reconstruction for now. Caption lines (found by Stage 2 beside/below
+a figure) are the opposite: they are ordinary translatable text that is merely
+*associated* with a figure, so geometry alone never excludes them.
 """
 import argparse, json
 from pathlib import Path
@@ -44,27 +46,31 @@ def associate_line(line, illustrations, threshold=0.30):
 
 
 def stage1_illustration_candidates(stage1_page):
-    """Recover illustration candidates, including obvious false text regions.
+    """Illustrations found by Stage 1's geometric detector (photographs and line art).
 
-    Stage 1 already emits image_or_drawing candidates. A second conservative
-    rule catches the supplied technical-drawing case: a very large region that
-    Stage 1 called heading/text but whose OCR confidence is very low. This is a
-    classification hypothesis, not proof that the region is an illustration.
+    There is deliberately no longer a "large region with low OCR confidence"
+    fallback: illustrations are now detected *before* OCR, so drawing fragments
+    never become text regions. That fallback also swallowed the figure captions
+    that sit under a drawing group.
     """
-    W, H = stage1_page['width'], stage1_page['height']
-    page_area=W*H
     out=[]
     for r in stage1_page.get('regions', []):
         typ=r.get('type','')
-        b=r['bbox']
         if 'image' in typ or 'drawing' in typ:
-            out.append((r, 'stage1_image_or_drawing', 0.95))
-            continue
-        frac=area(b)/max(1,page_area)
-        conf=float(r.get('ocr_confidence',100))
-        if frac >= 0.18 and conf < 45 and typ in ('heading','text','text_candidate','caption'):
-            out.append((r, 'large_region_with_low_ocr_confidence', 0.80))
+            reason='stage1_'+r.get('detector','image_or_drawing')
+            out.append((r, reason, 0.95))
     return out
+
+
+def nearest_illustration(box, illustrations):
+    """Illustration whose box is closest to ``box`` (rectangle distance), or None."""
+    best=None; best_d=None
+    for im in illustrations:
+        a,b,c,d=im['bbox']
+        dx=max(0,max(a,box[0])-min(c,box[2])); dy=max(0,max(b,box[1])-min(d,box[3]))
+        dist=(dx*dx+dy*dy)**.5
+        if best is None or dist<best_d: best,best_d=im,dist
+    return best
 
 
 def classify(data, stage1, threshold):
@@ -87,10 +93,7 @@ def classify(data, stage1, threshold):
             duplicate=False
             for kept in filtered:
                 if overlap_ratio(im['bbox'],kept['bbox']) > .60 or overlap_ratio(kept['bbox'],im['bbox']) > .60:
-                    if kept['classification_reason']=='stage1_image_or_drawing': duplicate=True
-                    elif im['classification_reason']=='stage1_image_or_drawing':
-                        filtered.remove(kept)
-                    else: duplicate=True
+                    duplicate=True
                     break
             if not duplicate: filtered.append(im)
         illustrations=filtered
@@ -98,15 +101,25 @@ def classify(data, stage1, threshold):
         for i,r in enumerate(page.get('regions', []),1):
             r['object_id']=f"p{page['page']}-reg-{i}"
 
-        counts={'page_text':0,'illustration_text':0}
+        counts={'page_text':0,'illustration_text':0,'caption':0}
         for r in page.get('regions', []):
             lines=r.get('lines',[])
             if not lines:
                 r['content_context']='page_text' if r.get('type')!='illustration' else 'illustration'
                 r['translation_status']='translate' if r['content_context']=='page_text' else 'exclude'
                 continue
-            assoc=[]
+            assoc=[]; assoc_caption=[]
             for ln in lines:
+                if ln.get('type')=='caption_line':
+                    near=nearest_illustration(ln['bbox'],illustrations)
+                    ln['content_context']='caption'
+                    ln['translation_status']='translate'
+                    if near is not None:
+                        ln['associated_illustration_id']=near['object_id']
+                        assoc_caption.append(near['object_id'])
+                    ln['association_reason']='caption line beside/below an illustration'
+                    counts['caption']+=1
+                    continue
                 matches=[]
                 for im in illustrations:
                     ov=overlap_ratio(ln['bbox'],im['bbox'])
@@ -124,7 +137,10 @@ def classify(data, stage1, threshold):
                     ln['translation_status']='translate'
                     counts['page_text']+=1
             ids=sorted(set(assoc))
-            if not ids:
+            if lines and len(assoc_caption)==len(lines):
+                r['content_context']='caption'; r['translation_status']='translate'
+                r['associated_illustration_ids']=sorted(set(assoc_caption))
+            elif not ids:
                 r['content_context']='page_text'; r['translation_status']='translate'
             elif len(assoc)==len(lines):
                 r['content_context']='illustration_text'; r['translation_status']='exclude'
@@ -139,7 +155,7 @@ def classify(data, stage1, threshold):
         page['classification']={
             'line_counts':counts,
             'illustration_count':len(illustrations),
-            'association_policy':'geometry_overlap_or_containment',
+            'association_policy':'geometry_overlap_or_containment; captions are translatable page text',
             'illustration_text_policy':'preserve_ocr_exclude_translation'
         }
     return data
@@ -184,6 +200,7 @@ def main():
 
     summary={'pages':len(data.get('pages',[])),'illustrations':sum(p['classification']['illustration_count'] for p in data['pages']),
              'page_text_lines':sum(p['classification']['line_counts']['page_text'] for p in data['pages']),
+             'caption_lines':sum(p['classification']['line_counts']['caption'] for p in data['pages']),
              'illustration_text_lines':sum(p['classification']['line_counts']['illustration_text'] for p in data['pages']),
              'mixed_regions':sum(r.get('content_context')=='mixed' for p in data['pages'] for r in p.get('regions',[])),
              'output':str(out),'debug':str(a.output/'debug_stage3.png')}

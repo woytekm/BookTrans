@@ -41,6 +41,39 @@
   `tests/conftest.py` puts the stage directory on the path; `test_stage3.py`
   imports `stage3` directly.
 
+### Illustration and caption model
+
+- New `src/booktrans/illustrations.py`: illustrations are now detected *before*
+  text OCR, from geometry alone. Photographs/halftones use the existing tonal
+  contour detector; line drawings are "everything that is not part of a text
+  line" (a text line = a row of glyph-sized pieces; leftover ink that forms a
+  sizeable cluster is a figure; nearby pieces merge into one figure).
+- Stage 1 masks illustration boxes (padded per detector) out of text-region
+  detection, so drawing fragments no longer become text regions. Overlapping
+  coarse text boxes are merged before OCR.
+- Stage 2 OCRs from a copy of the page with illustrations painted over (crop
+  context used to pull neighbouring drawing edges in as junk "captions").
+- Captions are found by geometry (small text beside or below a figure, plus
+  continuation lines), OCR lines are split at wide horizontal gaps (side-by-side
+  captions), low-confidence symbol-only tokens are dropped, and captions are
+  grouped per column. The old "caption band to the right of the image" hack is gone.
+- Body glyph size is estimated from running text only (captions can outnumber
+  body lines on a drawing page).
+- Stage 2 removes duplicate OCR lines (IoU) and each line belongs to exactly one
+  coarse text box.
+- Stage 2 `--ocr-scale` (default 2.0) upscales crops before OCR. Measured on lines
+  with known text: small captions improve clearly (e.g. `41 BARZDORF` 0.91 -> 1.00,
+  caption 37 0.89 -> 0.96 similarity), body text is unchanged; 3-4x is no better.
+- Stage 3: the "large region with low OCR confidence" illustration fallback is
+  removed (it swallowed the captions under a drawing group). Caption lines are
+  `content_context: caption`, `translation_status: translate`, with an
+  `associated_illustration_id`; geometry alone never excludes them.
+- Sample result: `0002.tif` page 1 went from one detected illustration plus about
+  eight junk "text" regions (`ä faf`, `{ LEA l" A`, ...) sent to translation, to six
+  illustrations (main plate + five profile drawings), zero junk regions and seven
+  separate two-line captions, plus the two plate captions 38/39.
+- Tests: `tests/test_illustrations.py` (synthetic pages); `test_stage3.py` updated.
+
 ## 2026-11-11 — Documentation baseline and project consolidation
 
 - Created a persistent project tree and initial architecture/data-model/pipeline/decision/status documentation.
