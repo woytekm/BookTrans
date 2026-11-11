@@ -57,3 +57,40 @@ All image normalization and page transformations operate on derived data. The or
 The initial input path handles a TIFF containing two facing pages, estimates the gutter and splits it into left/right page images.
 
 **Reason:** The supplied book scans are open-book spreads. Single-page input and robust page-edge detection remain future generalizations.
+
+## ADR-008 — Resolution is handled by a scale factor measured from the body line pitch
+
+**Status:** Accepted
+
+Thresholds are tuned in pixels of the 1800 px sample spreads. Larger scans are analysed on an area-averaged working copy; the factor comes from the median distance between consecutive text-line blobs (reference 23.3 px, factors below 1.25 snap to 1). Full-resolution pixels are used only for OCR crops and figure crops. **Reason:** page-height-based scaling failed on a crop of a page; the line pitch is a property of the text and works for crops, pages and spreads.
+
+## ADR-009 — The page-recreation model is `document.json`, separate from the stage JSON
+
+**Status:** Accepted
+
+`document.json` is nested (pages, blocks, lines), carries layout and typography, and links figures; the stage JSONs stay in `stages/`. Coordinates are working pixels with `scale` and `image_full` recording the mapping. **Reason:** the renderer and a future review tool need one self-contained description of a page.
+
+## ADR-010 — Rebuild pages on a clean canvas by default; the scan background is optional
+
+**Status:** Accepted
+
+`--background paper` draws on the paper colour; `scan` keeps the scan and wipes the translated blocks. Figures are pasted, page furniture is multiplied in. **Reason:** a clean canvas has no ghost text; `scan` keeps the paper texture and gutter shading when wanted.
+
+## ADR-011 — Typeset with an optimum-fit justified line breaker, not the browser or PDF layout engine
+
+**Status:** Accepted
+
+Own Knuth-Plass style breaker over PIL fonts with pyphen hyphenation and Polish typographic rules (no line ends in a one-letter word). **Reason:** exact control of frames, line pitch and flow across pages, and it yields measurable fit data for the report.
+
+## ADR-012 — Font fitting by letter-spacing and size, not by changing the line count
+
+**Status:** Accepted
+
+The translation is fitted to the original line widths by per-block tracking (cap 0.12 em) and a size within 4 % of the glyph-height size. **Reason:** language length is not the issue (Polish is about 3 % shorter); the original typeface is wider than the available fonts. Choosing among several fonts automatically is a later step.
+
+## ADR-013 — The translation service is a separate stage with a JSON contract
+
+**Status:** Accepted (service not built)
+
+Input `document.json` units; output a translations JSON in the format of `examples/*.pl.json`. A local LLM behind an OpenAI-compatible endpoint is the intended backend. See `TRANSLATION.md`. **Reason:** keeps geometry deterministic, allows hand editing and re-rendering, and lets the backend change.
+

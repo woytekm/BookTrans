@@ -80,6 +80,14 @@ def main():
                     help='full px per working px (auto = measured from the body line pitch; 1 = analyse as is). Larger scans are analysed downscaled; OCR and figures use full resolution')
     ap.add_argument('--layout', choices=['spread', 'page', 'crop'], default='spread',
                     help='spread: open book split at the gutter (default); page: one whole page; crop: part of a page')
+    ap.add_argument('--translations', type=Path, help='translations JSON ({"units": {unit_id: {"pl": text}}}); if given, the pages are also rebuilt into <out>/<name>/render/')
+    ap.add_argument('--background', choices=['paper', 'scan'], default='paper', help='for --translations: clean paper canvas or the scan with text wiped')
+    ap.add_argument('--font', type=Path, help='regular serif TTF with Polish letters (default: bundled Crimson Text)')
+    ap.add_argument('--bold-font', type=Path)
+    ap.add_argument('--italic-font', type=Path)
+    ap.add_argument('--tracking', default='auto', help="letter-spacing for --translations: 'auto' fits it to the original line widths; a number in em fixes it; 0 = none")
+    ap.add_argument('--size-scale', type=float, default=1.0, help='multiply the chosen font size')
+    ap.add_argument('--word-space', type=float, default=1.0, help='multiply the natural word space')
     ap.add_argument('-v', '--verbose', action='store_true', help='also print every region and every OCR line with its confidence')
     a = ap.parse_args()
     os.environ.setdefault('BOOKTRANS_T0', str(__import__('time').time()))
@@ -92,6 +100,17 @@ def main():
             nt = sum(b['kind'] == 'text' for b in p['blocks'])
             log.info('wrap', '%s page %d%s: %d text blocks, %d figures' % (f.name, p['page'], p['side'], nt, nf))
         log.info('wrap', 'done: %s (%d pages, %d units)' % (out, len(doc['pages']), len(doc['units'])))
+        if a.translations:
+            from render import render, Fonts
+            log.info('wrap', '=== page assembly (render.py) ===')
+            doc['_dir'] = str(out)
+            trans = json.loads(a.translations.read_text(encoding='utf-8'))
+            names, rep = render(doc, trans, out / 'render', Fonts(a.font, a.bold_font, a.italic_font), a.background,
+                               tracking=None if a.tracking == 'auto' else float(a.tracking),
+                               size_scale=a.size_scale, word_space=a.word_space)
+            for w in rep['warnings']:
+                log.info('wrap', 'WARNING ' + w)
+            log.info('wrap', 'rebuilt pages: %s in %s' % (', '.join(names), out / 'render'))
         print(out)
 
 
