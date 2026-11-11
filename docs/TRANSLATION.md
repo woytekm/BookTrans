@@ -114,6 +114,23 @@ Settings: `--temperature` (0.2), `--max-tokens` (4096), `--timeout` (600 s per r
 
 Diagnostics: every request logs its time, prompt and answer token counts, tokens per second, the finish reason and any hidden reasoning (`reasoning_content`); an empty answer is explained (thinking model that used its tokens for reasoning, or cut off by the token/context limit). Use it to judge a model's real speed before changing anything.
 
+Providers: `--provider openai` (default; LM Studio or any OpenAI-compatible server) or `--provider anthropic`
+(Anthropic Messages API, `POST https://api.anthropic.com/v1/messages`; key in `$ANTHROPIC_API_KEY` or
+`--api-key`, model default `claude-sonnet-5-5`, change with `--model`). An API key is created in the
+Anthropic Console and is billed per token, separately from a Claude Pro/Max subscription (as far as the
+author knows; check the current pricing). The answer carries exact token counts: every request logs them, the
+run ends with a total (`usage this run: ...`, also stored as `usage` in `translations.json`), and
+`--price-in` / `--price-out` (USD per million tokens, from the pricing page) add a cost. Rate limits and
+overload (HTTP 429, 5xx, 529) are retried with a growing pause; other HTTP errors stop the run with the server's
+message (for example a wrong key). Cached units cost nothing, so a repeated run only pays for what changed.
+`--dry-run` prints a rough token estimate. The Anthropic provider has been tested only against a mock
+server, not against the real API.
+
+```bash
+export ANTHROPIC_API_KEY=...            # never commit or paste a key; create a key limited to this use and revoke it when done
+python translate.py output/book/document.json --provider anthropic --price-in 3 --price-out 15   # use the real prices
+```
+
 Reasoning models: a "thinking" model can spend all `--max-tokens` on hidden reasoning and return an empty
 answer. Seen with `google/gemma-4-12b` in LM Studio: 15,000 characters of reasoning, 4095 tokens, 420 s at
 9.7 tok/s, empty answer. **Gemma 4 thinks by default.** In LM Studio, open the model's settings (Custom

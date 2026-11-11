@@ -49,7 +49,7 @@ python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.jso
 python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 51 tests, a few seconds
+python -m pytest -q ../../tests                                                # 53 tests, a few seconds
 ```
 
 Useful options: `--layout spread|page|crop`, `--scale auto|N`, `--ocr-scale`, `--lang`, `-v`,
@@ -74,7 +74,7 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/marks.py` | page numbers, printer's marks, rules (kept as image crops) |
 | `src/booktrans/render.py` | page assembly: typesetting of Polish text, font fitting, compositing |
 | `src/booktrans/scale.py` | resolution detection from the body line pitch |
-| `src/booktrans/translate.py` | translation through an OpenAI-compatible endpoint (LM Studio): glossary block, checks, retries, cache |
+| `src/booktrans/translate.py` | translation through an OpenAI-compatible endpoint (LM Studio) or the Anthropic API: glossary block, checks, retries, cache, token usage |
 | `src/booktrans/glossary.py`, `glossary/` | German -> Polish names and terms: lookup before translation, check after (`TRANSLATION.md`) |
 | `src/booktrans/illustrations.py`, `deskew.py`, `imgutil.py`, `log.py` | helpers |
 | `fonts/` | bundled Crimson Text (SIL OFL) |
@@ -172,7 +172,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (51 tests).
+- Run `python -m pytest -q` before every commit (53 tests).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
 - Check `render/report.json`: line counts against `lines_original`, `warnings`, `tracking_em`.

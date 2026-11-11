@@ -88,22 +88,48 @@ def clean(answer):
 
 
 # ---------------------------------------------------------------- model
-def chat(endpoint, model, prompt, temperature, max_tokens, timeout, api_key=None, extra=None):
+USAGE = {'calls': 0, 'input': 0, 'output': 0, 'cache_read': 0, 'cache_write': 0, 'seconds': 0.0}
+
+
+def post_json(url, headers, body, timeout, tries=4):
+    """POST JSON, parse the JSON answer. Rate limits and server overload (429, 5xx, 529) are retried with
+    a growing pause; other HTTP errors raise RuntimeError carrying the server's message."""
+    data = json.dumps(body).encode('utf-8')
+    for k in range(tries):
+        req = urllib.request.Request(url, data, {'Content-Type': 'application/json', **headers})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            msg = e.read().decode('utf-8', 'replace')[:500]
+            if e.code in (429, 500, 502, 503, 504, 529) and k < tries - 1:
+                wait = 5 * 2 ** k
+                log.info('translate', '  HTTP %d (%s); retrying in %ds' % (e.code, msg[:120].replace('\n', ' '), wait))
+                time.sleep(wait)
+                continue
+            raise RuntimeError('HTTP %d from %s: %s' % (e.code, url, msg))
+
+
+def _note_usage(dt, inp, out, cache_read=0, cache_write=0):
+    USAGE['calls'] += 1; USAGE['seconds'] += dt
+    USAGE['input'] += inp or 0; USAGE['output'] += out or 0
+    USAGE['cache_read'] += cache_read or 0; USAGE['cache_write'] += cache_write or 0
+
+
+def chat_openai(endpoint, model, prompt, temperature, max_tokens, timeout, api_key=None, extra=None):
     body = {'model': model, 'temperature': temperature, 'max_tokens': max_tokens, 'stream': False,
             'messages': [{'role': 'user', 'content': prompt}]}        # one user message: works with every chat template
     body.update(extra or {})
-    req = urllib.request.Request(endpoint.rstrip('/') + '/chat/completions', json.dumps(body).encode('utf-8'),
-                                 {'Content-Type': 'application/json',
-                                  'Authorization': 'Bearer ' + (api_key or 'lm-studio')})
     t0 = time.time()
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        data = json.loads(r.read().decode('utf-8'))
+    data = post_json(endpoint.rstrip('/') + '/chat/completions',
+                     {'Authorization': 'Bearer ' + (api_key or 'lm-studio')}, body, timeout)
     dt = time.time() - t0
     choice = data['choices'][0]
     msg = choice['message']
     content = msg.get('content') or ''
     use = data.get('usage') or {}
     pt, ct = use.get('prompt_tokens'), use.get('completion_tokens')
+    _note_usage(dt, pt, ct)
     reasoning = msg.get('reasoning_content') or msg.get('reasoning') or ''
     log.info('translate', '  model call: %.1fs, prompt %s tok, answer %s tok%s, finish=%s%s' % (
         dt, pt if pt is not None else '?', ct if ct is not None else '?',
@@ -116,6 +142,34 @@ def chat(endpoint, model, prompt, temperature, max_tokens, timeout, api_key=None
         elif choice.get('finish_reason') == 'length':
             log.info('translate', '  empty answer, cut off by the token limit (max_tokens %d or the context length set in LM Studio)' % max_tokens)
     return content
+
+
+def chat_anthropic(endpoint, model, prompt, temperature, max_tokens, timeout, api_key=None, extra=None):
+    """Anthropic Messages API (``POST /v1/messages``); the answer carries exact token counts."""
+    if not api_key:
+        raise RuntimeError('no API key: set ANTHROPIC_API_KEY or pass --api-key')
+    body = {'model': model, 'max_tokens': max_tokens, 'messages': [{'role': 'user', 'content': prompt}]}
+    if temperature is not None and temperature >= 0:
+        body['temperature'] = temperature
+    body.update(extra or {})
+    t0 = time.time()
+    data = post_json(endpoint.rstrip('/') + '/v1/messages',
+                     {'x-api-key': api_key, 'anthropic-version': '2023-06-01'}, body, timeout)
+    dt = time.time() - t0
+    content = ''.join(b.get('text', '') for b in data.get('content', []) if b.get('type') == 'text')
+    use = data.get('usage') or {}
+    inp, out = use.get('input_tokens'), use.get('output_tokens')
+    _note_usage(dt, inp, out, use.get('cache_read_input_tokens'), use.get('cache_creation_input_tokens'))
+    log.info('translate', '  model call: %.1fs, input %s tok, output %s tok, stop=%s' % (
+        dt, inp if inp is not None else '?', out if out is not None else '?', data.get('stop_reason')))
+    if data.get('stop_reason') == 'max_tokens':
+        log.info('translate', '  answer cut off by --max-tokens (%d)' % max_tokens)
+    return content
+
+
+def chat(endpoint, model, prompt, temperature, max_tokens, timeout, api_key=None, extra=None, provider='openai'):
+    fn = chat_anthropic if provider == 'anthropic' else chat_openai
+    return fn(endpoint, model, prompt, temperature, max_tokens, timeout, api_key, extra)
 
 
 def list_models(endpoint, timeout=15):
@@ -180,6 +234,21 @@ def collect(doc):
     return out
 
 
+def report_usage(a):
+    """Token totals of this run (cached units cost nothing); a cost when --price-in/--price-out are given."""
+    u = dict(USAGE)
+    u['seconds'] = round(u['seconds'], 1)
+    pin, pout = getattr(a, 'price_in', None), getattr(a, 'price_out', None)
+    if pin is not None and pout is not None:
+        u['cost'] = round(u['input'] * pin / 1e6 + u['output'] * pout / 1e6 + u['cache_read'] * pin * 0.1 / 1e6
+                          + u['cache_write'] * pin * 1.25 / 1e6, 4)
+    log.info('translate', 'usage this run: %d requests, %d input + %d output tokens%s%s, %.0fs' % (
+        u['calls'], u['input'], u['output'],
+        (' (cache: %d read, %d written)' % (u['cache_read'], u['cache_write'])) if u['cache_read'] or u['cache_write'] else '',
+        (', cost %.4f' % u['cost']) if 'cost' in u else '', u['seconds']))
+    return u
+
+
 def key_of(model, base, rules, block, kind, upper, text, context):
     h = hashlib.sha256('\x1f'.join([model, base, rules, block, kind, str(upper), text, context or '']).encode('utf-8'))
     return h.hexdigest()
@@ -196,7 +265,10 @@ def run(doc, a, call=None):
     if getattr(a, 'no_think', False):                  # servers ignore what they do not know
         extra.setdefault('chat_template_kwargs', {'enable_thinking': False})
         extra.setdefault('reasoning_effort', 'none')
-    call = call or (lambda prompt: chat(a.endpoint, a.model, prompt, a.temperature, a.max_tokens, a.timeout, a.api_key, extra))
+    provider = getattr(a, 'provider', 'openai')
+    call = call or (lambda prompt: chat(a.endpoint, a.model, prompt, a.temperature, a.max_tokens, a.timeout, a.api_key, extra, provider))
+    for k in USAGE:
+        USAGE[k] = 0 if k != 'seconds' else 0.0
     units = collect(doc)
     todo = [u for u in units if u[4] == 'translate' and (not a.only or u[0] in a.only)]
     skipped = [u[0] for u in units if u[4] != 'translate']
@@ -229,7 +301,7 @@ def run(doc, a, call=None):
             for attempt in range(a.retries + 1):
                 try:
                     answer = clean(call(build_prompt(base, rules, block, role, upper, text, ctx, remark)))
-                except (urllib.error.URLError, OSError, KeyError, ValueError) as e:
+                except (urllib.error.URLError, OSError, KeyError, ValueError, RuntimeError) as e:
                     raise SystemExit('request to %s failed: %s' % (a.endpoint, e))
                 flags, remark = problems(text, answer, hits)
                 entry['pl'] = answer
@@ -250,7 +322,12 @@ def run(doc, a, call=None):
         p = a.output.with_suffix('.prompts.txt')
         p.write_text('\n'.join(prompts_txt), encoding='utf-8')
         log.info('translate', 'dry run: %d prompts written to %s' % (len(prompts_txt), p))
+        chars_in = sum(len(x) for x in prompts_txt); chars_src = sum(len(u[1]) for u in todo)
+        log.info('translate', 'rough estimate for a real run (about 3.5 characters per token; Polish output about as long as the German): '
+                              '%d input tokens, %d output tokens, %d requests (without retries or cache hits)' % (
+                                  chars_in / 3.5, chars_src * 0.96 / 3.0, len(todo)))
     else:
+        result['usage'] = report_usage(a)
         a.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
         log.info('translate', 'wrote %s (%d units, %d with flags)' % (a.output, len(result['units']), sum(bool(u['flags']) for u in result['units'].values())))
     return result
@@ -260,10 +337,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('document', type=Path, help='document.json')
     ap.add_argument('-o', '--output', type=Path, default=None, help='translations JSON (default: next to document.json)')
-    ap.add_argument('--endpoint', default=os.environ.get('LMSTUDIO_ENDPOINT', 'http://localhost:1234/v1'),
-                    help='OpenAI-compatible base URL (LM Studio: http://localhost:1234/v1; default or $LMSTUDIO_ENDPOINT)')
+    ap.add_argument('--provider', choices=['openai', 'anthropic'], default='openai',
+                    help='openai: OpenAI-compatible endpoint such as LM Studio (default); anthropic: Anthropic Messages API (key in $ANTHROPIC_API_KEY)')
+    ap.add_argument('--endpoint', default=None,
+                    help='base URL (openai: LM Studio http://localhost:1234/v1, or $LMSTUDIO_ENDPOINT; anthropic: https://api.anthropic.com)')
     ap.add_argument('--model', default=None, help="model id as LM Studio lists it (default: the first model the endpoint reports)")
-    ap.add_argument('--api-key', default=os.environ.get('LMSTUDIO_API_KEY'))
+    ap.add_argument('--api-key', default=None, help='default: $ANTHROPIC_API_KEY (anthropic) or $LMSTUDIO_API_KEY (openai)')
+    ap.add_argument('--price-in', type=float, help='price per million input tokens, to report a cost')
+    ap.add_argument('--price-out', type=float, help='price per million output tokens')
     ap.add_argument('--glossary', nargs='*', type=Path, help='glossary CSV files (default: glossary/*.csv)')
     ap.add_argument('--prompt', type=Path, default=ROOT / 'prompts' / 'translate_pl.txt')
     ap.add_argument('--rules', type=Path, default=ROOT / 'prompts' / 'translate_rules_pl.txt')
@@ -276,6 +357,15 @@ def main():
     ap.add_argument('--extra-body', help='JSON merged into every request body, e.g. \'{"top_p": 0.9}\'')
     ap.add_argument('--dry-run', action='store_true', help='write the prompts, do not call the model')
     a = ap.parse_args()
+    if a.provider == 'anthropic':
+        a.endpoint = a.endpoint or 'https://api.anthropic.com'
+        a.api_key = a.api_key or os.environ.get('ANTHROPIC_API_KEY')
+        a.model = a.model or 'claude-sonnet-5-5'
+        if not a.api_key and not a.dry_run:
+            raise SystemExit('no API key: set ANTHROPIC_API_KEY (create one in the Anthropic Console) or pass --api-key')
+    else:
+        a.endpoint = a.endpoint or os.environ.get('LMSTUDIO_ENDPOINT', 'http://localhost:1234/v1')
+        a.api_key = a.api_key or os.environ.get('LMSTUDIO_API_KEY')
     os.environ.setdefault('BOOKTRANS_T0', str(time.time()))
     doc = json.loads(a.document.read_text(encoding='utf-8'))
     a.output = a.output or a.document.parent / 'translations.json'

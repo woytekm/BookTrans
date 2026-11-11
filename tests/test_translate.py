@@ -103,3 +103,61 @@ def test_digits_ignore_roman_numerals_and_superscripts():
     assert T.digits('der zweiten Hälfte des 13. Jahrhunderts') == T.digits('drugiej połowy XIII wieku')
     assert T.digits('1 Siehe Hamann II. 1923.') == T.digits('¹ Por. Hamann II, 1923.')
     assert T.digits('Abb. 37') != T.digits('il. 38')
+
+
+def _serve(handler_cls):
+    srv = HTTPServer(('127.0.0.1', 0), handler_cls)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def test_anthropic_provider_headers_usage_and_cost(tmp_path):
+    got = {}
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            got['path'] = self.path
+            got['key'] = self.headers['x-api-key']; got['ver'] = self.headers['anthropic-version']
+            got['body'] = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            out = json.dumps({'content': [{'type': 'text', 'text': 'Portal w Byczynie jest prosty. Ma 3 stopnie.'}],
+                              'usage': {'input_tokens': 500, 'output_tokens': 40}, 'stop_reason': 'end_turn'}).encode()
+            self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(out)
+        def log_message(self, *a):
+            pass
+    srv = _serve(H)
+    try:
+        a = _args(tmp_path, only=['u0002'], endpoint='http://127.0.0.1:%d' % srv.server_port, provider='anthropic',
+                  api_key='sk-test', price_in=3.0, price_out=15.0, model='claude-sonnet-5-5')
+        res = T.run(_doc(), a)
+    finally:
+        srv.shutdown()
+    assert got['path'] == '/v1/messages' and got['key'] == 'sk-test' and got['ver'] == '2023-06-01'
+    assert got['body']['messages'][0]['role'] == 'user' and 'stream' not in got['body'] and got['body']['max_tokens'] == 100
+    assert res['units']['u0002']['pl'].startswith('Portal w Byczynie')
+    assert res['usage']['input'] == 500 and res['usage']['output'] == 40 and res['usage']['calls'] == 1
+    assert abs(res['usage']['cost'] - (500 * 3 + 40 * 15) / 1e6) < 1e-9
+
+
+def test_overload_is_retried_and_errors_carry_the_message(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.time, 'sleep', lambda s: None)
+    state = {'n': 0}
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers['Content-Length']))
+            state['n'] += 1
+            if self.path.endswith('bad'):
+                self.send_response(401); self.end_headers(); self.wfile.write(b'{"error":{"message":"invalid x-api-key"}}'); return
+            if state['n'] < 3:
+                self.send_response(529); self.end_headers(); self.wfile.write(b'overloaded'); return
+            self.send_response(200); self.end_headers()
+            self.wfile.write(json.dumps({'content': [{'type': 'text', 'text': 'ok'}], 'usage': {}}).encode())
+        def log_message(self, *a):
+            pass
+    srv = _serve(H)
+    try:
+        base = 'http://127.0.0.1:%d' % srv.server_port
+        assert T.chat_anthropic(base, 'm', 'x', 0.2, 10, 5, 'k') == 'ok' and state['n'] == 3
+        import pytest
+        with pytest.raises(RuntimeError, match='401.*invalid x-api-key'):
+            T.post_json(base + '/bad', {}, {}, 5)
+    finally:
+        srv.shutdown()

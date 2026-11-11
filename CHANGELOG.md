@@ -2,6 +2,13 @@
 
 ## Unreleased — stage2-rework
 
+### Anthropic API provider and token accounting
+
+- `translate.py --provider anthropic` (Messages API, `$ANTHROPIC_API_KEY`, default model `claude-sonnet-5-5`),
+  retries on 429/5xx/529, API error messages shown, per-run token totals (stored as `usage` in
+  `translations.json`), optional cost (`--price-in`, `--price-out`), token estimate in `--dry-run`.
+  Tested against a mock server only (53 tests).
+
 ### Fixes after the first real run (LM Studio, Gemma 4 12B)
 
 - Paragraph detection: a line that starts in lower case after a line that does not end a sentence can
