@@ -97,3 +97,9 @@ def test_empty_answers_are_not_cached(tmp_path):
     T.run(_doc(), a, call=lambda p: '')
     res = T.run(_doc(), a, call=lambda p: 'Portal w Byczynie jest prosty. Ma 3 stopnie.')
     assert res['units']['u0002']['pl'].startswith('Portal w Byczynie')
+
+
+def test_digits_ignore_roman_numerals_and_superscripts():
+    assert T.digits('der zweiten Hälfte des 13. Jahrhunderts') == T.digits('drugiej połowy XIII wieku')
+    assert T.digits('1 Siehe Hamann II. 1923.') == T.digits('¹ Por. Hamann II, 1923.')
+    assert T.digits('Abb. 37') != T.digits('il. 38')

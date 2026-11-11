@@ -2,6 +2,14 @@
 
 ## Unreleased — stage2-rework
 
+### Fixes after the first real run (LM Studio, Gemma 4 12B)
+
+- Paragraph detection: a line that starts in lower case after a line that does not end a sentence can
+  no longer start a paragraph (a word lost in OCR made the line before it look short, so "geklaert."
+  became a unit of its own and the translation was cut mid-sentence). New test.
+- `translate.py`: the digit check converts Roman numerals and superscript footnote marks
+  ("13." = "XIII", "1" = "¹") before comparing; empty answers are never cached.
+
 ### Translation script
 
 - Per-request diagnostics (time, token counts, tok/s, finish reason, hidden reasoning, why an answer was empty).

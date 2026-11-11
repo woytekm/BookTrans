@@ -7,7 +7,7 @@ def col(rows, x1=100, R=600, pitch=24):
     for i, r in enumerate(rows):
         text, short = r[0], r[1]; ind = r[2] if len(r) > 2 else 0
         y = 100 + i * pitch
-        out.append({'text': text, 'type': 'body_line', 'relative_size': 1.0, 'bbox': [x1 + ind, y, R - short, y + 10]})
+        out.append({'text': text[:1].upper() + text[1:], 'type': 'body_line', 'relative_size': 1.0, 'bbox': [x1 + ind, y, R - short, y + 10]})
     return out
 
 
@@ -43,3 +43,13 @@ def test_regions_split_per_paragraph():
     c = col([('a', 0), ('b', 70), ('c', 0), ('d', 50)])
     regs = build_regions(c, 10)
     assert [len(r['lines']) for r in regs] == [2, 2]
+
+
+def test_lower_case_line_never_starts_a_paragraph():
+    # OCR lost a word in line 3, which therefore looks short; "geklärt." cannot start a paragraph
+    c = col([('Da abgesehen von dem Holzbau', 0), ('vorhanden war, ist ein Anschluß', 1),
+             ('Voraussetzung. Für Niederschlesien ist diese Frage im', 70), ('geklärt.', 560)])
+    c[3]['text'] = 'geklärt.'
+    assert breaks(c) == [True, False, False, False]
+    c2 = col([('Eine Zeile endet hier.', 80), ('Neuer Absatz beginnt', 0)])
+    assert breaks(c2) == [True, True]                 # a sentence end followed by a capital is still a break

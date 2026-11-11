@@ -124,7 +124,23 @@ def list_models(endpoint, timeout=15):
 
 
 # ---------------------------------------------------------------- checks
+_SUP = str.maketrans('\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079\u2070', '1234567890'[:9] + '0')
+_ROMAN = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
+
+
+def _roman(m):
+    t = m.group(0); n = 0
+    for i, c in enumerate(t):
+        v = _ROMAN[c]
+        n += -v if i + 1 < len(t) and _ROMAN[t[i + 1]] > v else v
+    return str(n)
+
+
 def digits(s):
+    """Sorted numbers in ``s`` for comparing source and translation: superscript digits (footnote marks) count
+    as digits and Roman numerals of two or more letters are converted ("XIII wieku" = "13. Jahrhunderts")."""
+    s = s.translate(_SUP)
+    s = re.sub(r'\b[IVXLCDM]{2,}\b', _roman, s)
     return sorted(re.findall(r'\d+', s))
 
 
