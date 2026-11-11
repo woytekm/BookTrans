@@ -10,7 +10,8 @@ from pytesseract import Output
 
 from imgutil import crop_for_ocr, paper_color
 from deskew import deskew_page, correction_matrix, apply_correction
-from illustrations import detect_illustrations, mask_box
+from illustrations import detect_illustrations, mask_box, edge_margins
+from scale import estimate_scale
 
 
 def load_rgb(path):
@@ -28,12 +29,12 @@ def detect_gutter(rgb):
     profile = cv2.GaussianBlur(profile.reshape(1, -1), (0, 0), 7).ravel()
     return a + int(np.argmin(profile))
 
-WORK_HEIGHT = 1315     # px: the resolution all geometric thresholds were tuned for
-
-
-def working_scale(height, work_height=WORK_HEIGHT):
-    """Full px per working px. Scans not clearly larger than the working size are used as is."""
-    return height / float(work_height) if height > 1.4 * work_height else 1.0
+def split_page(rgb, layout):
+    """Pages of one scan: ``spread`` (split at the gutter), ``page`` (one whole page)
+    or ``crop`` (part of a page; no physical edges, so edge margins are tiny)."""
+    if layout == 'spread':
+        return split_spread(rgb)
+    return [('P' if layout == 'page' else 'C', rgb, 0)]
 
 
 def split_spread(rgb):
@@ -88,8 +89,7 @@ def detect_text_regions(rgb, lang='deu', side='L', exclude=()):
     h,w=gray.shape
 
     # Ignore the physical book edge and the gutter shadow, side-aware.
-    ml,mr=page_margins(side)
-    mt=mb=OUTER_MARGIN
+    ml,mt,mr,mb=edge_margins(side)
     bw[:mt,:]=0; bw[-mb:,:]=0; bw[:,:ml]=0; bw[:,-mr:]=0
     # Illustrations were found first and are masked out: their fragments must
     # never become text regions (and never reach OCR or translation).
@@ -191,20 +191,22 @@ def main():
     ap.add_argument('input', type=Path)
     ap.add_argument('-o','--output', type=Path, default=Path('output'))
     ap.add_argument('--lang', default='deu')
-    ap.add_argument('--work-height', type=int, default=WORK_HEIGHT,
-                    help='height in px of the working copy used for layout analysis (default %d, the size of the sample scans); larger scans are analysed downscaled and OCR/figures use the full-resolution pixels' % WORK_HEIGHT)
+    ap.add_argument('--scale', default='auto',
+                    help='full px per working px for layout analysis. auto (default) measures the body line pitch and compares it with the sample scans (~23 px); a number forces it (1 = analyse the scan as is). Larger scans are analysed on a downscaled copy; OCR and figures use the full-resolution pixels')
+    ap.add_argument('--layout', choices=['spread','page','crop'], default='spread',
+                    help='spread: open book, split at the gutter (default); page: one whole page; crop: part of a page')
     args=ap.parse_args()
     args.output.mkdir(parents=True,exist_ok=True)
     full=load_rgb(args.input)
-    f=working_scale(full.shape[0],args.work_height)
-    # Layout analysis is tuned in pixels for ~1300 px tall pages. A larger scan is
+    f,scale_info=estimate_scale(full,None if args.scale=='auto' else float(args.scale))
+    # Layout analysis is tuned in pixels for the sample scans (body line pitch ~23 px). A larger scan is
     # analysed on an area-averaged working copy; full-resolution pixels are kept
     # for OCR and for the extracted figures (same split and the same affine map).
     rgb=cv2.resize(full,(int(round(full.shape[1]/f)),int(round(full.shape[0]/f))),interpolation=cv2.INTER_AREA) if f>1 else full
-    spread={'file':str(args.input),'width':rgb.shape[1],'height':rgb.shape[0],'scale':f,
+    spread={'file':str(args.input),'width':rgb.shape[1],'height':rgb.shape[0],'scale':f,'scale_info':scale_info,
             'full_width':full.shape[1],'full_height':full.shape[0],'pages':[]}
     deskewed=[]
-    for side,page,offset in split_spread(rgb):
+    for side,page,offset in split_page(rgb,args.layout):
         page_no=len(spread['pages'])+1
         # Skew differs per page (0.4-1.0 deg in the samples), so each page is
         # straightened on its own before any analysis. All coordinates below

@@ -12,7 +12,8 @@ creates ``<output_root>/<tiff name>/``:
     debug/          diagnostic overlays
     stages/         raw JSON of stages 1-4 (s1..s4), for debugging
 
-The input may be an open-book spread (split at the gutter) or a single page.
+The input may be an open-book spread (default, split at the gutter), a single
+whole page (``--layout page``) or a crop of a page (``--layout crop``).
 """
 import argparse
 import shutil
@@ -34,14 +35,14 @@ def run(cmd):
         raise SystemExit('stage failed: %s' % ' '.join(str(c) for c in cmd[:2]))
 
 
-def process(tiff, out_root, lang='deu', ocr_scale=2.0, work_height=1315):
+def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spread'):
     tiff = Path(tiff)
     out = Path(out_root) / tiff.stem
     if out.exists():
         shutil.rmtree(out)
     st = out / 'stages'
     s1, s2, s3, s4 = (st / n for n in ('s1', 's2', 's3', 's4'))
-    run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang, '--work-height', work_height])
+    run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang, '--scale', scale, '--layout', layout])
     run([HERE / 'stage2.py', tiff, '--stage1-json', s1 / 'page_structure.json', '-o', s2,
          '--lang', lang, '--ocr-scale', ocr_scale])
     run([HERE / 'stage3.py', s2 / 'page_structure_stage2.json', '--stage1-json', s1 / 'page_structure.json', '-o', s3])
@@ -60,11 +61,13 @@ def main():
     ap.add_argument('-o', '--output', type=Path, default=Path('output'))
     ap.add_argument('--lang', default='deu')
     ap.add_argument('--ocr-scale', type=float, default=2.0)
-    ap.add_argument('--work-height', type=int, default=1315,
-                    help='page height in px used for layout analysis; larger scans are analysed downscaled, OCR and figures use full resolution')
+    ap.add_argument('--scale', default='auto',
+                    help='full px per working px (auto = measured from the body line pitch; 1 = analyse as is). Larger scans are analysed downscaled; OCR and figures use full resolution')
+    ap.add_argument('--layout', choices=['spread', 'page', 'crop'], default='spread',
+                    help='spread: open book split at the gutter (default); page: one whole page; crop: part of a page')
     a = ap.parse_args()
     for f in a.inputs:
-        out, doc = process(f, a.output, a.lang, a.ocr_scale, a.work_height)
+        out, doc = process(f, a.output, a.lang, a.ocr_scale, a.scale, a.layout)
         for p in doc['pages']:
             nf = sum(b['kind'] == 'figure' for b in p['blocks'])
             nt = sum(b['kind'] == 'text' for b in p['blocks'])

@@ -76,8 +76,9 @@ def test_tonal_photo_is_detected():
     assert abs(x1 - 200) <= 3 and abs(y1 - 150) <= 3 and abs(x2 - 500) <= 4 and abs(y2 - 450) <= 4
 
 
-def test_mask_box_pads_photos_more_vertically_than_line_art():
+def test_mask_box_pads_small_so_captions_directly_below_stay_readable():
     photo = {'detector': 'tonal', 'bbox': [100, 100, 200, 200]}
     art = {'detector': 'line_art', 'bbox': [100, 100, 200, 200]}
-    assert ill.mask_box(photo) == [96, 90, 204, 210]
+    # A caption can sit only ~6 working px under a photo (crop of a 600 DPI page).
+    assert ill.mask_box(photo) == [96, 96, 204, 204]
     assert ill.mask_box(art) == [96, 95, 204, 205]

@@ -35,6 +35,8 @@ cd src/booktrans
 python booktrans.py /path/to/0001.tif -o /path/to/output
 ```
 
+Useful options: `--layout spread|page|crop` (open book split at the gutter / one whole page / part of a page), `--scale auto|N` (how much larger than the sample scans the input is; auto measures the line pitch, so 600 DPI scans and crops are handled by analysing a downscaled working copy while OCR and figures use the full-resolution pixels), `--ocr-scale`.
+
 creates `output/0001/` with `document.json` (nested model: pages → blocks → lines, layout, typography, figure links, translation units), `pages/` (deskewed page images; all coordinates refer to them), `figures/` (every illustration cropped to a PNG), `debug/` (overlays) and `stages/` (raw JSON of stages 1–4). Each TIFF is processed on its own; to link paragraphs across spreads, run `stage4.py` over the `stages/s3` JSON files of consecutive spreads. The individual stages can still be run separately:
 
 Stage 1:

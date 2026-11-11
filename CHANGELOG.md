@@ -109,23 +109,41 @@
   paragraph rule and limitations; data model additions; README lists
   hand-installed modules and MacPorts `tesseract` / `tesseract-deu`.
 
-### High-resolution scans (working copy + full-resolution OCR and figures)
+### High-resolution scans, crops and single pages
 
-- Stage 1 `--work-height` (default 1315, the sample scans' size; wrapper passes it
-  through). A scan taller than 1.4x that is analysed on an area-averaged working
-  copy, because every geometric threshold is a pixel value tuned at that size; the
-  same split and the same affine deskew are applied to the full-resolution page
-  (`page_NN_X_full.png`, `scale` = full px per working px in the JSON).
-- Stage 2 OCRs crops cut from the full-resolution pixels, resized so that
-  `--ocr-scale` keeps its meaning (OCR pixels per working pixel; default 2 is
-  about 270 DPI for a 600 DPI scan). Boxes and glyph heights stay in working px.
-- Figures are cropped from the full-resolution page; `document.json` pages carry
-  `scale` and `image_full`.
-- Verified mechanically only (scans upscaled from the samples): coordinates map
-  correctly and native-size scans are unchanged. Detection quality on real 600 DPI
-  scans is NOT tuned yet: on a synthetic 5x upscale one drawing plate was split into
-  pieces (its gaps sit at the 40 px merge limit), so thresholds need tuning on a real file.
-- Tests: `tests/test_scale.py`, full-resolution figure crop in `tests/test_docmodel.py`.
+- Scale is measured from the text, not the page height: `src/booktrans/scale.py`
+  closes ink horizontally into line blobs and takes the dominant vertical distance
+  between consecutive lines (the body line pitch; ~23.4 px on the sample scans).
+  `f = pitch / 23.3`, scans below 1.25 are used as they are. Measured: samples
+  23.4 px (f = 1), the samples upscaled 5x 116.5 px (f = 5.0), a real 600 DPI crop
+  113-116 px (f = 4.87). Sizing by page height (my first version) was wrong for
+  crops: text came out twice too big and the body text was detected as a drawing.
+- A scan with f > 1 is analysed on an area-averaged working copy (all thresholds
+  are pixel values tuned at the sample size); the same split and affine deskew are
+  applied to the full-resolution page (`page_NN_X_full.png`; `scale` and
+  `scale_info` in the JSON). `--scale auto|N` on Stage 1 and the wrapper.
+- Stage 2 OCRs crops cut from the full-resolution pixels, resized so `--ocr-scale`
+  keeps its meaning (OCR px per working px; default 2). CLAHE is applied only to
+  the soft native-size path (it distorted thin small caps on real high-res pixels).
+  Boxes and glyph heights stay in working px. Figures are cropped from the
+  full-resolution page; `document.json` pages carry `scale` and `image_full`.
+- `--layout spread|page|crop` (Stage 1 and wrapper). `page` keeps the 65 px edge
+  margins on all sides, `crop` uses 10 px (a crop has no physical book edge), so
+  a photo or text cut by the crop edge is still found. The spread default is unchanged.
+- Photo mask padding below a photo reduced from 10 to 4 px: a caption sits only
+  ~6 working px under a photo at this scale and the old pad painted over the top
+  of its capitals. Native sample results are identical (all four pages, same lines
+  and illustrations).
+- Real 600 DPI crop (photo, caption, two paragraphs; 12 lines): 12/12 lines
+  match a manual transcription exactly, 1 figure, 2 paragraphs, caption linked.
+  The same crop downscaled to ~135 DPI and run natively also gives 12/12, so on
+  clean body text and this caption full-resolution OCR gives no measurable gain;
+  the gain is the full-resolution figure crops, and possibly on harder text (digits,
+  tiny captions, drawing labels), which this crop does not contain.
+- Still open: a synthetic 5x upscale of `0002.tif` splits the main drawing plate
+  into several pieces (its gaps sit at the 40 px merge limit); not seen on real
+  data yet, needs a real hi-res drawing page.
+- Tests: `tests/test_scale.py`; full-resolution figure crop test in `tests/test_docmodel.py`.
 
 ### One-command wrapper and nested document model
 

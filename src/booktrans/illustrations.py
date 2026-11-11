@@ -32,9 +32,28 @@ MIN_FIGURE_H = 48      # px
 MIN_FIGURE_INK = 150   # px of non-text ink
 
 
+CROP_MARGIN = 10       # px, a crop has no physical book edge to ignore
+
+
+def edge_margins(side):
+    """(left, top, right, bottom) ink-ignore margins, in working px.
+
+    ``L`` / ``R``: a page of an open spread (physical edge outside, gutter inside);
+    ``P``: a single whole page (edge on all sides); ``C``: a crop of a page.
+    """
+    if side == 'L':
+        return OUTER_MARGIN, OUTER_MARGIN, INNER_MARGIN, OUTER_MARGIN
+    if side == 'R':
+        return INNER_MARGIN, OUTER_MARGIN, OUTER_MARGIN, OUTER_MARGIN
+    if side == 'C':
+        return (CROP_MARGIN,) * 4
+    return (OUTER_MARGIN,) * 4
+
+
 def page_margins(side):
     """(left, right) ignore margins for the line-art detector."""
-    return (OUTER_MARGIN, INNER_MARGIN) if side == 'L' else (INNER_MARGIN, OUTER_MARGIN)
+    m = edge_margins(side)
+    return m[0], m[2]
 
 
 def _is_glyph(h, w, area):
@@ -120,8 +139,8 @@ def detect_line_art(gray, side, exclude=()):
     """
     h, w = gray.shape
     ink = ink_mask(gray)
-    ml, mr = page_margins(side)
-    ink[:OUTER_MARGIN, :] = 0; ink[h - OUTER_MARGIN:, :] = 0; ink[:, :ml] = 0; ink[:, w - mr:] = 0
+    ml, mt, mr, mb = edge_margins(side)
+    ink[:mt, :] = 0; ink[h - mb:, :] = 0; ink[:, :ml] = 0; ink[:, w - mr:] = 0
     for x1, y1, x2, y2 in exclude:
         ink[max(0, y1):y2, max(0, x1):x2] = 0
 
@@ -143,7 +162,7 @@ def detect_line_art(gray, side, exclude=()):
     return out
 
 
-def detect_tonal_images(rgb):
+def detect_tonal_images(rgb, side='L'):
     """Photographs / halftones: large, dense contours of dark and mid tones.
 
     Otsu is deliberately avoided (uneven lighting).  Typical printed text has an
@@ -152,8 +171,8 @@ def detect_tonal_images(rgb):
     h, w = rgb.shape[:2]
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     bw = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY_INV)[1]
-    m = OUTER_MARGIN
-    bw[:m, :] = 0; bw[-m:, :] = 0; bw[:, :m] = 0; bw[:, -m:] = 0
+    ml, mt, mr, mb = edge_margins(side)
+    bw[:mt, :] = 0; bw[h - mb:, :] = 0; bw[:, :ml] = 0; bw[:, w - mr:] = 0
     contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     out = []
     for c in contours:
@@ -171,7 +190,7 @@ def detect_tonal_images(rgb):
 # Photographs leave faint halftone residue just outside the dark-tone contour
 # (mostly below it); line art is tight. Captions sit >= ~9 px beside/below a
 # figure, so the horizontal margin must stay small.
-MASK_PAD = {'tonal': (4, 10), 'line_art': (4, 5)}
+MASK_PAD = {'tonal': (4, 4), 'line_art': (4, 5)}
 
 
 def mask_box(region):
@@ -187,7 +206,7 @@ def detect_illustrations(rgb, side):
     Photographs first; their boxes are masked before the line-art pass.
     """
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    tonal = detect_tonal_images(rgb)
+    tonal = detect_tonal_images(rgb, side)
     out = [dict(t, detector='tonal') for t in tonal]
     for fig in detect_line_art(gray, side, exclude=[t['bbox'] for t in tonal]):
         out.append(dict(fig, detector='line_art'))

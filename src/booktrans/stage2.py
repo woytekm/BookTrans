@@ -69,7 +69,8 @@ def ocr_lines(page, bbox, lang, context=10, scale=2.0, hires=None, f=1.0):
     # far below what Tesseract likes. Upscaling the crop first improves small text
     # (captions) clearly and leaves body text unchanged. Boxes are mapped back.
     if scale!=1 and not scale_done: gray=cv2.resize(gray,None,fx=scale,fy=scale,interpolation=cv2.INTER_CUBIC)
-    gray=cv2.createCLAHE(clipLimit=1.5,tileGridSize=(8,8)).apply(gray)
+    # CLAHE helps soft ~135 DPI scans; on real high-resolution pixels it only distorts thin small caps.
+    if not scale_done: gray=cv2.createCLAHE(clipLimit=1.5,tileGridSize=(8,8)).apply(gray)
     d=pytesseract.image_to_data(gray,lang=lang,config='--psm 6',output_type=Output.DICT)
     if scale!=1:
         for k in ('left','top','width','height'): d[k]=[int(round(v/scale)) for v in d[k]]
