@@ -151,16 +151,15 @@ Illustrations are represented separately from semantic text regions:
 - `classification_reason`
 - `translation_status`: `exclude`
 
-Stage 1 `image_or_drawing` candidates are accepted directly. A conservative
-fallback also recognizes a very large Stage 1 region with unusually low OCR
-confidence as an illustration candidate. This is intentionally a hypothesis
-and remains subject to later human review.
+Only explicit Stage 1 `image_or_drawing` regions become illustrations
+(`classification_reason`: `stage1_tonal` or `stage1_line_art`). The old
+"large low-confidence region" fallback was removed.
 
 ### OCR-line association
 
 Every OCR line receives:
 
-- `content_context`: `page_text` or `illustration_text`
+- `content_context`: `page_text`, `caption` or `illustration_text`
 - `translation_status`: `translate` or `exclude`
 - `associated_illustration_id` when associated with an illustration
 - `association_reason` for illustration-associated lines
@@ -187,3 +186,25 @@ OCR detected inside illustrations is **kept as source evidence but excluded from
 translation and page reconstruction**. The original illustration remains
 unchanged. Editing labels inside drawings is explicitly deferred to a later,
 advanced feature.
+
+## Additions in 0.3.0 / 0.4.0 (stage2-rework)
+
+Per page (Stage 1, carried forward): `skew_deg`, `deskew` (`angle_deg`, `edge_tilt_deg`, `edge_model`, `lines_used`, `full_lines_used`, `matrix_src_to_dst`), `page_image` (the deskewed page PNG; every coordinate refers to it). Illustration regions carry `detector` (`tonal` or `line_art`).
+
+Per OCR line (Stage 2): `paragraph_break` (first line of a paragraph) and `paragraph_break_reason` (`column_start`, `short_last_line`, `first_line_indent`, `extra_line_spacing`); caption lines have `type: caption_line` and get `associated_illustration_id` in Stage 3.
+
+Stage 4 (`units.json`, schema 0.4.0): paragraph regions get `continues_from` / `continues_to` (object ids, made unique per input file as `sN-pM-reg-K`). `units[]` hold `unit_id`, `type`, dehyphenated `text`, `source_object_ids`, `pages` as `[input_index, page]`, `joins[]` (rule `removed_hyphen`, `kept_hyphen_uppercase` or `suspended_compound`; `across_page` for joins over a page break) and `dehyphenated`.
+
+## Page-recreation document model (`document.json`, schema 1.0)
+
+Written by `booktrans.py`. Top level: `schema_version`, `source_file`, `coordinate_system`, `pages[]`, `units[]`.
+
+`pages[]`: `page`, `side`, `image` (relative path of the deskewed page PNG), `width`, `height`, `skew_deg`, `deskew`, `layout`, `blocks[]`.
+
+`layout`: `paper_color_rgb`, `text_area` (body/heading/footnote text), `content_area` (everything incl. figures), `columns[]` (`left`, `right` edge of justified text), `body_glyph_height_px`, `default_alignment`.
+
+`blocks[]` (in `reading_order`): `block_id`, `kind` (`text` | `figure`), `role`, `bbox`.
+- text: `text`, `lines[]` (`bbox`, `text`, `confidence`, `glyph_height_px`, `paragraph_start`), `unit_id`, `continues_from`/`continues_to`, `figure_ids`, `translation_status`, `content_context`, `typography` (`glyph_height_px`, `relative_size`, `line_pitch_px`, `style`, `uppercase_ratio`, `alignment` [`justified`/`left`/`center`], `alignment_measured`, `first_line_indent_px`, `last_line_shortfall_px`, `gap_above_px`).
+- figure: `file` (relative path), `crop_bbox`, `detector`, `captions[]` (block ids).
+
+`units[]`: `unit_id`, `type`, `text` (dehyphenated), `source_block_ids`, `dehyphenated`, `joins`.
