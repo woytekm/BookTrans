@@ -2,7 +2,7 @@
 
 A Python-based document reconstruction and translation project for historical books. The initial target is a pre-war German architecture book to be translated into Polish while retaining original illustrations, page composition and an approximate historical typographic character.
 
-**Current status:** working prototype for one book. Layout analysis, OCR, the page-recreation model (`document.json`) and page reconstruction with fitted fonts work on the two supplied sample spreads (translated by hand). The automated translation service is the next piece and is not built yet. The code is tuned to the sample scans and is not yet a general-purpose application. **New session? Read `docs/HANDOFF.md` first.**
+**Current status:** working prototype for one book. Layout analysis, OCR, the page-recreation model (`document.json`) and page reconstruction with fitted fonts work on the two supplied sample spreads (translated by hand). The translation script (`translate.py`, LM Studio endpoint, glossary-aware) exists but has not been run against a real model yet. The code is tuned to the sample scans and is not yet a general-purpose application. **New session? Read `docs/HANDOFF.md` first.**
 
 ## Current prototype
 
@@ -46,6 +46,12 @@ python booktrans.py /scans/mybook/ -o output --resume         # skip spreads who
 ```
 
 Pages are numbered consecutively, paragraphs cut at a spread boundary are joined into one translation unit, and the per-spread files are in `stages/<tiff name>/`. `--separate` gives one result folder per TIFF instead.
+
+Translating the units (LM Studio running with a model loaded and its server started):
+
+```bash
+python translate.py output/mybook/document.json -o output/mybook/translations.json [--endpoint URL] [--model NAME] [--dry-run]
+```
 
 Rebuilding the pages with a translation (one command, or `render.py` separately):
 

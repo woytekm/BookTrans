@@ -27,7 +27,8 @@ BookTrans is a working prototype: scans go in, a complete page-recreation model 
 - Hand translations of both sample spreads (`examples/0001.pl.json`, `examples/0002.pl.json`) and their reconstructions (`examples/*_render_compare.jpg`).
 - Batch mode: a folder or several TIFFs become one book document (`--resume`, `--separate`, `--name`); cross-spread paragraph joins.
 - `glossary.py`: glossary lookup (places with OCR-tolerant matching, terms inside compounds), prompt block, post-translation check, place-name CSV importer, candidate extractor; seed `glossary/terms.csv`.
-- Progress/timing output on stderr; 43 tests.
+- `translate.py`: translation through an OpenAI-compatible endpoint (LM Studio) with glossary block, answer cleaning, checks with retries, cache and dry run (tested with a mock server; not yet with a real model).
+- Progress/timing output on stderr; 48 tests.
 
 ## Experimental results and observations
 
@@ -49,15 +50,15 @@ BookTrans is a working prototype: scans go in, a complete page-recreation model 
 - Italic, bold, small caps and typeface identification are not implemented reliably; `style` is currently unknown.
 - Tesseract confidence is not a calibrated probability of correctness.
 - No human-review UI exists.
-- No translation client or cache exists yet (`TRANSLATION.md` has the contract). Output is PNG per page, no PDF export.
+- `translate.py` has not been run against a real model. Output is PNG per page, no PDF export.
 - Body text flows with no widow/orphan control.
 - No automatic font choice among several fonts; page numbers are pasted as crops; one body column per page is assumed.
 - The code is a set of scripts, not a tested library/API; tests use synthetic data only.
 
 ## Immediate next development
 
-1. **Translation service** (`translate.py`, local LLM; see `TRANSLATION.md`).
-2. **Glossary content** (import place names, review terms) and wiring into the translation service (`TRANSLATION.md`).
+1. **First real run of `translate.py`** against LM Studio (Gemma 12B); tune prompts and checks (`TRANSLATION.md`).
+2. **Glossary content** (import place names, review terms).
 3. Automatic font choice among supplied fonts; more samples (two-column, ragged right, footnotes, running heads).
 
 Earlier list (still relevant for robustness):

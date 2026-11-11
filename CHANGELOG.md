@@ -2,6 +2,14 @@
 
 ## Unreleased — stage2-rework
 
+### Translation script
+
+- `src/booktrans/translate.py`: one request per unit to an OpenAI-compatible endpoint (LM Studio), with
+  the glossary block of the matching entries, rules (`prompts/translate_rules_pl.txt`), the kind of text and
+  the previous sentence as context; answer cleaning; checks (glossary terms, length ratio, digits) with up to
+  two retries; cache (`<output>.cache.json`); `--dry-run`, `--only`, `--model`, `--endpoint`.
+  Tested with a mock HTTP server (5 tests, 48 in total); not yet run against a real model.
+
 ### Glossary
 
 - `src/booktrans/glossary.py` and `glossary/terms.csv`: German -> Polish place names and terms. Lookup

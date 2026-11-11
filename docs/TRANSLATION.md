@@ -1,8 +1,8 @@
 # Translation: contract for the translation service
 
-The translation step is **not implemented**. This document fixes what it consumes and produces so that
-it can be built (and swapped) without touching the rest. Two spreads were translated by hand in a chat
-session following exactly this contract: `examples/0001.pl.json`, `examples/0002.pl.json`.
+This document fixes what the translation step consumes and produces, so that the backend can be swapped
+without touching the rest. `translate.py` (below) implements it for an OpenAI-compatible endpoint (LM
+Studio). Two spreads were translated by hand in a chat session following exactly this contract: `examples/0001.pl.json`, `examples/0002.pl.json`.
 
 ## Input
 
@@ -69,22 +69,53 @@ report carries a warning. `source` and `notes` are for review.
 - **Do not add or drop sentences.** The renderer fits the text to the original frame, and the Polish
   text is about 3 % shorter than the German on the samples (3423 vs 3544 characters on spread 1).
 
-## Service design (proposal, nothing built)
+## The translation script (`src/booktrans/translate.py`)
 
-- A script `translate.py document.json -o translations.json` (plain standalone, like the others).
-- A local LLM behind an OpenAI-compatible HTTP endpoint (Ollama, llama.cpp server, LM Studio); the
-  endpoint and model name come from `config/` or arguments.
-- One unit per request, in document order, with a short context: the previous unit's last sentence and
-  the role (`heading`, `caption`, ...) plus the glossary. Headings and captions are short and
-  uppercase; give the model the role so it does not write a sentence.
-- A cache keyed by a hash of (model, prompt, source text, glossary) so a re-run only translates changed
-  units.
-- Post-checks that fail loudly into `notes`: Polish/German length ratio outside about 0.7-1.3, digits
-  and figure numbers that differ from the source, leftover German words, missing place-name glossary
-  hits.
-- Units cut at a spread boundary are whole units in a book document (batch mode, `HANDOFF.md`
-  section 8): translate them as one. Unit ids are numbered over the whole book.
-- Output stays in the format above so a human can edit the JSON and re-render.
+**Status:** written and tested against a mock endpoint and a dry run on the sample book; **not yet run
+against a real LM Studio model** (first thing to do on the Mac).
+
+```bash
+cd src/booktrans
+python translate.py output/book/document.json -o output/book/translations.json            # LM Studio on localhost:1234
+python translate.py output/book/document.json --endpoint http://192.168.1.20:1234/v1 --model gemma-3-12b-it
+python translate.py output/book/document.json --dry-run                                     # only write the prompts (translations.prompts.txt)
+python translate.py output/book/document.json --only u0021 u0022                            # just these units
+python render.py output/book/document.json output/book/translations.json -o output/book/render
+```
+
+LM Studio: load a model, open the Developer tab, "Start Server" (default `http://localhost:1234/v1`).
+Without `--model` the first model the server reports is used. `$LMSTUDIO_ENDPOINT` / `$LMSTUDIO_API_KEY`
+work as defaults. Standard library only.
+
+What it does for every unit with `translation_status: translate` (excluded and review units are skipped):
+
+1. glossary lookup on the German text (see below), only usable entries are given to the model;
+2. **one request per unit** (one `user` message: it works with every chat template, including Gemma's,
+   which has no system role): base prompt (`prompts/translate_pl.txt`, the owner's wording), rules
+   (`prompts/translate_rules_pl.txt`, editable: answer only with the translation, silent OCR repair,
+   no added or dropped sentences, "Abb." -> "il.", footnote superscripts), the glossary list, the kind of
+   text (heading, caption, footnote, paragraph; capitals in the original), the last sentence of the
+   previous paragraph as context, and the text;
+3. cleaning of the answer (`<think>` blocks, code fences, "Tłumaczenie:", quotes);
+4. checks: glossary terms present (inflections accepted), length ratio 0.65-1.45 (texts over 60 characters),
+   digits equal to the source. Glossary and length problems trigger up to `--retries` (default 2) repeats of
+   the request with an `IMPORTANT:` remark naming the problem; digit differences are only reported (OCR
+   often misreads digits in the source);
+5. output `translations.json` in the format above plus, per unit, `glossary` (what was given) and `flags`
+   (problems left, glossary entries that were *not* given because they are disputed or ambiguous), and a
+   `notes` summary; it is rewritten after every unit.
+
+Cache: `<output>.cache.json`, keyed by model, both prompts, glossary block, kind, context and text, so a
+repeated or interrupted run only asks for what changed (editing a glossary entry re-translates only the
+units where it matched). Delete the file to force a fresh translation.
+
+Settings: `--temperature` (0.2), `--max-tokens` (4096), `--timeout` (600 s per request), `--glossary`
+(default `glossary/*.csv`), `--prompt`, `--rules`.
+
+Known limits: units are translated independently (one sentence of context only); no batching, no
+streaming; the source stored in the output is the raw OCR text, not the corrected German; a model that
+ignores "answer only with the translation" is only partly caught by `clean()`; the length check cannot
+tell a bad translation of the right length from a good one, so spot checks stay necessary.
 
 ## Glossary (`src/booktrans/glossary.py`, `glossary/`)
 
@@ -142,6 +173,5 @@ TRZONU" while the glossary says "pierścień trzonu kolumny".
 
 ### Still to do
 
-- Wire `prompt_block` and `check` into `translate.py` once it exists.
 - Resolve ambiguous places from context (neighbouring names, the district named in the text).
 - A review workflow for `proposed` entries (`candidates` is the start).

@@ -90,7 +90,7 @@ The translation is fitted to the original line widths by per-block tracking (cap
 
 ## ADR-013 — The translation service is a separate stage with a JSON contract
 
-**Status:** Accepted (service not built)
+**Status:** Accepted; implemented as `translate.py` (LM Studio endpoint)
 
 Input `document.json` units; output a translations JSON in the format of `examples/*.pl.json`. A local LLM behind an OpenAI-compatible endpoint is the intended backend. See `TRANSLATION.md`. **Reason:** keeps geometry deterministic, allows hand editing and re-rendering, and lets the backend change.
 

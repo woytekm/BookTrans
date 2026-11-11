@@ -22,8 +22,8 @@ automation over by-hand tuning).
 
 **Status:** detection, OCR, the document model and page reconstruction work on the sample pages
 (`0001.tif`, `0002.tif`, pages 50-53). The translation service (a local LLM) is the next big piece and
-does not exist yet; the two samples were translated by hand in a chat session
-(`examples/0001.pl.json`, `examples/0002.pl.json`).
+exists as `translate.py` but has **not been run against a real model yet**; the two samples were
+translated by hand in a chat session (`examples/0001.pl.json`, `examples/0002.pl.json`).
 
 ## 2. Working with the owner (preferences)
 
@@ -46,9 +46,10 @@ does not exist yet; the two samples were translated by hand in a chat session
 cd src/booktrans
 python booktrans.py /path/to/0001.tif -o /path/to/output                       # stages 1-4 -> document.json
 python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.json   # ... and rebuild the pages
+python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 43 tests, a few seconds
+python -m pytest -q ../../tests                                                # 48 tests, a few seconds
 ```
 
 Useful options: `--layout spread|page|crop`, `--scale auto|N`, `--ocr-scale`, `--lang`, `-v`,
@@ -73,6 +74,7 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/marks.py` | page numbers, printer's marks, rules (kept as image crops) |
 | `src/booktrans/render.py` | page assembly: typesetting of Polish text, font fitting, compositing |
 | `src/booktrans/scale.py` | resolution detection from the body line pitch |
+| `src/booktrans/translate.py` | translation through an OpenAI-compatible endpoint (LM Studio): glossary block, checks, retries, cache |
 | `src/booktrans/glossary.py`, `glossary/` | German -> Polish names and terms: lookup before translation, check after (`TRANSLATION.md`) |
 | `src/booktrans/illustrations.py`, `deskew.py`, `imgutil.py`, `log.py` | helpers |
 | `fonts/` | bundled Crimson Text (SIL OFL) |
@@ -123,11 +125,13 @@ Full detail: `PIPELINE.md`, `RENDERING.md`, `DATA_MODEL.md`.
   real data.
 - Tesseract confidence is not a calibrated probability; there is no human review tool.
 
-## 7. Translation: what the next session builds
+## 7. Translation
 
-See `TRANSLATION.md` for the contract. In short: read `document.json` units, call a local LLM with the
-prompt in `prompts/translate_pl.txt`, write a translations JSON in the format of `examples/*.pl.json`,
-which `render.py` consumes unchanged.
+`translate.py` reads the `document.json` units, looks each up in the glossary, calls an LM Studio
+(OpenAI-compatible) endpoint with the prompt in `prompts/translate_pl.txt` plus rules and glossary list,
+checks and retries, and writes the translations JSON that `render.py` consumes (`TRANSLATION.md`). Next:
+run it for real (Gemma 12B on the Mac), tune the rules prompt and the checks on what the model actually
+does, and fill the glossary.
 
 ## 8. Batch mode (books) and units cut at a spread boundary
 
@@ -146,9 +150,9 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 9. Roadmap
 
-1. Translation service (`translate.py`), see `TRANSLATION.md`.
-2. Glossary content: import the place-name CSV, review `proposed` terms, resolve ambiguous places; wire the
-   glossary into the translation service (the tooling itself exists, see `TRANSLATION.md`).
+1. First real run of `translate.py` against LM Studio; tune prompt, rules and checks on the output.
+2. Glossary content: import the place-name CSV, review `proposed` terms, resolve ambiguous places; (the glossary is already wired into
+   `translate.py`).
 3. Automatic font choice among supplied fonts (score x-height ratio, advance width, stem darkness
    against the scan; the tracking fit already exists).
 4. More samples: two-column pages, ragged right, footnotes, running heads; tune and add tests.
@@ -158,7 +162,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (43 tests).
+- Run `python -m pytest -q` before every commit (48 tests).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
 - Check `render/report.json`: line counts against `lines_original`, `warnings`, `tracking_em`.
