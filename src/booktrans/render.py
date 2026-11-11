@@ -44,6 +44,8 @@ DEFAULT_FONT_DIRS = [HERE.parent.parent / 'fonts']
 SINGLE_LETTER = {'a', 'i', 'o', 'u', 'w', 'z'}      # Polish: do not end a line with these
 INK = (34, 30, 26)
 RMIN, RMAX = 0.75, 2.0           # allowed word-space stretch (1 = natural)
+FIT_UP = 1.04                    # with fitted tracking the size may exceed the glyph-height size by this much
+FIT_MAX_EM = 0.12                # fitted letter-spacing is capped at this fraction of the font size
 
 
 # ---------------------------------------------------------------- fonts
@@ -263,7 +265,7 @@ def anchor_of(block, col):
     return 'left'
 
 
-def calibrated_size(block, fonts, style, upper, ratios):
+def calibrated_size(block, fonts, style, upper, ratios, max_up=1.15):
     """Font size (work px) that sets the block's original text with its original line widths."""
     t = block['typography']
     gh = t['glyph_height_px'] or 12.0
@@ -282,7 +284,27 @@ def calibrated_size(block, fonts, style, upper, ratios):
         num += width * (0.95 if full else 1.0)
         den += natural
     s_w = num / den if den else s_h
-    return float(min(max(s_w, 0.85 * s_h), 1.15 * s_h)), s_h, s_w
+    return float(min(max(s_w, 0.85 * s_h), max_up * s_h)), s_h, s_w
+
+
+def fit_track(blocks, font, scale, size, max_em=FIT_MAX_EM):
+    """Letter-spacing (work px per character) that makes the original lines of ``blocks`` set in
+    ``font`` (loaded at ``scale`` x ``size``) as wide as they were on the scan: the median over lines
+    of (original width - natural width) / (characters - 1), clamped to [0, max_em * size]."""
+    gaps = []
+    for b in blocks:
+        lines = b['lines']
+        justified = b['typography'].get('alignment') == 'justified'
+        for i, ln in enumerate(lines):
+            t = ln['text'].strip(); n = len(t)
+            if n <= 3 or (justified and i == len(lines) - 1):
+                continue
+            full = justified and i < len(lines) - 1
+            target = (ln['bbox'][2] - ln['bbox'][0]) * (0.95 if full else 1.0)
+            gaps.append((target - font.getlength(t) / scale) / (n - 1))
+    if not gaps:
+        return 0.0
+    return float(min(max(np.median(gaps), 0.0), max_em * size))
 
 
 def paper_fill(img_arr, bbox, fallback):
@@ -310,7 +332,12 @@ def wipe(arr, box, S):
     return Image.fromarray(np.clip(bg[inner], 0, 255).astype(np.uint8))
 
 
-def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='auto', para_indent_em=None):
+def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='auto', para_indent_em=None,
+           tracking=None, size_scale=1.0, word_space=1.0):
+    """``tracking``: None = fit the letter-spacing per block so the translation fills the original
+    line widths; a number = fixed letter-spacing in em (0 = none).  ``size_scale`` and ``word_space``
+    multiply the chosen font size and the natural word space."""
+    up = FIT_UP if tracking is None else 1.15
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     base = Path(doc.get('_dir', '.'))
     tr = trans['units']
@@ -389,8 +416,8 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
                           'cap': sum(b['line_count'] for b in bl), 'bottom': max(b['bbox'][3] for b in bl)}
     if body_units and pages_body:
         sample = [b for u in body_units for _, b in chains[u]]
-        sizes = [calibrated_size(b, fonts, 'regular', False, ratios['regular'])[0] for b in sample]
-        size0 = float(np.median(sizes))
+        sizes = [calibrated_size(b, fonts, 'regular', False, ratios['regular'], up)[0] for b in sample]
+        size0 = float(np.median(sizes)) * size_scale
         W = float(np.median([g['width'] for g in pages_body.values()]))
         ind = [b['typography'].get('first_line_indent_px') or 0 for b in sample]
         indent = float(np.median(ind)) if np.median(ind) > 6 else 0.0
@@ -400,9 +427,11 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
         for shrink in (1.0, 0.98, 0.96, 0.94, 0.92, 0.9):
             size = size0 * shrink
             font = fonts.get('regular', size * 8)
+            btrack = tracking * size if tracking is not None else fit_track(sample, font, 8, size)
             typeset_units = {}
             for u in body_units:
-                typeset_units[u] = typeset(tr[u]['pl'].strip(), font, W * 8, indent * 8, True)
+                typeset_units[u] = typeset(tr[u]['pl'].strip(), font, W * 8, indent * 8, True,
+                                           space_factor=word_space, track=btrack * 8)
             total = sum(len(v[0]) for v in typeset_units.values())
             if total <= total_cap:
                 break
@@ -420,7 +449,7 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
                 pi = order[pos]; g = pages_body[pi]
                 S = scales[pi]
                 ft = fonts.get('regular', size * S)
-                ln = {'pieces': [{'t': p['t'], 'w': p['w'] / 8 * S, 'brk': p['brk'], 'track': 0.0} for p in line['pieces']],
+                ln = {'pieces': [{'t': p['t'], 'w': p['w'] / 8 * S, 'brk': p['brk'], 'track': p.get('track', 0.0) / 8 * S} for p in line['pieces']],
                       'gap': line['gap'] / 8 * S, 'hyphen': line['hyphen'], 'indent': line['indent'] / 8 * S}
                 baseline = g['top'] + r['asc'] * size + used[pi] * g['pitch']
                 draw_line(draws[pi], ln, ft, g['x1'] * S, baseline * S, ink)
@@ -428,6 +457,8 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
                 if first_page is None:
                     first_page = pi
             report['units'].append({'unit': u, 'kind': 'body', 'lines': len(lines), 'size_px': round(size, 2),
+                                    'tracking_px': round(btrack, 2), 'tracking_em': round(btrack / size, 3),
+                                    'lines_original': sum(b['line_count'] for _, b in chains[u]),
                                     'hyphenated_lines': sum(l['hyphen'] for l in lines), 'relaxed_spacing': relaxed,
                                     'starts_on_page': doc['pages'][first_page]['page'] if first_page is not None else None})
         for pi in order:
@@ -448,9 +479,10 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
         if upper:
             text = text.upper()
         t0 = first['typography']
-        size0, s_h, s_w = calibrated_size(first, fonts, style, upper, ratios.get(style, ratios['regular']))
+        size0, s_h, s_w = calibrated_size(first, fonts, style, upper, ratios.get(style, ratios['regular']), up)
         if upper:
             size0 = float(min(max(s_w, 0.7 * s_h), 1.15 * s_h))
+        size0 *= size_scale
         col = doc['pages'][frames[0][0]]['layout']['columns']
         col = col[0] if col else None
         anchor = anchor_of(first, col)
@@ -465,7 +497,11 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
             size = size0 * shrink
             font = fonts.get(style, size * 8)
             track = 0.0
-            if upper:                                     # letter-space capitals up to the original line widths
+            if tracking is not None:
+                track = tracking * size
+            elif not upper:                               # fit the letter-spacing to the original line widths
+                track = fit_track([first], font, 8, size)
+            else:                                         # letter-space capitals up to the original line widths
                 gaps = []
                 for ln in first['lines']:
                     n = len(ln['text'].strip())
@@ -474,7 +510,7 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
                         gaps.append(((ln['bbox'][2] - ln['bbox'][0]) - nat) / (n - 1))
                 track = float(min(max(np.median(gaps) if gaps else 0.0, 0.0), 0.25 * size))
             for Wc in Ws:
-                lines, relaxed = typeset(text, font, Wc * 8, 0.0, False, track=track * 8)
+                lines, relaxed = typeset(text, font, Wc * 8, 0.0, False, space_factor=word_space, track=track * 8)
                 if len(lines) <= capacity:
                     chosen = (shrink, Wc, lines, relaxed, size, track); break
             if chosen:
@@ -482,7 +518,7 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
         if not chosen:
             shrink, Wc = 0.9, Ws[-1]; size = size0 * shrink
             font = fonts.get(style, size * 8)
-            lines, relaxed = typeset(text, font, Wc * 8, 0.0, False, track=0.0)
+            lines, relaxed = typeset(text, font, Wc * 8, 0.0, False, space_factor=word_space, track=0.0)
             chosen = (shrink, Wc, lines, relaxed, size, 0.0)
             report['warnings'].append('%s: needs %d lines, frame holds %d (overflow)' % (uid, len(lines), capacity))
         shrink, Wc, lines, relaxed, size, track = chosen
@@ -506,7 +542,8 @@ def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='
                 draw_line(draws[pi], ln, ft, x * S, (top + asc + k * pitch) * S, ink)
                 li += 1
         report['units'].append({'unit': uid, 'kind': first['role'], 'lines': len(lines), 'capacity': capacity,
-                                'size_px': round(size, 2), 'tracking_px': round(track, 2), 'shrink': shrink})
+                                'size_px': round(size, 2), 'tracking_px': round(track, 2), 'tracking_em': round(track / size, 3),
+                                'lines_original': capacity, 'shrink': shrink})
 
     # ------------------------------------------------ outputs
     names = []
@@ -539,6 +576,11 @@ def main():
                     help='paper: clean canvas (default); scan: the scanned page with text blocks wiped')
     ap.add_argument('--resolution', choices=['auto', 'work'], default='auto',
                     help='auto: full resolution when the scan has it; work: analysis scale')
+    ap.add_argument('--tracking', default='auto',
+                    help="letter-spacing: 'auto' (default) fits it per block so the translation fills the original "
+                         "line widths; a number in em (e.g. 0.05) fixes it; 0 = none")
+    ap.add_argument('--size-scale', type=float, default=1.0, help='multiply the chosen font size (default 1.0)')
+    ap.add_argument('--word-space', type=float, default=1.0, help='multiply the natural word space (default 1.0)')
     ap.add_argument('--ink', default='%d,%d,%d' % INK)
     ap.add_argument('--paragraph-indent', type=float, default=None,
                     help='first-line indent in em (default: as in the original page, normally none)')
@@ -551,9 +593,10 @@ def main():
     log.info('render', 'typesetting %d pages with %d translated units' % (len(doc['pages']), len(trans['units'])))
     if _HYPH is None:
         log.info('render', 'pyphen not installed: no hyphenation (pip install pyphen)')
-    names, rep = render(doc, trans, out, Fonts(a.font, a.bold_font, a.italic_font), a.background, ink, a.resolution, a.paragraph_indent)
+    names, rep = render(doc, trans, out, Fonts(a.font, a.bold_font, a.italic_font), a.background, ink, a.resolution, a.paragraph_indent,
+                      None if a.tracking == 'auto' else float(a.tracking), a.size_scale, a.word_space)
     for r in rep['units']:
-        log.info('render', '%s %s: %d lines%s, size %.1f px' % (r['unit'], r['kind'], r['lines'], ('/%d' % r['capacity']) if 'capacity' in r else '', r['size_px']))
+        log.info('render', '%s %s: %d lines (original %d), size %.1f px, tracking %.3f em' % (r['unit'], r['kind'], r['lines'], r['lines_original'], r['size_px'], r['tracking_em']))
     for r in rep['pages']:
         log.info('render', 'page %d body: %d of %d lines used' % (r['page'], r['body_lines_used'], r['body_lines_capacity']))
     for w in rep['warnings']:

@@ -89,3 +89,32 @@ def test_missing_translation_keeps_original_pixels(tmp_path):
     out = np.asarray(Image.open(tmp_path / 'out' / names[0]).convert('RGB'))
     assert (out[130:140, 100:300] == 10).all()
     assert any('no translation' in w for w in rep['warnings'])
+
+
+def _blk(widths_texts, justified=False):
+    lines = [{'text': t, 'bbox': [0, i * 20, w, i * 20 + 14]} for i, (t, w) in enumerate(widths_texts)]
+    return {'lines': lines, 'typography': {'alignment': 'justified' if justified else 'left'}}
+
+
+def test_fit_track_fills_original_widths():
+    f = _fonts().get('regular', 8 * 16)
+    txt = 'Mittelalterliche Kirchenportale'
+    nat = f.getlength(txt) / 8
+    b = _blk([(txt, nat + 31 * 1.0)] * 3)                 # original is 1 px/char wider than natural
+    t = R.fit_track([b], f, 8, 16)
+    assert abs(t - 1.0) < 0.05
+    wide = _blk([(txt, nat + 31 * 9.0)] * 3)              # absurdly wide original: capped at 0.12 em
+    assert abs(R.fit_track([wide], f, 8, 16) - 0.12 * 16) < 1e-6
+    narrow = _blk([(txt, nat - 20)] * 3)                  # original narrower: never negative
+    assert R.fit_track([narrow], f, 8, 16) == 0.0
+
+
+def test_tracking_option_and_report(tmp_path):
+    doc, trans = _doc(tmp_path)
+    _, rep0 = R.render(doc, trans, tmp_path / 'o0', _fonts(), tracking=0.0)
+    _, rep1 = R.render(doc, trans, tmp_path / 'o1', _fonts(), tracking=0.06)
+    u0, u1 = rep0['units'][0], rep1['units'][0]
+    assert u0['tracking_em'] == 0.0 and abs(u1['tracking_em'] - 0.06) < 0.002
+    assert 'lines_original' in u1
+    _, rep2 = R.render(doc, trans, tmp_path / 'o2', _fonts(), size_scale=0.9)
+    assert rep2['units'][0]['size_px'] < rep0['units'][0]['size_px'] * 0.95

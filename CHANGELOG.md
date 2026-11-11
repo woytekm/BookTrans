@@ -2,6 +2,15 @@
 
 ## Unreleased — stage2-rework
 
+### Font fitting (render)
+
+- Letter-spacing is fitted per block (`--tracking auto`, default): the translation fills the
+  original line widths; capped at 0.12 em, size at most 4 % above the glyph-height size.
+  0001: body 49 -> 54 lines (original 56), with 0.08 em tracking.
+- New options `--tracking EM`, `--size-scale`, `--word-space`; `booktrans.py` passes
+  `--font/--bold-font/--italic-font` and these to the renderer. `--tracking 0` = previous look.
+- `report.json` gains `tracking_em` and `lines_original`.
+
 ### OCR crops and Stage 1 clean-up
 
 - New `src/booktrans/imgutil.py` with `crop_for_ocr`: OCR crops now include
