@@ -114,6 +114,8 @@ Settings: `--temperature` (0.2), `--max-tokens` (4096), `--timeout` (600 s per r
 
 Diagnostics: every request logs its time, prompt and answer token counts, tokens per second, the finish reason and any hidden reasoning (`reasoning_content`); an empty answer is explained (thinking model that used its tokens for reasoning, or cut off by the token/context limit). Use it to judge a model's real speed before changing anything.
 
+Reasoning models: a "thinking" model can spend all `--max-tokens` on hidden reasoning and return an empty answer (seen with a model that wrote 15,000 characters of reasoning in 420 s at 9.7 tok/s). Use a non-reasoning instruct model; `--no-think` asks Qwen3-style models not to think (it sends `chat_template_kwargs.enable_thinking=false`, `reasoning_effort=none` and appends `/no_think`; models that do not know them ignore them), `--extra-body JSON` adds any other request field.
+
 Known limits: units are translated independently (one sentence of context only); no batching, no
 streaming; the source stored in the output is the raw OCR text, not the corrected German; a model that
 ignores "answer only with the translation" is only partly caught by `clean()`; the length check cannot

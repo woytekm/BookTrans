@@ -88,9 +88,10 @@ def clean(answer):
 
 
 # ---------------------------------------------------------------- model
-def chat(endpoint, model, prompt, temperature, max_tokens, timeout, api_key=None):
+def chat(endpoint, model, prompt, temperature, max_tokens, timeout, api_key=None, extra=None):
     body = {'model': model, 'temperature': temperature, 'max_tokens': max_tokens, 'stream': False,
             'messages': [{'role': 'user', 'content': prompt}]}        # one user message: works with every chat template
+    body.update(extra or {})
     req = urllib.request.Request(endpoint.rstrip('/') + '/chat/completions', json.dumps(body).encode('utf-8'),
                                  {'Content-Type': 'application/json',
                                   'Authorization': 'Bearer ' + (api_key or 'lm-studio')})
@@ -175,7 +176,12 @@ def run(doc, a, call=None):
     log.info('translate', 'glossary: %d entries from %s' % (len(matcher.entries), ', '.join(f.name for f in gfiles) or '-'))
     cache_path = a.output.with_suffix('.cache.json')
     cache = json.loads(cache_path.read_text(encoding='utf-8')) if cache_path.exists() else {}
-    call = call or (lambda prompt: chat(a.endpoint, a.model, prompt, a.temperature, a.max_tokens, a.timeout, a.api_key))
+    extra = json.loads(a.extra_body) if getattr(a, 'extra_body', None) else {}
+    if getattr(a, 'no_think', False):                  # Qwen3-style switches; servers ignore what they do not know
+        extra.setdefault('chat_template_kwargs', {'enable_thinking': False})
+        extra.setdefault('reasoning_effort', 'none')
+    call = call or (lambda prompt: chat(a.endpoint, a.model, prompt + ('\n\n/no_think' if getattr(a, 'no_think', False) else ''),
+                                        a.temperature, a.max_tokens, a.timeout, a.api_key, extra))
     units = collect(doc)
     todo = [u for u in units if u[4] == 'translate' and (not a.only or u[0] in a.only)]
     skipped = [u[0] for u in units if u[4] != 'translate']
@@ -250,6 +256,8 @@ def main():
     ap.add_argument('--timeout', type=float, default=600, help='seconds per request')
     ap.add_argument('--retries', type=int, default=2, help='extra attempts when a check fails (default 2)')
     ap.add_argument('--only', nargs='*', help='translate only these unit ids')
+    ap.add_argument('--no-think', action='store_true', help='ask a reasoning model not to think (sends enable_thinking=false, reasoning_effort=none and appends /no_think; only some models obey)')
+    ap.add_argument('--extra-body', help='JSON merged into every request body, e.g. \'{"top_p": 0.9}\'')
     ap.add_argument('--dry-run', action='store_true', help='write the prompts, do not call the model')
     a = ap.parse_args()
     os.environ.setdefault('BOOKTRANS_T0', str(time.time()))
