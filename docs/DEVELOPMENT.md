@@ -25,7 +25,8 @@ BookTrans is a working prototype: scans go in, a complete page-recreation model 
 - `marks.py`: page numbers, printer's mark and rules as image crops.
 - `render.py`: page assembly from the document model and a translations JSON, with optimum-fit justified line breaking, Polish hyphenation, flow across pages, fixed frames for headings/captions/footnotes, paper or scan background, and automatic font fitting (letter-spacing and size fitted to the original line widths; `--tracking`, `--size-scale`, `--word-space`, `--font*`).
 - Hand translations of both sample spreads (`examples/0001.pl.json`, `examples/0002.pl.json`) and their reconstructions (`examples/*_render_compare.jpg`).
-- Progress/timing output on stderr; 35 tests.
+- Batch mode: a folder or several TIFFs become one book document (`--resume`, `--separate`, `--name`); cross-spread paragraph joins.
+- Progress/timing output on stderr; 37 tests.
 
 ## Experimental results and observations
 
@@ -48,14 +49,14 @@ BookTrans is a working prototype: scans go in, a complete page-recreation model 
 - Tesseract confidence is not a calibrated probability of correctness.
 - No human-review UI exists.
 - No translation client or cache exists yet (`TRANSLATION.md` has the contract). Output is PNG per page, no PDF export.
-- The wrapper processes one TIFF at a time; paragraphs cut at a spread boundary are not joined automatically.
+- Body text flows with no widow/orphan control.
 - No automatic font choice among several fonts; page numbers are pasted as crops; one body column per page is assumed.
 - The code is a set of scripts, not a tested library/API; tests use synthetic data only.
 
 ## Immediate next development
 
 1. **Translation service** (`translate.py`, local LLM; see `TRANSLATION.md`).
-2. **Batch mode** over consecutive spreads: cross-spread unit joins, shared glossary.
+2. **Glossary tooling** (`TRANSLATION.md`).
 3. Automatic font choice among supplied fonts; more samples (two-column, ragged right, footnotes, running heads).
 
 Earlier list (still relevant for robustness):

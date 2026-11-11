@@ -53,3 +53,40 @@ def test_figures_cut_from_full_resolution(tmp_path):
     w, h = Image.open(tmp_path / 'figures' / fig['file'].split('/')[-1]).size
     assert (w, h) == (1520, 620) and fig['bbox'] == [100, 20, 400, 140]   # (300+4)*5, (120+4)*5
     assert m['scale'] == 5.0 and m['image_full'] == 'pages/p_full.png'
+
+
+def test_book_mode_keeps_ids_unique(tmp_path):
+    from docmodel import build_document
+    pages = []
+    for k in (1, 2):                                   # two spreads, both with a "page 1" and the same object ids
+        d = tmp_path / ('s%d' % k); d.mkdir()
+        Image.fromarray(np.full((400, 700, 3), 240, np.uint8)).save(d / 'page_01_L.png')
+        cap = {'type': 'caption', 'object_id': 's%d-p1-reg-2' % k, 'bbox': [100, 150, 300, 170], 'text': 'Abb.',
+               'line_count': 1, 'median_relative_size': .7, 'lines': [_line(100, 300, 150)],
+               'associated_illustration_ids': ['p1-ill-1'], 'translation_status': 'translate'}
+        pages.append({'page': 1, 'side': 'L', 'x_offset': 0, 'width': 700, 'height': 400, 'input_index': k,
+                      'page_image': 'page_01_L.png', 'regions': [cap, _para('s%d-p1-reg-3' % k, 200)],
+                      'illustrations': [{'object_id': 'p1-ill-1', 'bbox': [100, 20, 400, 140],
+                                         'classification_reason': 'stage1_line_art'}],
+                      'source_tiff': 'scans/000%d.tif' % k, 'stage1_dir': str(d)})
+    units = {'units': [{'unit_id': 'u0001', 'type': 'paragraph', 'text': 'x', 'dehyphenated': False, 'joins': [],
+                        'source_object_ids': ['s1-p1-reg-3', 's2-p1-reg-3']}], 'pages': pages}
+    doc = build_document(units, None, tmp_path / 'out', 'book', book=True)
+    assert [p['page'] for p in doc['pages']] == [1, 2]
+    assert [p['spread'] for p in doc['pages']] == [1, 2]
+    ids = [b['block_id'] for p in doc['pages'] for b in p['blocks']]
+    assert len(ids) == len(set(ids)) and 's2-p1-ill-1' in ids
+    assert doc['units'][0]['source_block_ids'] == ['s1-p1-reg-3', 's2-p1-reg-3']
+    figs = {b['file'] for p in doc['pages'] for b in p['blocks'] if b['kind'] == 'figure'}
+    assert len(figs) == 2 and all((tmp_path / 'out' / f).exists() for f in figs)
+    cap2 = [b for b in doc['pages'][1]['blocks'] if b['role'] == 'caption'][0]
+    assert cap2['figure_ids'] == ['s2-p1-ill-1']
+    assert (tmp_path / 'out' / 'pages' / '0001_page_01_L.png').exists()
+
+
+def test_expand_inputs(tmp_path):
+    from booktrans import expand_inputs
+    for n in ('0002.tif', '0001.TIF', 'x.txt', '.hidden.tif'):
+        (tmp_path / n).write_bytes(b'')
+    tiffs, folder = expand_inputs([tmp_path])
+    assert [t.name for t in tiffs] == ['0001.TIF', '0002.tif'] and folder == tmp_path

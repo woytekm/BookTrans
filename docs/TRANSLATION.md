@@ -82,7 +82,31 @@ report carries a warning. `source` and `notes` are for review.
 - Post-checks that fail loudly into `notes`: Polish/German length ratio outside about 0.7-1.3, digits
   and figure numbers that differ from the source, leftover German words, missing place-name glossary
   hits.
-- Units cut at a spread boundary: see `HANDOFF.md` section 8. Either run stage 4 over consecutive
-  spreads so the unit is whole, or give the previous spread's trailing unit as context and split the
-  translation at the same point.
+- Units cut at a spread boundary are whole units in a book document (batch mode, `HANDOFF.md`
+  section 8): translate them as one. Unit ids are numbered over the whole book.
 - Output stays in the format above so a human can edit the JSON and re-render.
+
+## Glossary (designed, not built)
+
+Thousands of place names plus an art-history vocabulary do **not** need RAG, embeddings or a bigger
+model. The glossary is a plain lookup applied *before* the request:
+
+1. Match the unit's German text against the glossary (case-insensitive, substring for compounds so
+   "Kämpfergesims" finds "Kämpfer"; allow edit distance 1-2 for OCR slips on place names, and require the
+   capital letter for names).
+2. Put only the matching pairs (typically 3-15) into the prompt as a short list:
+   `Pitschen = Byczyna (nom.; inflect as needed)`. The Polish side is given in the nominative; the model
+   inflects ("in Pitschen" -> "w Byczynie").
+3. Check the output: every matched term must appear (in any inflected form: compare stems) or the unit
+   is flagged in `notes`.
+
+Cost: negligible memory and no extra model, so it works on a small local model (a 12B model on 16 GB).
+Prompt growth is a few hundred tokens per unit. One unit per request keeps the context small.
+
+Sources and layers:
+- **Place names:** an authoritative table (post-1945 name decrees, TERYT/Wikipedia lists), one row per
+  place with the district to disambiguate (Friedland OS, Politz). Czech places take Czech names.
+- **Terms:** model-proposed, human-approved; columns `de`, `pl`, `kind` (place|term|person), `status`
+  (confirmed|proposed|disputed), `note`, `source`. Candidates are extracted from the whole-book OCR
+  (rare German words and compound parts with counts and example sentences).
+- Planned file: `glossary/terms.csv`.

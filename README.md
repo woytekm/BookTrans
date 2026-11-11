@@ -37,6 +37,16 @@ cd src/booktrans
 python booktrans.py /path/to/0001.tif -o /path/to/output
 ```
 
+A whole book (several spreads, or a folder of TIFFs in name order) in one go:
+
+```bash
+python booktrans.py /scans/mybook/ -o output                  # -> output/mybook/  (one document.json for the book)
+python booktrans.py 0001.tif 0002.tif 0003.tif -o output --name part1
+python booktrans.py /scans/mybook/ -o output --resume         # skip spreads whose stages 1-3 already exist
+```
+
+Pages are numbered consecutively, paragraphs cut at a spread boundary are joined into one translation unit, and the per-spread files are in `stages/<tiff name>/`. `--separate` gives one result folder per TIFF instead.
+
 Rebuilding the pages with a translation (one command, or `render.py` separately):
 
 ```bash
@@ -50,7 +60,7 @@ python render.py output/0001/document.json translations.json -o output/0001/rend
 
 Useful options: `--layout spread|page|crop` (open book split at the gutter / one whole page / part of a page), `--scale auto|N` (how much larger than the sample scans the input is; auto measures the line pitch, so 600 DPI scans and crops are handled by analysing a downscaled working copy while OCR and figures use the full-resolution pixels), `--ocr-scale`, `--lang` (default `deu`), `-v` (print every region and OCR line with its confidence). Progress with timings is printed to the terminal while it runs.
 
-This creates `output/0001/` with `document.json` (nested model: pages → blocks → lines, layout, typography, figure links, translation units), `pages/` (deskewed page images; all coordinates refer to them), `figures/` (every illustration cropped to a PNG), `debug/` (overlays) and `stages/` (raw JSON of stages 1–4). Each TIFF is processed on its own; to link paragraphs across spreads, run `stage4.py` over the `stages/s3` JSON files of consecutive spreads (a batch mode is planned, see `docs/HANDOFF.md` section 8). The individual stages can still be run separately:
+This creates `output/0001/` with `document.json` (nested model: pages → blocks → lines, layout, typography, figure links, translation units), `pages/` (deskewed page images; all coordinates refer to them), `figures/` (every illustration cropped to a PNG), `debug/` (overlays) and `stages/` (raw JSON of stages 1–4). With several inputs the result is one book folder (see above). The individual stages can still be run separately:
 
 Stage 1:
 

@@ -1,0 +1,103 @@
+{
+  "schema": "1.0",
+  "target_language": "pl",
+  "prompt": "You are a highly educated polish art and architecture historian translating a german art history and architecture related literature to polish. The literature is mostly related to Lower Silesia. For geographical names, use names assigned to places after 1945 where this apply. Language used should be appropriate for first half of XX century. Translate following text to polish:",
+  "notes": [
+    "Source text was corrected for obvious OCR slips before translation (OBERSCHLESTEN, kosispieliger, besondersder, desursprünglichen, Finfassung, wesenitlichen, \"0S\"/\"OS\").",
+    "OCR slips corrected in the source before translation (Südportal, Portalkämpfer, Stadtmauer, \"Fin\"/\"Ein\", \"s ist\"/\"Es ist\", Kinfassung, dürfie, \"Abb.538,39\" = Abb. 38, 39, Abb. 59 for Ritterswalde = 39).",
+    "Combined translation of 0001+0002 for batch mode: the paragraph cut at the spread boundary is one unit (u0009) here: 0001 u0009 + 0002 u0008.",
+    "u0013 stops after \"Münsterberg,\" because the sentence continues on the next spread.",
+    "Place names post-1945: Ritterswalde = Domaszkowice, Bösdorf = Pakosławice, Friedland OS = Korfantów, Pitschen = Byczyna, Ziegenhals = Głuchołazy, Münsterberg = Ziębice, Rauden OS = Rudy. Barzdorf and Jauernig lie in Czechoslovakia: Czech names Bartultovice and Javorník. Politz was rendered \"Police\" and should be checked (unverified).",
+    "Wording to check: \"Abtreppung\" = uskok, \"Kämpfer\" = impost, \"Schaftring\" = pierścień trzonu kolumny."
+  ],
+  "units": {
+    "u0001": {
+      "source": "37 PITSCHEN OS, PORTAL DER EVANGELISCHEN PFARRKIRCHE",
+      "pl": "37 BYCZYNA, PORTAL EWANGELICKIEGO KOŚCIOŁA PARAFIALNEGO"
+    },
+    "u0002": {
+      "source": "FRANZ BOROWSKI",
+      "pl": "FRANZ BOROWSKI"
+    },
+    "u0003": {
+      "source": "MITTELALTERLICHE KIRCHENPORTALE IN OBERSCHLESIEN",
+      "pl": "ŚREDNIOWIECZNE PORTALE KOŚCIELNE NA GÓRNYM ŚLĄSKU"
+    },
+    "u0004": {
+      "source": "Den politischen und sozialen Verhältnissen ist es wohl zumeist zuzuschreiben, daß Oberschlesien nicht reich an monumentalen Werken des frühen Mittelalters ist. Leider ist nun auch das Wenige, was wir aus jener frühen Zeit besitzen, — es handelt sich im wesentlichen um Kirchen —, vielfach durch nachträgliche Um- und Erweiterungsbauten besonders in neuerer Zeit so entstellt, daß der ursprüngliche Zustand schwer festgestellt werden kann.",
+      "pl": "Stosunkom politycznym i społecznym należy zapewne przypisać przede wszystkim to, że Górny Śląsk nie jest bogaty w monumentalne dzieła wczesnego średniowiecza. Niestety także to nieliczne, co z owych wczesnych czasów posiadamy — chodzi tu w istocie o kościoły —, zostało w wielu wypadkach tak oszpecone późniejszymi przebudowami i rozbudowami, zwłaszcza w czasach nowszych, że pierwotny stan trudno obecnie ustalić."
+    },
+    "u0005": {
+      "source": "Ohne Abschlagen des Putzes, Entfernen des neueren Mauerwerks und anderer kostspieliger Vorbereitungsarbeiten ist der alte Zustand, besonders der aufschlußreichen konstruktiven Einzelheiten des ursprünglichen Bestandes, oft nicht mehr zu ermitteln.",
+      "pl": "Bez skuwania tynków, usuwania nowszego muru i innych kosztownych prac przygotowawczych często nie sposób już ustalić dawnego stanu, zwłaszcza pouczających szczegółów konstrukcyjnych pierwotnej substancji budowli."
+    },
+    "u0006": {
+      "source": "Die ältesten auf uns gekommenen Werke gehören der zweiten Hälfte des 13. Jahrhunderts an, für oberschlesisches Gebiet die Epoche der beginnenden Gotik. Reine romanische Baudenkmäler, wie wir sie in Niederschlesien, wenigstens in Überresten noch häufig antreffen, sind mir nicht bekannt. Diese frühen Werke sind aus Backstein und auch aus Bruchsteinen errichtet unter Verwendung von Werk- und Formsteinen für die Architekturformen. Vom Werkstein wurde dabei mehr Gebrauch gemacht als von den Ziegelformsteinen, denn wir befinden uns in Oberschlesien nicht im reinen Backsteingebiet, wie z. B. in der Provinz Brandenburg oder in Oberitalien, sondern in einem Gebiet, wo außer den Granitfindlingen auch vielfach gewachsener Stein (Granit, Kalk und Sandstein) anzutreffen ist. So wurden auch bei Backsteinkirchen aus Werkstein hergestellt die Sockel, die Einfassung der Gebäudeecken, die Fenster- und Türeinrahmungen, vor allem aber fand er ausgiebigste Verwendung bei den Haupteingängen der Kirchen, den Portalen.",
+      "pl": "Najstarsze dzieła, jakie do nas dotarły, należą do drugiej połowy XIII wieku, co dla obszaru górnośląskiego oznacza epokę wczesnego gotyku. Czystych romańskich zabytków budownictwa, jakie na Dolnym Śląsku spotykamy jeszcze często, przynajmniej w szczątkach, nie znam. Wczesne te budowle wzniesiono z cegły, a także z kamienia łamanego, stosując do form architektonicznych kamień ciosowy i kształtki. Z kamienia ciosowego korzystano przy tym częściej niż z cegieł kształtek, gdyż na Górnym Śląsku nie znajdujemy się na obszarze czysto ceglanym, jak np. w prowincji brandenburskiej czy w północnych Włoszech, lecz na terenie, gdzie obok granitowych głazów narzutowych napotyka się również często kamień rodzimy (granit, wapień i piaskowiec). Toteż nawet w kościołach ceglanych wykonywano z kamienia ciosowego cokoły, obramienia narożników budynków, obramienia okien i drzwi, przede wszystkim jednak znajdował on najobfitsze zastosowanie przy głównych wejściach do kościołów, czyli przy portalach."
+    },
+    "u0007": {
+      "source": "Es ist nun ein glücklicher Umstand, daß an vielen Baudenkmälern Oberschlesiens die mittelalterlichen Portale erhalten sind, selbst an den Werken, wie unter anderem in Ziegenhals, Ritterswalde, Bösdorf, Friedland OS, an denen sonst so gut wie nichts mehr aus der frühen Zeit vorhanden ist. Sie bildeten meist den am reichsten durchgebildeten Bauteil der Kirche. Aus ihnen können wir daher das technische und künstlerische Können, die Eigenart der Baustoffbehandlung und die Formensprache der Zeit recht gut ablesen.",
+      "pl": "Szczęśliwym zrządzeniem losu na wielu zabytkach architektury Górnego Śląska zachowały się średniowieczne portale, i to nawet w takich budowlach, jak między innymi w Głuchołazach, Domaszkowicach, Pakosławicach czy Korfantowie, w których poza tym nie ma już niemal nic z wczesnej epoki. Stanowiły one zazwyczaj najbogaciej opracowaną część kościoła. Z nich więc możemy całkiem dobrze odczytać umiejętności techniczne i artystyczne, swoistość obróbki materiału budowlanego oraz język form tej epoki."
+    },
+    "u0008": {
+      "source": "Da abgesehen von dem Holzbau eine bauliche Kultur im Lande nicht vorhanden war, ist ein Anschluß an fortgeschrittenere Nachbargebiete Voraussetzung. Für Niederschlesien ist diese Frage im wesentlichen geklärt.",
+      "pl": "Ponieważ poza budownictwem drewnianym nie istniała w kraju żadna kultura budowlana, koniecznym założeniem jest nawiązanie do bardziej rozwiniętych obszarów sąsiednich. Dla Dolnego Śląska zagadnienie to zostało w istocie wyjaśnione."
+    },
+    "u0009": {
+      "source": "Außer den Zisterziensern, die meist aus Frankreich kamen, stammten die Deutschen, welche die Piasten zur Besiedelung ihrer in Niederschlesien liegenden Fürstentümern herbeiriefen, meist aus Thüringen, Sachsen und Franken. Der Kulturstrom, der nach Oberschlesien eindrang, kam aber nicht nur aus den oben genannten Gebieten, sondern, wie wir an den Denkmälern feststellen werden, auch aus Südwesten, aus Niederösterreich, Mähren, Böhmen und auch aus Ungarn, Gebiete, von denen es auch abwechselnd mit Polen politisch abhängig war. Wobei zu beachten ist, daß diese Länder ebenfalls Kolonialgebiete waren, Pflanzstätten westlicher Kultur, und zwar im wesentlichen befruchtet von Süddeutschland, sowie von Frankreich und Italien.¹ Da in der vorliegenden Studie, welche die mittelalterlichen Kirchenportale von 1250—1350 behandelt, die stilistische Zusammengehörigkeit der Denkmäler - ein möglichst geschlossener Kunstkreis — behandelt werden soll, ist es selbstverständlich, daß an den heutigen politischen Grenzen Oberschlesiens nicht Halt gemacht werden konnte, sondern daß auch die Randzonen der Nachbargebiete (Niederschlesien und die tschechoslowakische Republik) in Betracht gezogen werden mußten.",
+      "pl": "Poza cystersami, którzy przybywali przeważnie z Francji, Niemcy, których Piastowie sprowadzili do zasiedlenia swych księstw leżących na Dolnym Śląsku, pochodzili w większości z Turyngii, Saksonii i Frankonii. Prąd kulturowy, który wniknął na Górny Śląsk, płynął jednak nie tylko z wymienionych wyżej obszarów, lecz — jak to stwierdzimy na zabytkach — także z południowego zachodu: z Dolnej Austrii, Moraw, Czech, a również z Węgier, z krajów, od których Górny Śląsk był także, na przemian z Polską, politycznie zależny. Przy czym należy zauważyć, że kraje te były również obszarami kolonizacyjnymi, ogniskami kultury zachodniej, i to w istocie zapładnianymi przez południowe Niemcy, a także przez Francję i Włochy.¹ Ponieważ w niniejszym opracowaniu, które obejmuje średniowieczne portale kościelne z lat 1250—1350, ma być ukazana stylistyczna wspólnota zabytków — krąg artystyczny możliwie zamknięty — jest rzeczą oczywistą, że nie można było zatrzymać się na dzisiejszych granicach politycznych Górnego Śląska, lecz że także strefy graniczne obszarów sąsiednich (Dolny Śląsk i Republika Czechosłowacka) musiały zostać wzięte pod uwagę."
+    },
+    "u0010": {
+      "source": "1 Siehe deutsche und französische Kunst im Mittelalter von Richard Hamann II. 1923.",
+      "pl": "¹ Zob. Richard Hamann, Deutsche und französische Kunst im Mittelalter, t. II, 1923."
+    },
+    "u0011": {
+      "source": "39 RITTERSWALDE, SÜDPORTAL DER KATHOLISCHEN PFARRKIRCHE",
+      "pl": "39 DOMASZKOWICE, PORTAL POŁUDNIOWY KATOLICKIEGO KOŚCIOŁA PARAFIALNEGO"
+    },
+    "u0012": {
+      "source": "38 FRIEDLAND OS, WESTPORTAL DER KATHOLISCHEN PFARRKIRCHE",
+      "pl": "38 KORFANTÓW, PORTAL ZACHODNI KATOLICKIEGO KOŚCIOŁA PARAFIALNEGO"
+    },
+    "u0013": {
+      "source": "40 BÖSDORF, PORTALSOCKEL",
+      "pl": "40 PAKOSŁAWICE, COKÓŁ PORTALU"
+    },
+    "u0014": {
+      "source": "58 BÖSDORF, PORTALKÄMPFER",
+      "pl": "58 PAKOSŁAWICE, IMPOST PORTALU"
+    },
+    "u0015": {
+      "source": "59 POLITZ, SCHAFTRING",
+      "pl": "59 POLICE, PIERŚCIEŃ TRZONU"
+    },
+    "u0016": {
+      "source": "41 BARZDORF, PORTALSOCKEL",
+      "pl": "41 BARTULTOVICE, COKÓŁ PORTALU"
+    },
+    "u0017": {
+      "source": "57 FRIEDLAND OS, PORTALKÄMPFER",
+      "pl": "57 KORFANTÓW, IMPOST PORTALU"
+    },
+    "u0018": {
+      "source": "Die Gliederung des Stoffes erfolgte bei dem fast gänzlichen Fehlen von Archivalien nicht in chronologischer Reihenfolge, sondern nach der Art ihrer Anlage. Es werden zunächst die einfacheren und dann die reicheren Portale behandelt werden.",
+      "pl": "Wobec niemal całkowitego braku materiałów archiwalnych układ materiału nie jest chronologiczny, lecz oparty na rodzaju założenia portali. Omówione zostaną najpierw portale prostsze, a następnie bogatsze."
+    },
+    "u0019": {
+      "source": "Das mit seiner mittelalterlichen Stadtmauer und seinen stattlichen Wehrtürmen ebenso einheitlich wie malerisch wirkende Städtchen Pitschen zeigt uns an seiner mittelalterlichen Backsteinkirche St. Petri bzw. Nikolai die einfachste Form eines gotischen Portals mit einer Abtreppung. Abb. 37. Es ist dem in seinem Untergeschoß aus Bruchsteinen bestehenden Westturm der Kirche eingefügt. Ein mit steilem Spitzbogen gewölbtes Portal mit einer Abtreppung ohne eingestellten Runddienst und ohne Markierung von Sockel und Kämpfer, die Ecken durch eine einfache Phase gebrochen. Die mit der Mauer bündig liegende Einfassung aus dem gleichen Baustoff wie das Untergeschoß des Turmes, nur aus größeren Werkstücken zusammengefügt. Werkmäßig bearbeitet nur in den Leibungen und an der Vorderseite. Die an das Bruchsteinmauerwerk anstoßenden Seiten unbearbeitet.",
+      "pl": "Miasteczko Byczyna, o równie jednolitym, co malowniczym wyglądzie dzięki średniowiecznym murom miejskim i okazałym basztom obronnym, ukazuje nam na swym średniowiecznym ceglanym kościele św. Piotra, czyli św. Mikołaja, najprostszą postać portalu gotyckiego z jednym uskokiem (il. 37). Wprawiony jest on w zachodnią wieżę kościoła, której przyziemie wzniesiono z kamienia łamanego. Portal sklepiony stromym ostrołukiem, z jednym uskokiem, bez wstawionej kolumienki i bez zaznaczenia cokołu i impostu; narożniki złamane prostą fazą. Obramienie, licujące z murem, wykonane z tego samego budulca co przyziemie wieży, tylko z większych ciosów. Obrobione warsztatowo jedynie w ościeżach i od przodu; boki przylegające do muru z kamienia łamanego pozostawiono nieobrobione."
+    },
+    "u0020": {
+      "source": "Die ganz schlichte architektonische Durchbildung, die fast rohe technische Behandlung lassen zunächst auf ein hohes Alter dieses Portals schließen. Wie man aus den Einzelformen besonders im Innern der Kirche auf das gleichzeitig mit ihr errichtete Portal schließen kann, dürfte es kaum vor dem Jahre 1500 entstanden sein. Es gehört somit nicht zu den ältesten steinernen Werken Oberschlesiens. Die Urkunden geben über den Baubeginn der Kirche leider keinen Aufschluß.",
+      "pl": "Całkowicie skromne ukształtowanie architektoniczne i niemal surowa obróbka techniczna każą z początku przypuszczać, że portal ten jest bardzo stary. Jeśli jednak z form szczegółowych, zwłaszcza we wnętrzu kościoła, można wnosić o portalu wzniesionym równocześnie z nim, to powstał on zapewne nie wcześniej niż około roku 1500. Nie należy więc do najstarszych kamiennych dzieł Górnego Śląska. Dokumenty niestety nie dają żadnych wiadomości o początku budowy kościoła."
+    },
+    "u0021": {
+      "source": "Wenn auch reicher in der Einzeldurchbildung, so doch in der Gesamtanordnung verwandt mit dem Pitschener Werk sind die Portale in Bösdorf, Ritterswalde, Friedland OS, Abb. 38, 39, sowie die Chorportale der Pfarrkirche in Barzdorf und der Friedhofskapelle in Jauernig. Die beiden letzteren im Nachbargebiet der Tschechoslowakei (ehemals Österreich-Schlesien). Sie besitzen ebenfalls nur eine Abstufung. Hier sind aber Dienste in die einspringende Gewändedecke gestellt mit entsprechendem Rundstab in den Archivolten. Sockel und Kämpfer werden durch besondere Gesimsung betont. Die Profilierung aller Architekturteile, trotz des verwendeten Granits, von feinster Durcharbeitung. Besonders eigenartig die Gesimsung der Kämpfer. Sie zeigen die Form der im Übergangsstil so beliebten Säulenschaftringe in den verschiedensten Gestaltungen. Die Sockel der Dienste — mit Ausnahme vom Portal in Friedland OS, das dem Sockelgesims die Form eines lesbischen Kymas gegeben hat — haben die übrigen attischen Basen in mittelalterlicher Umprägung. Während die Basis in Bösdorf, Abb. 40, noch stark an das antike Vorbild erinnert, Ritterswalde, Abb. 39, eine recht unbeholfene Form zeigt, hat Barzdorf, Abb. 41, bereits die tief unterschnittene schüsselförmige Gestaltung, die für die Gotik charakteristisch ist.",
+      "pl": "Choć bogatsze w szczegółach, to jednak w ogólnym układzie spokrewnione z byczyńskim dziełem są portale w Pakosławicach, Domaszkowicach i Korfantowie (il. 38, 39) oraz portale prezbiterium kościoła parafialnego w Bartultovicach i kaplicy cmentarnej w Javorníku. Dwa ostatnie leżą na sąsiednim obszarze Czechosłowacji (dawniej Śląsk Austriacki). Mają one również tylko jeden uskok. Tu jednak kolumienki ustawiono w załamaniu węgarów, a w archiwoltach odpowiada im pałąk. Cokół i impost uwydatnia osobne gzymsowanie. Profilowanie wszystkich części architektonicznych, mimo użycia granitu, jest niezwykle staranne. Szczególnie osobliwe jest gzymsowanie impostów: przybiera ono formę pierścieni trzonu kolumny, tak ulubionych w stylu przejściowym, w najrozmaitszych ujęciach. Cokoły kolumienek — z wyjątkiem portalu w Korfantowie, w którym gzyms cokołu otrzymał kształt kymationu lesbijskiego — mają pozostałe bazy attyckie w średniowiecznym przekształceniu. Podczas gdy baza w Pakosławicach (il. 40) przypomina jeszcze silnie wzór antyczny, a w Domaszkowicach (il. 39) ma formę dość niezgrabną, w Bartultovicach (il. 41) występuje już głęboko podcięte, miskowate ukształtowanie, charakterystyczne dla gotyku."
+    },
+    "u0022": {
+      "source": "Die Durchbildung der Gewändeprofilierung, bei der der Rundstab und die aus dem Viertelkreis gebildete Hohlkehle überwiegen, die Gesimsung von Sockel und Kämpfer kennzeichnen die Portale als frühgotisch. Sie liegen zeitlich in der zweiten Hälfte des 13. Jahrhunderts und gehören damit zu den ältesten monumentalen Zeugen des Landes. Die Portalanlage der ehemaligen Zisterzienser-Klosterkirche St. Mariä zu Rauden OS gehört mit den Portalen in Ziegenhals, Münsterberg,",
+      "pl": "Ukształtowanie profilowania węgarów, w którym przeważają pałąk i wklęskę z ćwierćkola, oraz gzymsowanie cokołu i impostu znamionują te portale jako wczesnogotyckie. Powstały one w drugiej połowie XIII wieku i należą tym samym do najstarszych monumentalnych świadectw kraju. Założenie portalowe dawnego kościoła klasztornego cystersów pw. Wniebowzięcia Najświętszej Marii Panny w Rudach należy wraz z portalami w Głuchołazach, Ziębicach,"
+    }
+  }
+}

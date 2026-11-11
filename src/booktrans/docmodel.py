@@ -92,8 +92,14 @@ def _save_crop(page_img, full_img, f, bbox, path):
     Image.fromarray(crop).save(path)
 
 
-def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_rel=None):
-    """Return the nested model of one page; writes figure crops into ``fig_dir``."""
+def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_rel=None, keep_prefix=False):
+    """Return the nested model of one page; writes figure crops into ``fig_dir``.
+
+    ``keep_prefix``: keep Stage 4's per-input prefix (``s3-``) in block ids, as a book made of
+    several spreads needs unique ids; illustration ids then get the prefix as well.
+    """
+    rid = (lambda i: i) if keep_prefix else _nid
+    ipre = ('s%d-' % page['input_index']) if keep_prefix and page.get('input_index') else ''
     h, w = page['height'], page['width']
     f = float(page.get('scale') or 1.0)
     regions = page['regions']
@@ -126,7 +132,7 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_
         log.debug('docmodel', 'cropping figure %s from %s' % (ill['object_id'], 'full-resolution page' if full_img is not None else 'page'))
         _save_crop(page_img, full_img, f, [x1, y1, x2, y2], fig_dir / fn)
         fig_of[ill['object_id']] = {
-            'block_id': ill['object_id'], 'kind': 'figure', 'role': 'illustration',
+            'block_id': ipre + ill['object_id'], 'kind': 'figure', 'role': 'illustration',
             'bbox': ill['bbox'], 'crop_bbox': [x1, y1, x2, y2],
             'file': 'figures/' + fn, 'detector': ill.get('classification_reason', '').replace('stage1_', ''),
             'captions': [],
@@ -134,7 +140,7 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_
     for r in sorted(regions, key=lambda r: (r['bbox'][1], r['bbox'][0])):
         if r['type'] == 'illustration':
             continue
-        b = {'block_id': _nid(r['object_id']), 'kind': 'text', 'role': r['type'], 'bbox': r['bbox'],
+        b = {'block_id': rid(r['object_id']), 'kind': 'text', 'role': r['type'], 'bbox': r['bbox'],
              'text': r['text'], 'line_count': r['line_count'],
              'translation_status': r.get('translation_status'),
              'content_context': r.get('content_context'),
@@ -143,13 +149,13 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_
             b['unit_id'] = unit_of[r['object_id']]
         for key in ('continues_from', 'continues_to'):
             if r.get(key):
-                b[key] = _nid(r[key])
+                b[key] = rid(r[key])
         ids = r.get('associated_illustration_ids') or []
         if ids:
-            b['figure_ids'] = ids
+            b['figure_ids'] = [ipre + i for i in ids]
             for i in ids:
                 if i in fig_of:
-                    fig_of[i]['captions'].append(_nid(r['object_id']))
+                    fig_of[i]['captions'].append(rid(r['object_id']))
         b['lines'] = [{'bbox': l['bbox'], 'text': l['text'], 'confidence': l.get('confidence'),
                        'glyph_height_px': l.get('glyph_height'),
                        'paragraph_start': l.get('paragraph_break', False)} for l in r['lines']]
@@ -160,7 +166,7 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_
     for k, m in enumerate(find_marks(page_img, boxes, content_area, layout_cols), 1):
         fn = '%s_%s_%02d.png' % (stem, m['role'], k)
         _save_crop(page_img, full_img, f, m['bbox'], fig_dir / fn)
-        blocks.append({'block_id': 'p%d-%s-%d' % (page['page'], m['role'], k), 'kind': 'graphic',
+        blocks.append({'block_id': ipre + 'p%d-%s-%d' % (page['page'], m['role'], k), 'kind': 'graphic',
                        'role': m['role'], 'bbox': m['bbox'], 'crop_bbox': m['bbox'], 'file': 'figures/' + fn})
         log.debug('docmodel', 'found %s at %s' % (m['role'], m['bbox']))
     blocks.sort(key=lambda b: (b['bbox'][1], b['bbox'][0]))
@@ -197,27 +203,41 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_
     }
 
 
-def build_document(units_doc, stage1_dir, out_dir, source_file):
-    """Assemble ``document.json`` content; copies page images, writes figures."""
+def build_document(units_doc, stage1_dir, out_dir, source_file, book=False):
+    """Assemble ``document.json`` content; copies page images, writes figures.
+
+    ``book=True``: the pages come from several spreads (Stage 4 run over all of them). Every page
+    then carries ``stage1_dir`` and ``source_tiff`` (set by the wrapper); pages are numbered
+    consecutively across the book, image and figure files get the TIFF's name as prefix, and block ids
+    keep their ``sN-`` prefix so they stay unique.
+    """
     out_dir = Path(out_dir)
     (out_dir / 'pages').mkdir(parents=True, exist_ok=True)
     unit_of = {oid: u['unit_id'] for u in units_doc['units'] for oid in u['source_object_ids']}
     pages = []
-    for page in units_doc['pages']:
-        src = Path(stage1_dir) / page['page_image']
-        dst = out_dir / 'pages' / page['page_image']
-        arr = np.asarray(Image.open(src).convert('RGB'))
-        Image.fromarray(arr).save(dst)
+    for n, page in enumerate(units_doc['pages'], 1):
+        s1 = Path(page.get('stage1_dir') or stage1_dir)
+        pre = (Path(page['source_tiff']).stem + '_') if book and page.get('source_tiff') else ''
+        orig_no = page['page']
+        if book:
+            page = dict(page, page=n)
+        name = pre + page['page_image']
+        arr = np.asarray(Image.open(s1 / page['page_image']).convert('RGB'))
+        Image.fromarray(arr).save(out_dir / 'pages' / name)
         full_arr = full_rel = None
-        if page.get('page_image_full') and (Path(stage1_dir) / page['page_image_full']).exists():
-            full_rel = 'pages/' + page['page_image_full']
-            shutil.copy(Path(stage1_dir) / page['page_image_full'], out_dir / full_rel)
+        if page.get('page_image_full') and (s1 / page['page_image_full']).exists():
+            full_rel = 'pages/' + pre + page['page_image_full']
+            shutil.copy(s1 / page['page_image_full'], out_dir / full_rel)
             full_arr = np.asarray(Image.open(out_dir / full_rel).convert('RGB'))
-        pages.append(build_page(page, 'pages/' + page['page_image'], arr, out_dir / 'figures', unit_of, full_arr, full_rel))
+        pg = build_page(page, 'pages/' + name, arr, out_dir / 'figures', unit_of, full_arr, full_rel, keep_prefix=book)
+        if book:
+            pg.update({'source_tiff': Path(page['source_tiff']).name, 'spread': page.get('input_index'),
+                       'page_in_spread': orig_no})
+        pages.append(pg)
     units = []
     for u in units_doc['units']:
         d = {k: u[k] for k in ('unit_id', 'type', 'text', 'dehyphenated', 'joins')}
-        d['source_block_ids'] = [_nid(i) for i in u['source_object_ids']]
+        d['source_block_ids'] = [(i if book else _nid(i)) for i in u['source_object_ids']]
         units.append(d)
     return {'schema_version': SCHEMA, 'source_file': str(source_file),
             'coordinate_system': 'pixels of each page image (deskewed, working scale); multiply by page.scale for page.image_full',
