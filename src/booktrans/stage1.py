@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, math
+import argparse, json
 from pathlib import Path
 
 import cv2
@@ -7,6 +7,8 @@ import numpy as np
 from PIL import Image
 import pytesseract
 from pytesseract import Output
+
+from imgutil import crop_for_ocr, paper_color
 
 
 def load_rgb(path):
@@ -31,104 +33,6 @@ def split_spread(rgb):
     right = rgb[:, gutter:]
     return [("L", left, 0), ("R", right, gutter)]
 
-
-def ocr_lines(rgb, lang='deu'):
-    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    # Gentle normalization; retain the original image for final output.
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    norm = clahe.apply(gray)
-    data = pytesseract.image_to_data(norm, lang=lang, config='--psm 3', output_type=Output.DICT)
-
-    words = []
-    n = len(data['text'])
-    for i in range(n):
-        txt = data['text'][i].strip()
-        conf = float(data['conf'][i]) if data['conf'][i] != '-1' else -1
-        if not txt or conf < 15:
-            continue
-        x, y, w, h = [int(data[k][i]) for k in ('left','top','width','height')]
-        words.append({
-            'text': txt, 'conf': round(conf, 1),
-            'x': x, 'y': y, 'w': w, 'h': h,
-            'block': int(data['block_num'][i]),
-            'par': int(data['par_num'][i]),
-            'line': int(data['line_num'][i])
-        })
-
-    # Tesseract's line identifiers are good enough for a first prototype.
-    groups = {}
-    for wd in words:
-        key = (wd['block'], wd['par'], wd['line'])
-        groups.setdefault(key, []).append(wd)
-
-    lines = []
-    for key, ws in groups.items():
-        x1 = min(w['x'] for w in ws); y1 = min(w['y'] for w in ws)
-        x2 = max(w['x'] + w['w'] for w in ws); y2 = max(w['y'] + w['h'] for w in ws)
-        text = ' '.join(w['text'] for w in ws)
-        conf = sum(w['conf'] for w in ws) / len(ws)
-        lines.append({'x':x1,'y':y1,'w':x2-x1,'h':y2-y1,'text':text,'conf':round(conf,1)})
-
-    lines.sort(key=lambda r: (r['y'], r['x']))
-    return lines
-
-
-def merge_lines_into_regions(lines, page_w, page_h):
-    """Turn OCR lines into coarse layout regions.
-
-    This is intentionally conservative: for the first stage a paragraph/column-sized
-    region is preferable to dozens of tiny boxes.  Later we can replace this with a
-    dedicated document-layout model.
-    """
-    if not lines:
-        return []
-    heights = [r['h'] for r in lines]
-    med_h = max(1.0, float(np.median(heights)))
-    regions = []
-    cur = [lines[0]]
-
-    def overlap_ratio(a, b):
-        ax1, ax2 = a['x'], a['x'] + a['w']
-        bx1, bx2 = b['x'], b['x'] + b['w']
-        inter = max(0, min(ax2,bx2)-max(ax1,bx1))
-        return inter / max(1, min(a['w'], b['w']))
-
-    for line in lines[1:]:
-        prev = cur[-1]
-        gap = line['y'] - (prev['y'] + prev['h'])
-        ov = overlap_ratio(prev, line)
-        # Same text flow: normal line spacing and significant horizontal overlap.
-        same_flow = gap <= med_h * 2.4 and ov >= 0.35
-        if same_flow:
-            cur.append(line)
-        else:
-            regions.append(cur)
-            cur = [line]
-    regions.append(cur)
-
-    out = []
-    for idx, rs in enumerate(regions, 1):
-        x1 = min(r['x'] for r in rs); y1 = min(r['y'] for r in rs)
-        x2 = max(r['x']+r['w'] for r in rs); y2 = max(r['y']+r['h'] for r in rs)
-        text = '\n'.join(r['text'] for r in rs)
-        avg_conf = sum(r['conf'] for r in rs)/len(rs)
-        avg_line_h = sum(r['h'] for r in rs)/len(rs)
-        nlines = len(rs)
-
-        if nlines <= 3 and avg_line_h >= med_h * 1.25:
-            kind = 'heading'
-        elif avg_line_h <= med_h * 0.78:
-            kind = 'caption'
-        else:
-            kind = 'text'
-        out.append({
-            'id': idx, 'type': kind,
-            'bbox': [x1,y1,x2,y2],
-            'ocr_confidence': round(avg_conf,1),
-            'text': text,
-            'lines': rs
-        })
-    return out
 
 def detect_image_regions(rgb, text_regions):
     """Detect photographs/drawings as large contiguous dark/tonal regions.
@@ -163,7 +67,18 @@ def detect_image_regions(rgb, text_regions):
     candidates.sort(key=lambda r:(r['bbox'][2]-r['bbox'][0])*(r['bbox'][3]-r['bbox'][1]),reverse=True)
     return candidates
 
-def detect_text_regions(rgb, lang='deu'):
+OUTER_MARGIN = 65   # px: physical book edge / table on the outer side of a page
+INNER_MARGIN = 10   # px: gutter side. Text on the right-hand page starts only ~60 px
+                    # from the gutter, so a symmetric 65 px margin clipped the first
+                    # letters of every line (hen/var/ceit/lelt in the sample scans).
+
+
+def page_margins(side):
+    """(left, right) ink-ignore margins for a page of the given side."""
+    return (OUTER_MARGIN, INNER_MARGIN) if side == 'L' else (INNER_MARGIN, OUTER_MARGIN)
+
+
+def detect_text_regions(rgb, lang='deu', side='L'):
     """Find coarse printed-text blocks, then OCR each block.
 
     Morphological grouping is much more stable for this book than grouping
@@ -171,12 +86,12 @@ def detect_text_regions(rgb, lang='deu'):
     """
     gray=cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY)
     bw=cv2.adaptiveThreshold(gray,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,41,15)
-    # Remove obvious scan border and gutter artifacts.
     h,w=gray.shape
-    
-    # Ignore the physical book edge; content starts well inside it on these scans.
-    margin=65
-    bw[:margin,:]=0; bw[-margin:,:]=0; bw[:,:margin]=0; bw[:,-margin:]=0
+
+    # Ignore the physical book edge and the gutter shadow, side-aware.
+    ml,mr=page_margins(side)
+    mt=mb=OUTER_MARGIN
+    bw[:mt,:]=0; bw[-mb:,:]=0; bw[:,:ml]=0; bw[:,-mr:]=0
     # Connect characters into lines and nearby lines into paragraph-sized blocks.
     bw=cv2.morphologyEx(bw,cv2.MORPH_CLOSE,cv2.getStructuringElement(cv2.MORPH_RECT,(21,3)))
     grouped=cv2.dilate(bw,cv2.getStructuringElement(cv2.MORPH_RECT,(7,13)))
@@ -203,7 +118,6 @@ def detect_text_regions(rgb, lang='deu'):
         merged_into=False
         for j,m in enumerate(merged):
             mx1,my1,mx2,my2=m['bbox']
-            vert_gap=max(0,max(my1,y1 if False else y)-min(my2,y))
             horiz_overlap=max(0,min(mx2,x2)-max(mx1,x)) / max(1,min(mx2-mx1,ww))
             # same column / nearby text blocks
             if horiz_overlap>.35 and y <= my2+28 and y2 >= my1:
@@ -213,9 +127,10 @@ def detect_text_regions(rgb, lang='deu'):
             merged.append({'bbox':[x,y,x2,y2]})
 
     regions=[]
+    paper=paper_color(rgb)
     for idx,r in enumerate(merged,1):
         x1,y1,x2,y2=r['bbox']
-        crop=rgb[max(0,y1-4):min(h,y2+4),max(0,x1-4):min(w,x2+4)]
+        crop,_=crop_for_ocr(rgb,r['bbox'],context=10,pad=24,color=paper)
         # psm 6 works well for paragraph/title blocks; preserve line breaks via TSV.
         text=pytesseract.image_to_string(crop,lang=lang,config='--psm 6').strip()
         data=pytesseract.image_to_data(crop,lang=lang,config='--psm 6',output_type=Output.DICT)
@@ -230,7 +145,7 @@ def detect_text_regions(rgb, lang='deu'):
     return regions
 
 def process_page(rgb, side, x_offset, lang):
-    text_regions = detect_text_regions(rgb, lang)
+    text_regions = detect_text_regions(rgb, lang, side)
     image_regions = detect_image_regions(rgb, text_regions)
     # Estimate body line height and classify text regions by typography scale.
     hs=[r['ocr_line_height'] for r in text_regions if r['ocr_line_height']>0]

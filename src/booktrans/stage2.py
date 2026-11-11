@@ -13,8 +13,17 @@ import cv2, numpy as np, pytesseract
 from PIL import Image
 from pytesseract import Output
 
+from imgutil import crop_for_ocr
 
-def ocr_lines(crop, offset, lang):
+
+def ocr_lines(page, bbox, lang, context=10):
+    """OCR one coarse region of ``page`` and return line objects in page coordinates.
+
+    The region is cut with real context pixels and surrounded by paper-coloured
+    padding (see imgutil.crop_for_ocr); a bare crop made Tesseract drop or
+    misread line-initial letters that touch the crop border.
+    """
+    crop,offset=crop_for_ocr(page,bbox,context=context,pad=24)
     gray=cv2.cvtColor(crop,cv2.COLOR_RGB2GRAY)
     gray=cv2.createCLAHE(clipLimit=1.5,tileGridSize=(8,8)).apply(gray)
     d=pytesseract.image_to_data(gray,lang=lang,config='--psm 6',output_type=Output.DICT)
@@ -217,13 +226,12 @@ def main():
                 if 'image' in r['type'] or 'drawing' in r['type']:
                     image_boxes.append({'bbox':r['bbox'],'type':'illustration'})
                 continue
-            x1,y1,x2,y2=r['bbox']; crop=page[y1:y2,x1:x2]
-            ls=ocr_lines(crop,(x1,y1),a.lang); all_lines.extend(ls); text_bboxes.append(r['bbox'])
+            ls=ocr_lines(page,r['bbox'],a.lang); all_lines.extend(ls); text_bboxes.append(r['bbox'])
         for im in image_boxes:
             x1,y1,x2,y2=im['bbox']; H,W=page.shape[:2]
             bx1=min(W,x2+3); by1=max(0,y2-35); bx2=min(W,x2+360); by2=min(H,y2+8)
             if bx2>bx1 and by2>by1:
-                cap=ocr_lines(page[by1:by2,bx1:bx2],(bx1,by1),a.lang)
+                cap=ocr_lines(page,[bx1,by1,bx2,by2],a.lang,context=0)
                 for ln in cap:
                     if ln['glyph_height']<18 and not any(abs(ln['bbox'][1]-q['bbox'][1])<5 and ln['text']==q['text'] for q in all_lines):
                         ln['caption_band_candidate']=True; all_lines.append(ln)
