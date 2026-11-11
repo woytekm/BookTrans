@@ -86,27 +86,62 @@ report carries a warning. `source` and `notes` are for review.
   section 8): translate them as one. Unit ids are numbered over the whole book.
 - Output stays in the format above so a human can edit the JSON and re-render.
 
-## Glossary (designed, not built)
+## Glossary (`src/booktrans/glossary.py`, `glossary/`)
 
 Thousands of place names plus an art-history vocabulary do **not** need RAG, embeddings or a bigger
-model. The glossary is a plain lookup applied *before* the request:
+model. The glossary is a plain lookup applied *before* the request and a check applied *after*:
 
-1. Match the unit's German text against the glossary (case-insensitive, substring for compounds so
-   "Kämpfergesims" finds "Kämpfer"; allow edit distance 1-2 for OCR slips on place names, and require the
-   capital letter for names).
-2. Put only the matching pairs (typically 3-15) into the prompt as a short list:
-   `Pitschen = Byczyna (nom.; inflect as needed)`. The Polish side is given in the nominative; the model
-   inflects ("in Pitschen" -> "w Byczynie").
-3. Check the output: every matched term must appear (in any inflected form: compare stems) or the unit
-   is flagged in `notes`.
+1. The unit's German text is matched against the glossary. Text and entries are normalised (case,
+   umlauts, ß, accents folded: OCR drops diacritics, so `BOSDORF` finds `Bösdorf`). Terms match inside
+   compounds (`Kämpfer` finds `Portalkämpfer`; terms shorter than 6 letters only as whole words). Place
+   names must be capitalised, may span up to 3 words (`Friedland OS`) and tolerate one or two OCR slips
+   (`Rittersvalde`, `OBERSCHLESTEN`).
+2. Only matching entries with status `confirmed` or `proposed` go into the prompt
+   (`prompt_block(hits)`: `- Pitschen = Byczyna (miejscowość, Kreuzburg OS)`; Polish in the nominative,
+   the model inflects it). `disputed` and `ambiguous` entries are never given to the model.
+3. After translation, `check()` verifies that every given term appears in the Polish text in some
+   inflected form (stems compared: `Byczyna` is found in `Byczynie`) and flags the unit if not.
 
-Cost: negligible memory and no extra model, so it works on a small local model (a 12B model on 16 GB).
-Prompt growth is a few hundred tokens per unit. One unit per request keeps the context small.
+Cost: negligible memory, no extra model, a few hundred prompt tokens per unit, so it works with a 12B
+model on 16 GB. One unit per request keeps the context small.
 
-Sources and layers:
-- **Place names:** an authoritative table (post-1945 name decrees, TERYT/Wikipedia lists), one row per
-  place with the district to disambiguate (Friedland OS, Politz). Czech places take Czech names.
-- **Terms:** model-proposed, human-approved; columns `de`, `pl`, `kind` (place|term|person), `status`
-  (confirmed|proposed|disputed), `note`, `source`. Candidates are extracted from the whole-book OCR
-  (rare German words and compound parts with counts and example sentences).
-- Planned file: `glossary/terms.csv`.
+### File format
+
+`glossary/terms.csv` (UTF-8, several files can be combined, first definition of a (de, kind) wins):
+`de, pl, kind, status, district, variants, note, source`. `kind`: `place` | `term` | `person`; `status`:
+`confirmed` | `proposed` | `disputed` | `ambiguous`; `variants`: other German spellings separated by `;`;
+`district` tells apart places with the same name. The shipped `glossary/terms.csv` seeds the places and
+terms of the two sample spreads (`proposed` unless verified; **the terms are model proposals, not
+verified by a specialist**: `Rundstab` and `Hohlkehle` are `disputed`).
+
+### Commands
+
+```bash
+cd src/booktrans
+python glossary.py match      output/book/document.json ../../glossary/terms.csv        # hits per unit + capitalised names not in the glossary
+python glossary.py check      output/book/document.json translations.json ../../glossary/terms.csv   # exit 1 if a term is missing in the Polish
+python glossary.py candidates output/book/document.json ../../glossary/terms.csv        # capitalised nouns not in the glossary, by frequency
+python glossary.py import-places train.csv test.csv -o ../../glossary/places.csv        # german,polish CSV -> glossary
+```
+
+`check` on the sample book caught a real inconsistency: the caption `u0015` had been translated "PIERŚCIEŃ
+TRZONU" while the glossary says "pierścień trzonu kolumny".
+
+### Sources for the place names
+
+- **German-Polish paired place names** (Hugging Face `DebasishDhal99/german-polish-paired-placenames`, CC-BY 4.0,
+  about 9,800 rows `german,polish`, scraped from the German Wikipedia list "Liste deutscher Bezeichnungen
+  polnischer Orte"; whole of Poland, no district, some German names map to several places). The
+  development sandbox cannot reach Hugging Face; download the CSV file(s) on a Mac (e.g.
+  `pip install huggingface_hub; huggingface-cli download DebasishDhal99/german-polish-paired-placenames
+  --repo-type dataset --local-dir hfpairs`) and run `import-places` on them. A German name with several
+  Polish ones becomes `ambiguous` (not given to the model; add the district by hand to resolve).
+- Wikidata (historical German names with district), the 1946 name decrees (Komisja Ustalania Nazw
+  Miejscowości) and the state name register (PRNG/TERYT) for verification.
+- Names from the 1930s renamings (e.g. Polkwitz -> Heerwegen) and old spellings go into `variants`.
+
+### Still to do
+
+- Wire `prompt_block` and `check` into `translate.py` once it exists.
+- Resolve ambiguous places from context (neighbouring names, the district named in the text).
+- A review workflow for `proposed` entries (`candidates` is the start).

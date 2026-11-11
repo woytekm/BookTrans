@@ -26,7 +26,8 @@ BookTrans is a working prototype: scans go in, a complete page-recreation model 
 - `render.py`: page assembly from the document model and a translations JSON, with optimum-fit justified line breaking, Polish hyphenation, flow across pages, fixed frames for headings/captions/footnotes, paper or scan background, and automatic font fitting (letter-spacing and size fitted to the original line widths; `--tracking`, `--size-scale`, `--word-space`, `--font*`).
 - Hand translations of both sample spreads (`examples/0001.pl.json`, `examples/0002.pl.json`) and their reconstructions (`examples/*_render_compare.jpg`).
 - Batch mode: a folder or several TIFFs become one book document (`--resume`, `--separate`, `--name`); cross-spread paragraph joins.
-- Progress/timing output on stderr; 37 tests.
+- `glossary.py`: glossary lookup (places with OCR-tolerant matching, terms inside compounds), prompt block, post-translation check, place-name CSV importer, candidate extractor; seed `glossary/terms.csv`.
+- Progress/timing output on stderr; 43 tests.
 
 ## Experimental results and observations
 
@@ -56,7 +57,7 @@ BookTrans is a working prototype: scans go in, a complete page-recreation model 
 ## Immediate next development
 
 1. **Translation service** (`translate.py`, local LLM; see `TRANSLATION.md`).
-2. **Glossary tooling** (`TRANSLATION.md`).
+2. **Glossary content** (import place names, review terms) and wiring into the translation service (`TRANSLATION.md`).
 3. Automatic font choice among supplied fonts; more samples (two-column, ragged right, footnotes, running heads).
 
 Earlier list (still relevant for robustness):

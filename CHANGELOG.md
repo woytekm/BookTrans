@@ -2,6 +2,14 @@
 
 ## Unreleased — stage2-rework
 
+### Glossary
+
+- `src/booktrans/glossary.py` and `glossary/terms.csv`: German -> Polish place names and terms. Lookup
+  before translation (normalised, compound- and OCR-tolerant matching), `prompt_block`, post-translation
+  `check` (inflected forms accepted), `import-places` for a `german,polish` CSV (duplicates dropped,
+  names with several Polish forms marked `ambiguous`), `match` and `candidates` reports. 6 new tests (43).
+  On the sample book `check` flagged a caption translated more briefly than the glossary term.
+
 ### Batch mode (books)
 
 - `booktrans.py` takes a folder of TIFFs or several files and writes one book folder: stages 1-3 per
