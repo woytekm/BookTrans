@@ -90,3 +90,10 @@ def test_dry_run_and_real_http_endpoint(tmp_path):
         srv.shutdown()
     assert res['units']['u0002']['pl'].startswith('Portal w Byczynie')
     assert got['body']['model'] == 'm' and got['body']['messages'][0]['role'] == 'user'
+
+
+def test_empty_answers_are_not_cached(tmp_path):
+    a = _args(tmp_path, only=['u0002'], retries=0)
+    T.run(_doc(), a, call=lambda p: '')
+    res = T.run(_doc(), a, call=lambda p: 'Portal w Byczynie jest prosty. Ma 3 stopnie.')
+    assert res['units']['u0002']['pl'].startswith('Portal w Byczynie')
