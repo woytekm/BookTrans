@@ -2,6 +2,12 @@
 
 ## Unreleased — stage2-rework
 
+### Documentation
+
+- New `docs/HANDOFF.md` (start here), `docs/TRANSLATION.md` (translation service contract), `docs/RENDERING.md`.
+  README, DEVELOPMENT, PIPELINE, ARCHITECTURE, DATA_MODEL (translations JSON, render report, scale fields) and
+  DECISIONS (ADR-008 to ADR-013) updated.
+
 ### Font fitting (render)
 
 - Letter-spacing is fitted per block (`--tracking auto`, default): the translation fills the

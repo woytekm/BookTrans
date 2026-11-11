@@ -100,4 +100,4 @@ Searchable, vector-text PDF with original raster illustrations
 
 ## Current implementation versus target architecture
 
-Only early input, coarse segmentation and OCR analysis are prototyped. The conceptual components above are target architecture, not claims that all are implemented. See `DEVELOPMENT.md` for exact status.
+Input, layout analysis, OCR, the document model and rendering (page reconstruction with font fitting) are prototyped. Translation, review and export are not. The conceptual components above are target architecture, not claims that all are implemented. See `HANDOFF.md` and `DEVELOPMENT.md` for exact status.

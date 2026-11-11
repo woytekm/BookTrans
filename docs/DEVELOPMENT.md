@@ -1,10 +1,10 @@
 # Development status
 
-Last updated: 2026-11-11
+Last updated: 2026-11-11. For the overview and the open issues start with `HANDOFF.md`.
 
 ## Current project state
 
-BookTrans is at an experimental early prototype stage. The current implementation is a pair of scripts rather than a packaged application. The supplied sample scans are two 1800-pixel-wide open-book TIFF spreads (`0001.tif` and `0002.tif`, TIFF metadata says 600 DPI, but the effective resolution is only about 135 DPI: Tesseract estimates 135 and body glyphs are 8-14 px high; thresholds in the code are expressed in pixels for that scale).
+BookTrans is a working prototype: scans go in, a complete page-recreation model and, with a translations file, reconstructed Polish pages come out. The implementation is a set of standalone scripts rather than a packaged application. The translation service is not built. The supplied sample scans are two 1800-pixel-wide open-book TIFF spreads (`0001.tif` and `0002.tif`, TIFF metadata says 600 DPI, but the effective resolution is only about 135 DPI: Tesseract estimates 135 and body glyphs are 8-14 px high; thresholds in the code are expressed in pixels for that scale).
 
 ## Implemented / prototyped
 
@@ -20,6 +20,12 @@ BookTrans is at an experimental early prototype stage. The current implementatio
 - Page-level paragraph detection per text column: short last line (primary signal in this book), first-line indent, extra spacing; hyphenated line ends never end a paragraph.
 - Stage 4: cross-page paragraph links (`continues_from`/`continues_to`), dehyphenation and translation units.
 - JSON structure output and diagnostic overlay generation.
+- Resolution handling: scale from the body line pitch, analysis on a working copy, OCR and figure crops from the full-resolution scan (`--scale`, `--ocr-scale`); layout modes `spread|page|crop`.
+- `booktrans.py` wrapper and `docmodel.py`: one command per TIFF gives `document.json` (layout, typography, blocks, figures, units), cropped figures, debug overlays and the stage JSONs.
+- `marks.py`: page numbers, printer's mark and rules as image crops.
+- `render.py`: page assembly from the document model and a translations JSON, with optimum-fit justified line breaking, Polish hyphenation, flow across pages, fixed frames for headings/captions/footnotes, paper or scan background, and automatic font fitting (letter-spacing and size fitted to the original line widths; `--tracking`, `--size-scale`, `--word-space`, `--font*`).
+- Hand translations of both sample spreads (`examples/0001.pl.json`, `examples/0002.pl.json`) and their reconstructions (`examples/*_render_compare.jpg`).
+- Progress/timing output on stderr; 35 tests.
 
 ## Experimental results and observations
 
@@ -41,14 +47,18 @@ BookTrans is at an experimental early prototype stage. The current implementatio
 - Italic, bold, small caps and typeface identification are not implemented reliably; `style` is currently unknown.
 - Tesseract confidence is not a calibrated probability of correctness.
 - No human-review UI exists.
-- No translation client, translation cache, typography fitting or PDF renderer exists yet.
-- The current code has not yet been reorganized into a tested library/API.
+- No translation client or cache exists yet (`TRANSLATION.md` has the contract). Output is PNG per page, no PDF export.
+- The wrapper processes one TIFF at a time; paragraphs cut at a spread boundary are not joined automatically.
+- No automatic font choice among several fonts; page numbers are pasted as crops; one body column per page is assumed.
+- The code is a set of scripts, not a tested library/API; tests use synthetic data only.
 
 ## Immediate next development
 
-**Improve text-versus-illustration classification, especially for technical drawings.** The second supplied spread is a useful stress case because labels and linework inside architectural drawings can be mistaken for prose. The model should support a drawing region with associated text labels rather than forcing every detected text fragment into a normal paragraph.
+1. **Translation service** (`translate.py`, local LLM; see `TRANSLATION.md`).
+2. **Batch mode** over consecutive spreads: cross-spread unit joins, shared glossary.
+3. Automatic font choice among supplied fonts; more samples (two-column, ragged right, footnotes, running heads).
 
-Then:
+Earlier list (still relevant for robustness):
 
 1. Create a small manually reviewed ground-truth annotation for both spreads: page boundaries, illustration boxes, text blocks and paragraph/line membership.
 2. Stabilize gutter detection against both scans and add regression tests.

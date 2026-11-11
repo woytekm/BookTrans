@@ -14,6 +14,11 @@ This document distinguishes the intended pipeline from the currently implemented
 8. Infer paragraph boundaries per text column of the page (short last line, indent, spacing; never after a hyphen).
 8a. Stage 4: link paragraphs across page/spread breaks, dehyphenate, build translation units.
 9. Serialize page/region/line information to JSON and draw a diagnostic overlay.
+10. `docmodel.py` builds `document.json` (layout, typography, reading-ordered blocks, figure crops, page marks/rules, translation units).
+11. Translation (not implemented; contract in `TRANSLATION.md`) produces a translations JSON.
+12. `render.py` rebuilds each page (see `RENDERING.md`).
+
+At high resolution (`--scale auto` detects it from the body line pitch) steps 2-4, 7-8 run on an area-averaged working copy at the sample scale; OCR crops and figure crops come from the full-resolution page, which gets the same split and deskew.
 
 ## Intended full flow
 

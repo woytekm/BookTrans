@@ -2,7 +2,7 @@
 
 A Python-based document reconstruction and translation project for historical books. The initial target is a pre-war German architecture book to be translated into Polish while retaining original illustrations, page composition and an approximate historical typographic character.
 
-**Current status:** early prototype, document analysis only. The current code is experimental and tuned against two supplied 1800-pixel-wide open-book TIFF scans. It is not yet a general-purpose book OCR or translation application.
+**Current status:** working prototype for one book. Layout analysis, OCR, the page-recreation model (`document.json`) and page reconstruction with fitted fonts work on the two supplied sample spreads (translated by hand). The automated translation service is the next piece and is not built yet. The code is tuned to the sample scans and is not yet a general-purpose application. **New session? Read `docs/HANDOFF.md` first.**
 
 ## Current prototype
 
@@ -50,7 +50,7 @@ python render.py output/0001/document.json translations.json -o output/0001/rend
 
 Useful options: `--layout spread|page|crop` (open book split at the gutter / one whole page / part of a page), `--scale auto|N` (how much larger than the sample scans the input is; auto measures the line pitch, so 600 DPI scans and crops are handled by analysing a downscaled working copy while OCR and figures use the full-resolution pixels), `--ocr-scale`, `--lang` (default `deu`), `-v` (print every region and OCR line with its confidence). Progress with timings is printed to the terminal while it runs.
 
-creates `output/0001/` with `document.json` (nested model: pages → blocks → lines, layout, typography, figure links, translation units), `pages/` (deskewed page images; all coordinates refer to them), `figures/` (every illustration cropped to a PNG), `debug/` (overlays) and `stages/` (raw JSON of stages 1–4). Each TIFF is processed on its own; to link paragraphs across spreads, run `stage4.py` over the `stages/s3` JSON files of consecutive spreads. The individual stages can still be run separately:
+This creates `output/0001/` with `document.json` (nested model: pages → blocks → lines, layout, typography, figure links, translation units), `pages/` (deskewed page images; all coordinates refer to them), `figures/` (every illustration cropped to a PNG), `debug/` (overlays) and `stages/` (raw JSON of stages 1–4). Each TIFF is processed on its own; to link paragraphs across spreads, run `stage4.py` over the `stages/s3` JSON files of consecutive spreads (a batch mode is planned, see `docs/HANDOFF.md` section 8). The individual stages can still be run separately:
 
 Stage 1:
 
@@ -79,7 +79,12 @@ Check each script's `--help` output for available options. Stage 2 currently def
 
 ## Project documentation
 
-Start with `docs/DEVELOPMENT.md` for the current state and next task. See `docs/DECISIONS.md` for durable architectural decisions and `docs/DATA_MODEL.md` for the current intermediate representation.
+Start with `docs/HANDOFF.md` (what works, how to run it, repository map, open issues, roadmap). Then:
+
+- `docs/TRANSLATION.md`: contract and design for the translation service (input units, output JSON, glossary and prompt rules).
+- `docs/RENDERING.md`: page assembly, line breaking and font fitting.
+- `docs/PIPELINE.md`, `docs/DATA_MODEL.md`: stages and every JSON schema (including `document.json` and the translations/report files).
+- `docs/DECISIONS.md`: durable decisions (ADR-001 ... ADR-013). `docs/DEVELOPMENT.md`: status log. `CHANGELOG.md`: what changed.
 
 ### Stage 3
 

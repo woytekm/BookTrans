@@ -209,3 +209,18 @@ Written by `booktrans.py`. Top level: `schema_version`, `source_file`, `coordina
 - graphic (`kind: graphic`, `role`: `page_mark` | `rule`): `file`, `crop_bbox`; page numbers, printer's marks and horizontal rules (e.g. above a footnote), kept as image crops.
 
 `units[]`: `unit_id`, `type`, `text` (dehyphenated), `source_block_ids`, `dehyphenated`, `joins`.
+
+Per page also: `scale` (full px per working px, 1.0 at the sample resolution), `image_full` (full-resolution deskewed page, or null), `full_width`, `full_height`. Figure and graphic crops are cut from `image_full` when present. All coordinates in the model are working pixels.
+
+## Translations JSON (input of `render.py`; output of the future translation service)
+
+```json
+{"schema": "1.0", "target_language": "pl", "prompt": "...", "notes": ["..."],
+ "units": {"u0004": {"source": "German text (OCR-corrected)", "pl": "Polish text"}}}
+```
+
+Only `units[id].pl` is used. Unit ids are those of `document.json` `units[]` and are unique per document only: a second spread starts again at `u0001`. Details and rules: `TRANSLATION.md`.
+
+## Render report (`render/report.json`)
+
+`units[]`: `unit`, `kind` (`body` or the block role), `lines`, `lines_original`, `size_px`, `tracking_px`, `tracking_em`; body units add `hyphenated_lines`, `relaxed_spacing`, `starts_on_page`; fixed frames add `capacity`, `shrink`. `pages[]`: `page`, `body_lines_used`, `body_lines_capacity`. `warnings[]`: missing translations, overflow. See `RENDERING.md`.
