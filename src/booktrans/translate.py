@@ -204,7 +204,7 @@ def run(doc, a, call=None):
             prompts_txt.append('===== %s (%s) =====\n%s\n' % (uid, role, prompt))
             continue
         key = key_of(a.model, base, rules, block, role, upper, text, ctx)
-        if key in cache:
+        if key in cache and cache[key].get('pl', '').strip():           # an empty answer is never reused
             entry['pl'] = cache[key]['pl']; entry['flags'] += cache[key].get('flags', [])
             log.info('translate', '[%d/%d] %s cached' % (n, len(todo), uid))
         else:
@@ -221,8 +221,9 @@ def run(doc, a, call=None):
                     break
                 log.info('translate', '%s attempt %d: %s' % (uid, attempt + 1, '; '.join(flags)))
             entry['flags'] += flags
-            cache[key] = {'pl': entry['pl'], 'flags': flags}
-            cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding='utf-8')
+            if entry['pl'].strip():
+                cache[key] = {'pl': entry['pl'], 'flags': flags}
+                cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding='utf-8')
             log.info('translate', '[%d/%d] %s %s: %d -> %d chars%s  (%.0fs)' % (
                 n, len(todo), uid, role, len(text), len(entry['pl']), '  FLAGS: ' + '; '.join(flags) if flags else '', time.time() - t0))
         result['units'][uid] = entry
