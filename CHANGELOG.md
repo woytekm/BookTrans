@@ -2,6 +2,11 @@
 
 ## Unreleased — stage2-rework
 
+### Documentation
+
+- OCR with `tessdata_best` `deu` documented as the recommended model (HANDOFF section 2): clearly better
+  than the fast model on 600 DPI input (heading, capitals, glued words).
+
 ### Anthropic API provider and token accounting
 
 - `translate.py --provider anthropic` (Messages API, `$ANTHROPIC_API_KEY`, default model `claude-sonnet-5-5`),

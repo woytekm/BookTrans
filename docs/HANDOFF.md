@@ -33,6 +33,13 @@ translated by hand in a chat session (`examples/0001.pl.json`, `examples/0002.pl
   tesseract-deu`; the traindata then lives in `/opt/local/share/tessdata`). The development sandbox is a
   Linux container, so anything touching Tesseract data there needs `TESSDATA_PREFIX` pointing at a
   folder with `deu.traineddata`.
+- **OCR model: use `tessdata_best` `deu`.** On the 600 DPI test spread the default (fast) `deu` read the
+  heading as `MIEDELÄLTERLICHE KIRCHENPORTÄALE` (confidence 28); `tessdata_best` reads it correctly and
+  fixes `Kigenart`/`besonders der`. The owner copied `deu.traineddata` from
+  <https://github.com/tesseract-ocr/tessdata_best> into `/opt/local/share/tessdata` (replacing the
+  MacPorts fast one), so the pipeline picks it up without any option. Remaining OCR errors on that
+  spread: `Finzelheiten` (E/F), `desursprünglichen` (glued), `OBERSCHLESTEN` (I/T), footnote mark `¹`
+  read as `‘`.
 - Explanations should be precise and technical.
 - Never type or store tokens or passwords. Pushing works through the attached-repo mechanism of the
   session; if a token is ever needed it must be fine-grained, limited to this repository and revoked
