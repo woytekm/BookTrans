@@ -2,6 +2,20 @@
 
 ## Unreleased — stage2-rework
 
+### OCR correction in the pipeline, LLM-assisted review (`ocrreview.py`)
+
+- `booktrans.py` runs `ocrfix.py` after writing `document.json` (single page and book mode); the files
+  (`document.corrected.json`, `ocr_corrections.json`, `ocr_review.json`) are written next to it. Skipped with a
+  message when `symspellpy` or the dictionaries are missing. New options `--no-ocrfix`, `--ocr-suggest`.
+- New `src/booktrans/ocrreview.py` (stage 5b), a separate script: for every open flag one model request with the
+  whole unit text (flag marked `⟦ ⟧`, other flags `‹ ›`), reason, candidates and glossary names
+  (`prompts/ocr_review_de.txt`); JSON answer (`replace` / `keep` / `unsure`, replacement, confidence, reason),
+  validated, retried once, replacement checked against the dictionaries (unknown word: never `high`); stored as
+  `llm` in `ocr_review.json`, cached. Subcommands `propose`, `show`, `accept --min-confidence`. Model options as in
+  `translate.py` (LM Studio or `--provider anthropic`). `ocrfix.py run` keeps the proposals.
+- `translate.py` uses `document.corrected.json` when it exists next to `document.json` (`--raw` to opt out).
+- 78 tests (10 new, fake model; full loop also run against a mock OpenAI-compatible server).
+
 ### OCR correction stage (`ocrfix.py`, stage 5, before translation)
 
 - New `src/booktrans/ocrfix.py`: checks the German text of every unit offline and corrects OCR errors

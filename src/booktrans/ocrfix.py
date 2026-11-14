@@ -564,6 +564,14 @@ def load_review(path):
     return res, d.get('accepted_words', [])
 
 
+def load_proposals(path):
+    """LLM proposals (``llm``) of the flags of an earlier review file, by flag key (see ocrreview.py)."""
+    if not Path(path).exists():
+        return {}
+    d = json.loads(Path(path).read_text(encoding='utf-8'))
+    return {f['key']: f['llm'] for f in d.get('flags', []) if f.get('llm')}
+
+
 def run(doc, fixer, review_res=None):
     """Correct ``doc['units']`` in place.  -> (corrections, flags)."""
     info = {}
@@ -593,9 +601,13 @@ def cmd_run(a):
     out = Path(a.output) if a.output else Path(a.document).with_name('document.corrected.json')
     review_path = Path(a.review) if a.review else out.with_name('ocr_review.json')
     res, accepted = load_review(review_path)
+    proposals = load_proposals(review_path)
     fixer = Fixer(lex, suggest=not a.no_suggest, accepted=accepted)
     log.info('ocrfix', '%d units' % len(doc['units']))
     cors, flags = run(doc, fixer, res)
+    for f in flags:                      # proposals of ocrreview.py survive a new run
+        if f['key'] in proposals:
+            f['llm'] = proposals[f['key']]
     doc['ocr_correction'] = {'version': 1, 'corrections': len(cors), 'flags': len(flags),
                              'hunspell': bool(lex.hs), 'review_resolutions_applied': len(res)}
     out.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding='utf-8')

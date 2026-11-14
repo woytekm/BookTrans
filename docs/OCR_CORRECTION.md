@@ -13,10 +13,23 @@ python ocrfix.py fetch                     # SymSpell de-100k + LibreOffice de_D
 
 ## Use
 
+`booktrans.py` runs the stage by itself after it has written `document.json` (skipped with a message when
+`symspellpy` or the dictionaries are missing; `--no-ocrfix` switches it off, `--ocr-suggest` adds the slow
+Hunspell suggestions). The files land next to `document.json`. To run it alone:
+
 ```bash
 python ocrfix.py run output/book/document.json          # -> document.corrected.json, ocr_corrections.json, ocr_review.json
-python translate.py output/book/document.corrected.json -o output/book/translations.json
 python ocrfix.py text "Niederschlesten und Überzesten"   # try a string
+```
+
+The whole path from there to the translation:
+
+```bash
+python ocrreview.py propose output/book/ocr_review.json    # LLM proposal for every open flag (stage 5b, below)
+python ocrreview.py show    output/book/ocr_review.json    # read the proposals
+python ocrreview.py accept  output/book/ocr_review.json --min-confidence high   # proposals -> resolutions (or edit the file)
+python ocrfix.py run output/book/document.json             # applies the resolutions, flags shrink
+python translate.py output/book/document.json -o output/book/translations.json  # uses document.corrected.json when it exists (--raw: no)
 ```
 
 Options: `-o FILE`, `--review FILE`, `--glossary CSV...` (default: all `glossary/*.csv`), `--no-suggest` (skip the
@@ -82,3 +95,29 @@ number, so it stays valid as long as the unit text does not change.
 - Names that are neither in the glossary nor in the vocabulary are flagged (low severity), never changed above
   cost 0.6. Fill the glossary/vocabulary to reduce flags.
 - Digits misread as digits (3/5) are not detected.
+
+## LLM-assisted review (stage 5b, `ocrreview.py`)
+
+A separate script and a separate step: it only reads `document.corrected.json` and `ocr_review.json` and only
+writes proposals into `ocr_review.json`; nothing changes in the text until a proposal becomes a `resolution`
+and `ocrfix.py run` is run again.
+
+For **each open flag, one request**: the instructions of `prompts/ocr_review_de.txt` (edit this file to change
+the behaviour), the kind of text, the **whole text of the unit** (auto-corrected) with the flagged word marked
+`⟦word⟧` and the other open flags of the unit marked `‹word›`, the checker's reason and candidates, and the
+glossary names found in the text. The model answers one JSON object:
+`{"decision": "replace"|"keep"|"unsure", "replacement": "...", "confidence": "high"|"medium"|"low", "reason": "..."}`.
+
+Checks on the answer: valid JSON and decision (one retry with a remark otherwise, then `unsure`), a replacement
+without line breaks and of sane length, a replacement equal to the word counts as `keep`, and the replacement is
+looked up in the dictionaries: a word the dictionaries do not know can never be `high` (`in_dictionary` in the
+record). The record is stored as `llm` in the flag (with the model name); `ocrfix.py run` keeps it when it
+rewrites the review file. Answers are cached in `ocr_review.json.llm-cache.json` (key: model + prompt), so an
+interrupted or repeated run asks only what changed.
+
+Commands: `propose` (`--provider openai|anthropic`, `--endpoint`, `--model`, `--no-think`, `--extra-body`,
+`--min-severity`, `--only UNIT...`, `--redo`, `--no-verify`, `--dry-run` prints the prompts), `show`, `accept`
+(`--min-confidence`, default `high`; `--replace-only`; sets `resolution` and `resolved_by: llm`). The model
+options are those of `translate.py` (LM Studio by default). Proposals below the chosen confidence stay open for
+the human. The functions `collect`, `build_prompt`, `parse_answer`, `check`, `accept` are separate, so a step can be
+swapped (another prompt, another selection of flags, another acceptance policy).

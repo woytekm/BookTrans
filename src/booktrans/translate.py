@@ -356,6 +356,7 @@ def main():
     ap.add_argument('--no-think', action='store_true', help='ask a reasoning model not to think (sends chat_template_kwargs.enable_thinking=false and reasoning_effort=none; whether the server passes them on depends on the server and model; in LM Studio the reliable switch is the model\'s "Enable Thinking" custom field)')
     ap.add_argument('--extra-body', help='JSON merged into every request body, e.g. \'{"top_p": 0.9}\'')
     ap.add_argument('--dry-run', action='store_true', help='write the prompts, do not call the model')
+    ap.add_argument('--raw', action='store_true', help='use document.json even if document.corrected.json (OCR-corrected by ocrfix.py) exists next to it')
     a = ap.parse_args()
     if a.provider == 'anthropic':
         a.endpoint = a.endpoint or 'https://api.anthropic.com'
@@ -367,6 +368,10 @@ def main():
         a.endpoint = a.endpoint or os.environ.get('LMSTUDIO_ENDPOINT', 'http://localhost:1234/v1')
         a.api_key = a.api_key or os.environ.get('LMSTUDIO_API_KEY')
     os.environ.setdefault('BOOKTRANS_T0', str(time.time()))
+    corrected = a.document.with_name('document.corrected.json')
+    if a.document.name == 'document.json' and corrected.exists() and not a.raw:
+        log.info('translate', 'using %s (OCR-corrected; --raw uses document.json)' % corrected)
+        a.document = corrected
     doc = json.loads(a.document.read_text(encoding='utf-8'))
     a.output = a.output or a.document.parent / 'translations.json'
     if not a.dry_run and not a.model:

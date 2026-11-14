@@ -82,6 +82,7 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/render.py` | page assembly: typesetting of Polish text, font fitting, compositing |
 | `src/booktrans/scale.py` | resolution detection from the body line pitch |
 | `src/booktrans/ocrfix.py` | stage 5: offline OCR correction of the units (dictionaries, confusions, lost spaces), corrections log and review file (`OCR_CORRECTION.md`) |
+| `src/booktrans/ocrreview.py` | stage 5b: LLM proposals for the flags `ocrfix.py` left open (`propose` / `show` / `accept`), prompt `prompts/ocr_review_de.txt` |
 | `src/booktrans/translate.py` | translation through an OpenAI-compatible endpoint (LM Studio) or the Anthropic API: glossary block, checks, retries, cache, token usage |
 | `src/booktrans/glossary.py`, `glossary/` | German -> Polish names and terms: lookup before translation, check after (`TRANSLATION.md`) |
 | `src/booktrans/illustrations.py`, `deskew.py`, `imgutil.py`, `log.py` | helpers |
@@ -174,7 +175,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 3. Automatic font choice among supplied fonts (score x-height ratio, advance width, stem darkness
    against the scan; the tracking fit already exists).
 4. More samples: two-column pages, ragged right, footnotes, running heads; tune and add tests.
-5. OCR post-correction: dictionary stage done (`ocrfix.py`, `OCR_CORRECTION.md`); next: tune on more pages, fill `glossary/vocabulary.txt`, maybe an LLM pass for the flagged remainder.
+5. OCR post-correction: dictionary stage done (`ocrfix.py`, `OCR_CORRECTION.md`); `ocrreview.py` asks an LLM about each flag (not yet run against a real model: try it on LM Studio / Gemma and tune `prompts/ocr_review_de.txt`); next: tune on more pages, fill `glossary/vocabulary.txt`.
 6. Human review of units and blocks; export (PDF / per-page images).
 7. DPI-independent thresholds beyond the line-pitch scale factor.
 

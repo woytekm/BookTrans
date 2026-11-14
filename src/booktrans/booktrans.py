@@ -11,6 +11,10 @@ creates ``<output_root>/<tiff name>/``:
     figures/        every detected illustration cropped to its own PNG
     debug/          diagnostic overlays
     stages/         raw JSON of stages 1-4 (s1..s4), for debugging
+    document.corrected.json   copy of document.json with OCR-corrected unit texts (stage 5, ocrfix.py;
+                    skipped when symspellpy or the dictionaries are missing, or with --no-ocrfix)
+    ocr_corrections.json      every automatic OCR correction (before, after, rule, cost)
+    ocr_review.json           words flagged for a human; ``ocrreview.py`` asks an LLM about them
 
 Several TIFFs (or a folder of them) are processed as one book: ``python booktrans.py scans/ -o out``
 writes ``<out>/<folder name>/`` with the same layout but one ``document.json`` for all spreads (pages
@@ -43,6 +47,21 @@ def run(cmd):
     if r.returncode:
         sys.stderr.write(r.stdout[-2000:])
         raise SystemExit('stage failed (exit %d): %s' % (r.returncode, Path(str(cmd[0])).name))
+
+
+def ocr_correct(out, suggest=False):
+    """Stage 5: offline OCR correction of the units (ocrfix.py) -> document.corrected.json, ocr_corrections.json,
+    ocr_review.json next to document.json.  Skipped (with the reason) when its requirements are missing."""
+    import importlib.util
+    if importlib.util.find_spec('symspellpy') is None:
+        log.info('wrap', 'OCR correction skipped: pip install spylls symspellpy')
+        return False
+    if not (HERE.parent.parent / 'dictionaries' / 'de-100k.txt').exists():
+        log.info('wrap', 'OCR correction skipped: dictionaries missing, run "python ocrfix.py fetch" once')
+        return False
+    log.info('wrap', '=== stage 5: OCR correction (ocrfix.py) ===')
+    run([HERE / 'ocrfix.py', 'run', out / 'document.json'] + ([] if suggest else ['--no-suggest']))
+    return True
 
 
 def step(n, title):
@@ -146,6 +165,8 @@ def main():
                     help='full px per working px (auto = measured from the body line pitch; 1 = analyse as is). Larger scans are analysed downscaled; OCR and figures use full resolution')
     ap.add_argument('--layout', choices=['spread', 'page', 'crop'], default='spread',
                     help='spread: open book split at the gutter (default); page: one whole page; crop: part of a page')
+    ap.add_argument('--no-ocrfix', action='store_true', help='skip the OCR correction stage (ocrfix.py)')
+    ap.add_argument('--ocr-suggest', action='store_true', help='OCR correction: also ask Hunspell for suggestions (slow, 3-8 s per hopeless word)')
     ap.add_argument('--translations', type=Path, help='translations JSON ({"units": {unit_id: {"pl": text}}}); if given, the pages are also rebuilt into <out>/<name>/render/')
     ap.add_argument('--background', choices=['paper', 'scan'], default='paper', help='for --translations: clean paper canvas or the scan with text wiped')
     ap.add_argument('--font', type=Path, help='regular serif TTF with Polish letters (default: bundled Crimson Text)')
@@ -175,6 +196,9 @@ def main():
             nt = sum(b['kind'] == 'text' for b in p['blocks'])
             log.info('wrap', '%s page %d%s: %d text blocks, %d figures' % (label, p['page'], p['side'], nt, nf))
         log.info('wrap', 'done: %s (%d pages, %d units)' % (out, len(doc['pages']), len(doc['units'])))
+        if not a.no_ocrfix and ocr_correct(out, a.ocr_suggest):
+            log.info('wrap', 'next: python ocrreview.py propose %s  (LLM proposals for the flags), then translate.py on document.corrected.json'
+                     % (out / 'ocr_review.json'))
         if a.translations:
             from render import render, Fonts
             log.info('wrap', '=== page assembly (render.py) ===')
