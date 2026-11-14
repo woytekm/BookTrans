@@ -2,6 +2,21 @@
 
 ## Unreleased — stage2-rework
 
+### OCR correction stage (`ocrfix.py`, stage 5, before translation)
+
+- New `src/booktrans/ocrfix.py`: checks the German text of every unit offline and corrects OCR errors
+  conservatively. Known words = SymSpell `de-100k` + Hunspell `de_DE_frami` (via `spylls`) +
+  `glossary/vocabulary.txt` + glossary names + compounds; old spelling (`daß`, `Thür`, `Cultur`) is accepted.
+  Candidates for unknown words: OCR confusions (`Binfassung` -> `Einfassung`, `fi`/`B` -> `ß`, `O8` -> `OS`),
+  edit distance, lost spaces (`nichtmehr`, `dieChorportale`, glued `z. B.in`), Hunspell suggestions (flag only).
+  A change is applied only when its cost is low and it clearly beats the runner-up; short words and possible
+  names are flagged instead. Known-but-suspicious words (`Fin` for `Ein`) are flagged, never changed.
+- Output: `document.corrected.json` (units keep `text_raw`, get `text` and `ocr_corrections`; `translate.py`
+  reads `text`, so it just works on the corrected file), `ocr_corrections.json` (every change),
+  `ocr_review.json` (flags with candidates and context; fill `resolution`, rerun; decisions persist).
+- `python ocrfix.py fetch` downloads the dictionaries into `dictionaries/` (git-ignored).
+- 16 tests with a synthetic lexicon (`tests/test_ocrfix.py`); `docs/OCR_CORRECTION.md`.
+
 ### Documentation
 
 - OCR with `tessdata_best` `deu` documented as the recommended model (HANDOFF section 2): clearly better

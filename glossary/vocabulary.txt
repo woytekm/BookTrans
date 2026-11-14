@@ -1,0 +1,68 @@
+# Project vocabulary for ocrfix.py: words that are correct in this book but missing from the general
+# German dictionaries (old spelling, regional names, abbreviations, art-history terms).
+# One entry per line: word [count].  Capitalisation is kept for the corrected text.  '#' starts a comment.
+# Silesian regions and places (more come from the glossary CSV files automatically)
+Schlesien
+Niederschlesien
+Oberschlesien
+Mittelschlesien
+Brandenburg
+Oberitalien
+Pitschen
+Ziegenhals
+Ritterswalde
+Bösdorf
+Friedland
+Neisse
+Kreuzburg
+Oppeln
+Breslau
+Ratibor
+Leobschütz
+Rosenberg
+Kosel
+Beuthen
+Gleiwitz
+Neustadt
+Patschkau
+Ottmachau
+Grottkau
+Falkenberg
+# Abbreviations
+OS
+NS
+OS.
+usw
+bzw
+vgl
+Abb
+Nr
+Chr
+# Old spelling (the book is pre-war: th, c, ß after short vowels are handled by rules in ocrfix.py,
+# only genuinely different forms belong here)
+Thür
+Thüre
+Thor
+Theil
+Cultur
+Kunstgeschichte
+Backsteingotik
+Werkstein
+Ziegelformsteine
+Granitfindlinge
+Portalkämpfer
+Archivolte
+Archivolten
+Gewände
+Tympanon
+Kapitell
+Kapitelle
+Kämpfer
+Rundbogenportal
+Spitzbogenportal
+Stufenportal
+Wimperg
+Rundstab
+Kehle
+Schräge
+Sockel
