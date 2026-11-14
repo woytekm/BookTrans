@@ -56,7 +56,7 @@ python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.jso
 python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 53 tests, a few seconds
+python -m pytest -q ../../tests                                                # 78 tests, a few seconds
 ```
 
 Useful options: `--layout spread|page|crop`, `--scale auto|N`, `--ocr-scale`, `--lang`, `-v`,
