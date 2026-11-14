@@ -66,6 +66,16 @@ least `MARGIN` (0.29) more, or the best is `FREQ_RATIO` (50) times more frequent
 a name) is changed above cost 0.6 only if the candidate is a common word. All constants are at the top of
 `ocrfix.py`.
 
+**Aggressive mode** (`ocrfix.py run --aggressive`, or `booktrans.py --aggressive-ocr-fix`): the same candidates, a
+looser decision (`POLICIES['aggressive']` at the top of `ocrfix.py`): cost up to 1.5 (two substitutions, a
+compound-only result, an edit plus a bit, a lost space between rarer words), the runner-up only needs to be 0.1
+more expensive or 10 times less frequent, words of 4 letters are changed, and the name guard is off (a capitalised
+unknown word is changed like any other). It still flags: words with no candidate at all, candidates costing more
+than 1.5 (two edits in a word), dead heats (`vesten`: besten/westen/festen), 3-letter words, and `suspect` known
+words. Expect some wrong "corrections", for example a real name changed into a similar word (`Piasten` ->
+`Plasten`); all of them are in `ocr_corrections.json` (with rule and cost, so low-confidence ones can be
+reviewed first), and the mode is recorded in `ocr_correction.mode` of the corrected document.
+
 Flag reasons: `ambiguous`, `weak_candidate`, `name_risk`, `short_word`, `no_candidate` (severity high for
 lower-case words), `unknown_name_or_word` (capitalised, low), `suspect` (known word that looks like a frequent
 OCR slip of a much more common one, e.g. `Fin` for `Ein`; low), `stray_letter`, `mixed_digits_letters`.

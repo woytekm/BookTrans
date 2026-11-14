@@ -2,6 +2,13 @@
 
 ## Unreleased — stage2-rework
 
+### Aggressive OCR correction
+
+- `ocrfix.py run --aggressive` / `booktrans.py --aggressive-ocr-fix`: looser decision policy (`POLICIES`): changes
+  almost everything that has a candidate (cost up to 1.5, margin 0.1 or 10x frequency, 4-letter words, no name
+  guard); flags only words without candidates, weak candidates, dead heats, 3-letter words and suspects. The mode
+  is stored in `ocr_correction.mode`. 2 new tests (80 in total).
+
 ### OCR correction in the pipeline, LLM-assisted review (`ocrreview.py`)
 
 - `booktrans.py` runs `ocrfix.py` after writing `document.json` (single page and book mode); the files

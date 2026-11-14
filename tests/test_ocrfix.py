@@ -146,3 +146,22 @@ def test_review_file_roundtrip(tmp_path):
 def test_helpers():
     assert O.dl_distance('Binfassung', 'Einfassung') == 1 and O.dl_distance('ab', 'ba') == 1
     assert O.recase('BOSDORF', 'bösdorf') == 'BÖSDORF' and O.recase('Haus', 'hans') == 'Hans'
+
+
+def test_aggressive_policy_changes_more_but_still_flags_ties_and_hopeless_words():
+    lx = O.Lexicon(dict_dir='/nonexistent', vocab=(), use_hunspell=False,
+                   freq_lines=['plasten 300', 'die 1900000000', 'kirche 3000000', 'besten 900000', 'westen 800000',
+                               'rang 500000', 'lie 1'])
+    text = 'Die Piasten Kirche im vesten xqzvwk'
+    strict = O.Fixer(lx, suggest=False).process(text, 'u1')
+    aggr = O.Fixer(lx, suggest=False, aggressive=True).process(text, 'u1')
+    assert 'Piasten' in strict[0] and strict[2][0]['reason'] == 'name_risk'          # a possible name: human decides
+    assert aggr[0].startswith('Die Plasten Kirche')                                   # aggressive: changed
+    for new, cors, flags in (strict, aggr):
+        assert {f['token'] for f in flags} >= {'xqzvwk'}                              # hopeless: flagged in both modes
+    assert 'vesten' in aggr[0] and 'vesten' in [f['token'] for f in aggr[2]]          # dead heat: still flagged
+
+
+def test_policy_names():
+    assert set(O.POLICIES) == {'strict', 'aggressive'}
+    assert O.POLICIES['aggressive']['auto_max'] > O.POLICIES['strict']['auto_max']

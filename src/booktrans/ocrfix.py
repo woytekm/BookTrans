@@ -60,6 +60,13 @@ AUTO_MAX = 1.0         # highest candidate cost that may be applied without a hu
 MARGIN = 0.29          # the best candidate must be this much cheaper than the runner-up ...
 COMPOUND_PENALTY = 0.5  # a candidate known only as a compound of known words costs this much more
 FREQ_RATIO = 50        # ... or this many times more frequent at equal cost
+# Decision policies.  'strict' is the default; 'aggressive' (--aggressive) changes almost everything that has a
+# candidate and flags only the really uncertain: no candidate at all, a candidate needing more than ~1.5 of cost,
+# or a dead heat between candidates.
+POLICIES = {
+    'strict': dict(auto_max=AUTO_MAX, margin=MARGIN, freq_ratio=FREQ_RATIO, min_len=MIN_AUTO_LEN, name_risk=True),
+    'aggressive': dict(auto_max=1.5, margin=0.1, freq_ratio=10, min_len=4, name_risk=False),
+}
 SUSPECT_RATIO = 500    # a known word is "suspect" when its OCR-confusion neighbour is this much more frequent
 SUSPECT_MAX_FREQ = 20000   # ... and the word itself is rarer than this (counts of de-100k)
 
@@ -244,8 +251,9 @@ class Cand:
 
 
 class Checker:
-    def __init__(self, lex, suggest=True):
+    def __init__(self, lex, suggest=True, policy='strict'):
         self.lex, self.suggest = lex, suggest
+        self.pol = POLICIES[policy] if isinstance(policy, str) else policy
         self._sug = {}
 
     # --- A: OCR confusions, up to two substitutions
@@ -363,10 +371,10 @@ class Checker:
         if any(ch.isdigit() for ch in tok):
             return self._finish(tok, self.confusions(tok))
         seg = (self.camel(tok) if camel else []) or self.segmentation(tok)
-        if len(tok) >= 14 and seg and seg[0].cost <= AUTO_MAX:
+        if len(tok) >= 14 and seg and seg[0].cost <= self.pol['auto_max']:
             return seg      # long unknown word that splits cleanly into known words: no need to look further
         cands = self.confusions(tok) + self.edits(tok) + seg
-        if not any(c.cost <= AUTO_MAX for c in cands):
+        if not any(c.cost <= self.pol['auto_max'] for c in cands):
             cands += self.hunspell(tok)
         return self._finish(tok, cands)
 
@@ -417,16 +425,17 @@ class Checker:
         """(candidate or None, reason) -- the conservative auto-correction rule."""
         if not cands:
             return None, 'no_candidate'
-        b = cands[0]
-        if b.cost > AUTO_MAX:
+        b, pol = cands[0], self.pol
+        if b.cost > pol['auto_max']:
             return None, 'weak_candidate'
-        if len(tok) < MIN_AUTO_LEN and b.text not in self.lex.cased.values():
+        if len(tok) < pol['min_len'] and b.text not in self.lex.cased.values():
             return None, 'short_word'     # (a project/glossary name is evidence enough)
-        if tok[:1].isupper() and not tok.isupper() and b.cost > NAME_RISK_COST and b.count < NAME_RISK_COUNT and b.rule != 'lost_space':
+        if pol['name_risk'] and tok[:1].isupper() and not tok.isupper() and b.cost > NAME_RISK_COST \
+                and b.count < NAME_RISK_COUNT and b.rule != 'lost_space':
             return None, 'name_risk'
         if len(cands) > 1:
             s = cands[1]
-            if s.cost - b.cost < MARGIN and not b.count >= FREQ_RATIO * max(s.count, 1):
+            if s.cost - b.cost < pol['margin'] and not b.count >= pol['freq_ratio'] * max(s.count, 1):
                 return None, 'ambiguous'
         return b, 'auto'
 
@@ -456,9 +465,10 @@ class Checker:
 
 # ---------------------------------------------------------------- text
 class Fixer:
-    def __init__(self, lex, suggest=True, accepted=()):
+    def __init__(self, lex, suggest=True, accepted=(), aggressive=False):
         self.lex = lex
-        self.ck = Checker(lex, suggest)
+        self.aggressive = aggressive
+        self.ck = Checker(lex, suggest, 'aggressive' if aggressive else 'strict')
         self.accepted = {w.lower() for w in accepted}
 
     def process(self, text, unit_id='', resolutions=None):
@@ -602,14 +612,14 @@ def cmd_run(a):
     review_path = Path(a.review) if a.review else out.with_name('ocr_review.json')
     res, accepted = load_review(review_path)
     proposals = load_proposals(review_path)
-    fixer = Fixer(lex, suggest=not a.no_suggest, accepted=accepted)
+    fixer = Fixer(lex, suggest=not a.no_suggest, accepted=accepted, aggressive=a.aggressive)
     log.info('ocrfix', '%d units' % len(doc['units']))
     cors, flags = run(doc, fixer, res)
     for f in flags:                      # proposals of ocrreview.py survive a new run
         if f['key'] in proposals:
             f['llm'] = proposals[f['key']]
     doc['ocr_correction'] = {'version': 1, 'corrections': len(cors), 'flags': len(flags),
-                             'hunspell': bool(lex.hs), 'review_resolutions_applied': len(res)}
+                             'mode': 'aggressive' if a.aggressive else 'strict', 'hunspell': bool(lex.hs), 'review_resolutions_applied': len(res)}
     out.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding='utf-8')
     out.with_name('ocr_corrections.json').write_text(json.dumps(
         {'schema': '1.0', 'corrections': cors}, ensure_ascii=False, indent=1), encoding='utf-8')
@@ -626,7 +636,7 @@ def cmd_run(a):
 
 def cmd_text(a):
     lex = Lexicon(glossary_files=a.glossary or [str(p) for p in sorted((ROOT / 'glossary').glob('*.csv'))], use_hunspell=not a.no_hunspell)
-    fx = Fixer(lex, suggest=not a.no_suggest)
+    fx = Fixer(lex, suggest=not a.no_suggest, aggressive=a.aggressive)
     new, cors, flags = fx.process(a.string, 'text')
     print(new)
     for c in cors:
@@ -643,6 +653,7 @@ def main():
         p = sub.add_parser(name)
         p.add_argument('--glossary', nargs='*')
         p.add_argument('--no-hunspell', action='store_true')
+        p.add_argument('--aggressive', action='store_true', help='correct everything that has a candidate; flag only the really uncertain (see POLICIES)')
         p.add_argument('--no-suggest', action='store_true', help='skip the slow Hunspell suggestions')
         if name == 'run':
             p.add_argument('document')
