@@ -236,6 +236,14 @@ def _ends_with_hyphen(text):
     return text.rstrip().endswith(('-','\u2010','\u00ac'))
 
 
+def _continues_sentence(prev_text, cur_text):
+    """True when ``cur_text`` cannot start a paragraph: it begins with a lower-case letter and the
+    previous line does not end a sentence. (German paragraphs start with a capital; a lost word in the
+    OCR can make the line before look short, which would otherwise cut the paragraph there.)"""
+    first = next((c for c in cur_text if c.isalpha()), '')
+    return bool(first) and first.islower() and not prev_text.rstrip().endswith(('.', '!', '?', '\u00bb', '"', '\u201d', '\u201c'))
+
+
 def mark_paragraph_breaks(col, body):
     """Mark the first line of every paragraph in one text column.
 
@@ -251,7 +259,9 @@ def mark_paragraph_breaks(col, body):
     * **extra line spacing** - clearly more than the normal line pitch.
 
     A line that ends in a hyphen never ends a paragraph, so a paragraph is never
-    cut inside a hyphenated word. Every marked line gets ``paragraph_break`` and
+    cut inside a hyphenated word; nor does a line followed by a line that starts in
+    lower case when the sentence is not finished (a word lost in OCR can make a
+    line look short). Every marked line gets ``paragraph_break`` and
     ``paragraph_break_reason``; the first line of the column is a break by definition.
     """
     ls=sorted(col,key=lambda z:z['bbox'][1])
@@ -266,7 +276,7 @@ def mark_paragraph_breaks(col, body):
     ls[0]['paragraph_break']=True; ls[0]['paragraph_break_reason']='column_start'
     for i in range(1,len(ls)):
         prev,cur=ls[i-1],ls[i]; reason=None
-        if not _ends_with_hyphen(prev['text']):
+        if not _ends_with_hyphen(prev['text']) and not _continues_sentence(prev['text'], cur['text']):
             if R-prev['bbox'][2]>short_thr: reason='short_last_line'
             elif cur['bbox'][0]-L>indent_thr: reason='first_line_indent'
             elif pitch>0 and (cy[i]-cy[i-1])>1.4*pitch: reason='extra_line_spacing'

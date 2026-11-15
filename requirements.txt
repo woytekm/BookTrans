@@ -4,3 +4,5 @@ Pillow>=10.0
 pytesseract>=0.3.10
 pytest>=7
 pyphen>=0.14      # optional: Polish hyphenation in render.py
+spylls>=0.1         # OCR correction (ocrfix.py): Hunspell in pure Python
+symspellpy>=6.7     # OCR correction (ocrfix.py): edit-distance lookup

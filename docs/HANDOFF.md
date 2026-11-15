@@ -33,6 +33,13 @@ translated by hand in a chat session (`examples/0001.pl.json`, `examples/0002.pl
   tesseract-deu`; the traindata then lives in `/opt/local/share/tessdata`). The development sandbox is a
   Linux container, so anything touching Tesseract data there needs `TESSDATA_PREFIX` pointing at a
   folder with `deu.traineddata`.
+- **OCR model: use `tessdata_best` `deu`.** On the 600 DPI test spread the default (fast) `deu` read the
+  heading as `MIEDELÄLTERLICHE KIRCHENPORTÄALE` (confidence 28); `tessdata_best` reads it correctly and
+  fixes `Kigenart`/`besonders der`. The owner copied `deu.traineddata` from
+  <https://github.com/tesseract-ocr/tessdata_best> into `/opt/local/share/tessdata` (replacing the
+  MacPorts fast one), so the pipeline picks it up without any option. Remaining OCR errors on that
+  spread: `Finzelheiten` (E/F), `desursprünglichen` (glued), `OBERSCHLESTEN` (I/T), footnote mark `¹`
+  read as `‘`.
 - Explanations should be precise and technical.
 - Never type or store tokens or passwords. Pushing works through the attached-repo mechanism of the
   session; if a token is ever needed it must be fine-grained, limited to this repository and revoked
@@ -49,7 +56,7 @@ python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.jso
 python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 48 tests, a few seconds
+python -m pytest -q ../../tests                                                # 80 tests, a few seconds
 ```
 
 Useful options: `--layout spread|page|crop`, `--scale auto|N`, `--ocr-scale`, `--lang`, `-v`,
@@ -74,7 +81,9 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/marks.py` | page numbers, printer's marks, rules (kept as image crops) |
 | `src/booktrans/render.py` | page assembly: typesetting of Polish text, font fitting, compositing |
 | `src/booktrans/scale.py` | resolution detection from the body line pitch |
-| `src/booktrans/translate.py` | translation through an OpenAI-compatible endpoint (LM Studio): glossary block, checks, retries, cache |
+| `src/booktrans/ocrfix.py` | stage 5: offline OCR correction of the units (dictionaries, confusions, lost spaces), corrections log and review file (`OCR_CORRECTION.md`) |
+| `src/booktrans/ocrreview.py` | stage 5b: LLM proposals for the flags `ocrfix.py` left open (`propose` / `show` / `accept`), prompt `prompts/ocr_review_de.txt` |
+| `src/booktrans/translate.py` | translation through an OpenAI-compatible endpoint (LM Studio) or the Anthropic API: glossary block, checks, retries, cache, token usage |
 | `src/booktrans/glossary.py`, `glossary/` | German -> Polish names and terms: lookup before translation, check after (`TRANSLATION.md`) |
 | `src/booktrans/illustrations.py`, `deskew.py`, `imgutil.py`, `log.py` | helpers |
 | `fonts/` | bundled Crimson Text (SIL OFL) |
@@ -133,6 +142,16 @@ checks and retries, and writes the translations JSON that `render.py` consumes (
 run it for real (Gemma 12B on the Mac), tune the rules prompt and the checks on what the model actually
 does, and fill the glossary.
 
+## 7a. First real translation run (2026-11-11, `google/gemma-4-12b` in LM Studio)
+
+Findings, to guide the next session: (1) Gemma 4 thinks by default; switch "Enable Thinking" off in
+LM Studio or every answer is empty (`TRANSLATION.md`). (2) Speed was about 5.5 tok/s, a paragraph takes
+about a minute. (3) **Translation quality of the 12B model is mediocre**: grammatical slips and
+non-words ("Uwarunkom", "kościojachach", "przedejejsze"), one sentence translated to nonsense
+("Bezczynności odłupania tynku" for "Ohne Abschlagen des Putzes"), "podesty" for Sockel, "tężni" for
+Fürstentümern, a caption in broken Polish. Ideas not yet built: a second "Polish editor" pass, a larger
+model, a Polish spell-check (hunspell) to flag non-words, the model-comparison mode.
+
 ## 8. Batch mode (books) and units cut at a spread boundary
 
 `booktrans.py` takes a folder of TIFFs (name order) or several files and builds **one** `document.json`:
@@ -156,13 +175,13 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 3. Automatic font choice among supplied fonts (score x-height ratio, advance width, stem darkness
    against the scan; the tracking fit already exists).
 4. More samples: two-column pages, ragged right, footnotes, running heads; tune and add tests.
-5. OCR post-correction (LLM pass or dictionary) before translation.
+5. OCR post-correction: dictionary stage done (`ocrfix.py`, `OCR_CORRECTION.md`); `ocrreview.py` asks an LLM about each flag (not yet run against a real model: try it on LM Studio / Gemma and tune `prompts/ocr_review_de.txt`); next: tune on more pages, fill `glossary/vocabulary.txt`.
 6. Human review of units and blocks; export (PDF / per-page images).
 7. DPI-independent thresholds beyond the line-pitch scale factor.
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (48 tests).
+- Run `python -m pytest -q` before every commit (53 tests).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
 - Check `render/report.json`: line counts against `lines_original`, `warnings`, `tracking_em`.

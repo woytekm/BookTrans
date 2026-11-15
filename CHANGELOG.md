@@ -2,6 +2,62 @@
 
 ## Unreleased — stage2-rework
 
+### Aggressive OCR correction
+
+- `ocrfix.py run --aggressive` / `booktrans.py --aggressive-ocr-fix`: looser decision policy (`POLICIES`): changes
+  almost everything that has a candidate (cost up to 1.5, margin 0.1 or 10x frequency, 4-letter words, no name
+  guard); flags only words without candidates, weak candidates, dead heats, 3-letter words and suspects. The mode
+  is stored in `ocr_correction.mode`. 2 new tests (80 in total).
+
+### OCR correction in the pipeline, LLM-assisted review (`ocrreview.py`)
+
+- `booktrans.py` runs `ocrfix.py` after writing `document.json` (single page and book mode); the files
+  (`document.corrected.json`, `ocr_corrections.json`, `ocr_review.json`) are written next to it. Skipped with a
+  message when `symspellpy` or the dictionaries are missing. New options `--no-ocrfix`, `--ocr-suggest`.
+- New `src/booktrans/ocrreview.py` (stage 5b), a separate script: for every open flag one model request with the
+  whole unit text (flag marked `⟦ ⟧`, other flags `‹ ›`), reason, candidates and glossary names
+  (`prompts/ocr_review_de.txt`); JSON answer (`replace` / `keep` / `unsure`, replacement, confidence, reason),
+  validated, retried once, replacement checked against the dictionaries (unknown word: never `high`); stored as
+  `llm` in `ocr_review.json`, cached. Subcommands `propose`, `show`, `accept --min-confidence`. Model options as in
+  `translate.py` (LM Studio or `--provider anthropic`). `ocrfix.py run` keeps the proposals.
+- `translate.py` uses `document.corrected.json` when it exists next to `document.json` (`--raw` to opt out).
+- 78 tests (10 new, fake model; full loop also run against a mock OpenAI-compatible server).
+
+### OCR correction stage (`ocrfix.py`, stage 5, before translation)
+
+- New `src/booktrans/ocrfix.py`: checks the German text of every unit offline and corrects OCR errors
+  conservatively. Known words = SymSpell `de-100k` + Hunspell `de_DE_frami` (via `spylls`) +
+  `glossary/vocabulary.txt` + glossary names + compounds; old spelling (`daß`, `Thür`, `Cultur`) is accepted.
+  Candidates for unknown words: OCR confusions (`Binfassung` -> `Einfassung`, `fi`/`B` -> `ß`, `O8` -> `OS`),
+  edit distance, lost spaces (`nichtmehr`, `dieChorportale`, glued `z. B.in`), Hunspell suggestions (flag only).
+  A change is applied only when its cost is low and it clearly beats the runner-up; short words and possible
+  names are flagged instead. Known-but-suspicious words (`Fin` for `Ein`) are flagged, never changed.
+- Output: `document.corrected.json` (units keep `text_raw`, get `text` and `ocr_corrections`; `translate.py`
+  reads `text`, so it just works on the corrected file), `ocr_corrections.json` (every change),
+  `ocr_review.json` (flags with candidates and context; fill `resolution`, rerun; decisions persist).
+- `python ocrfix.py fetch` downloads the dictionaries into `dictionaries/` (git-ignored).
+- 16 tests with a synthetic lexicon (`tests/test_ocrfix.py`); `docs/OCR_CORRECTION.md`.
+
+### Documentation
+
+- OCR with `tessdata_best` `deu` documented as the recommended model (HANDOFF section 2): clearly better
+  than the fast model on 600 DPI input (heading, capitals, glued words).
+
+### Anthropic API provider and token accounting
+
+- `translate.py --provider anthropic` (Messages API, `$ANTHROPIC_API_KEY`, default model `claude-sonnet-5-5`),
+  retries on 429/5xx/529, API error messages shown, per-run token totals (stored as `usage` in
+  `translations.json`), optional cost (`--price-in`, `--price-out`), token estimate in `--dry-run`.
+  Tested against a mock server only (53 tests).
+
+### Fixes after the first real run (LM Studio, Gemma 4 12B)
+
+- Paragraph detection: a line that starts in lower case after a line that does not end a sentence can
+  no longer start a paragraph (a word lost in OCR made the line before it look short, so "geklaert."
+  became a unit of its own and the translation was cut mid-sentence). New test.
+- `translate.py`: the digit check converts Roman numerals and superscript footnote marks
+  ("13." = "XIII", "1" = "¹") before comparing; empty answers are never cached.
+
 ### Translation script
 
 - Per-request diagnostics (time, token counts, tok/s, finish reason, hidden reasoning, why an answer was empty).
