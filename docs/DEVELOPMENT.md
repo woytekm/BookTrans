@@ -1,6 +1,6 @@
 # Development status
 
-Last updated: 2026-11-11. For the overview and the open issues start with `HANDOFF.md`.
+Last updated: 2026-11-15. For the overview and the open issues start with `HANDOFF.md`.
 
 ## Current project state
 
@@ -29,6 +29,7 @@ BookTrans is a working prototype: scans go in, a complete page-recreation model 
 - `glossary.py`: glossary lookup (places with OCR-tolerant matching, terms inside compounds), prompt block, post-translation check, place-name CSV importer, candidate extractor; seed `glossary/terms.csv`.
 - `translate.py`: translation through an OpenAI-compatible endpoint (LM Studio) with glossary block, answer cleaning, checks with retries, cache and dry run (tested with a mock server; not yet with a real model).
 - Progress/timing output on stderr; 48 tests.
+- GUI, stage A (`gui.py` and `gui_*.py`, `project.py`, `envcheck.py`, `pageindex.py`, `gui_demo.py`; design in `GUI.md`): projects, environment check, page list with OCR-correction counts, page JSON in three views, the correction window as a shell; 71 new tests (151 in total).
 
 ## Experimental results and observations
 
@@ -49,7 +50,7 @@ BookTrans is a working prototype: scans go in, a complete page-recreation model 
 - Reading order and multi-column layouts are not robustly modelled.
 - Italic, bold, small caps and typeface identification are not implemented reliably; `style` is currently unknown.
 - Tesseract confidence is not a calibrated probability of correctness.
-- No human-review UI exists.
+- Human review: the GUI (stage A, `GUI.md`) shows the pages and the OCR-correction counts and JSON per page, but marking words on the page image and editing are not built yet (stages B-C).
 - `translate.py` has not been run against a real model. Output is PNG per page, no PDF export.
 - Body text flows with no widow/orphan control.
 - No automatic font choice among several fonts; page numbers are pasted as crops; one body column per page is assumed.

@@ -99,3 +99,35 @@ Input `document.json` units; output a translations JSON in the format of `exampl
 **Status:** Accepted
 
 German text is matched against a CSV glossary (normalised, compound- and OCR-tolerant); only matching `confirmed`/`proposed` entries go into the prompt, and a post-check verifies them in the Polish output. **Reason:** thousands of names fit in no prompt but cost nothing as a lookup; no embedding model or large context is needed, so it runs on a small local model. Ambiguous and disputed entries are never given to the model.
+
+## ADR-015 — GUI toolkit: Tkinter; the GUI only reads and edits files and runs the pipeline as subprocesses
+
+**Status:** Proposed (stage A, 2026-11-15; awaiting the owner's confirmation)
+
+The GUI (`gui*.py`) uses Tkinter with Pillow's `ImageTk`. It never imports pipeline stages and never changes pipeline output; `booktrans.py` / `ocrfix.py` run as subprocesses (stage E). Logic that matters is toolkit-free (`project.py`, `envcheck.py`, `pageindex.py`).
+
+**Reason:** the central widget is a text editor with programmatic positioning, tags and undo, and the correction window must be a real separate OS window; Tk's `Text` provides this, Dear PyGui's multiline input does not, PyQt was rejected earlier for its MacPorts dependencies. Subprocesses keep the GUI usable without OpenCV/Tesseract and make a crashing stage harmless. **Cost:** Tk is a separate MacPorts package (`py3NN-tkinter`). See `GUI.md` D1, D5, D10.
+
+## ADR-016 — Human work lives outside the pipeline's output folder
+
+**Status:** Proposed (stage A, 2026-11-15)
+
+A project is `project.json` + `pipeline/<book>/` (disposable pipeline output) + `review/` (human decisions). The pipeline never writes to `review/`; the GUI never writes into `pipeline/`. All GUI files are JSON, written atomically.
+
+**Reason:** `booktrans.py` deletes its result folder before a full run, so anything a human typed inside it would be lost. See `GUI.md` D4, D8.
+
+## ADR-017 — The editable unit is the translation unit; edits are an overlay applied by `ocrfix.py`
+
+**Status:** Proposed (stage A, 2026-11-15; awaiting the owner's confirmation)
+
+A human corrects the text of a *unit* (what is translated), shown per page as the "review JSON" (`text_raw` read-only, `text` editable). Line texts in `document.json` stay raw OCR evidence (ADR-002). Edits are stored in `review/unit_edits.json` keyed by unit id with a hash of `text_raw`; `ocrfix.py run` applies them (stage D) so a re-run reproduces them; an edit whose hash no longer matches is reported as stale, not applied. Flags of an edited unit count as reviewed.
+
+**Reason:** the translation reads unit text; editing lines would require re-running stage 4's joining, and one stored text per unit keeps two windows consistent when a paragraph crosses a page. See `GUI.md` D2, section 6.
+
+## ADR-018 — Marks are located by replaying stage 4; word boxes are stored by stage 2
+
+**Status:** Proposed (stage A; the stage 2 change is stage B)
+
+A correction or flag offset in a unit is traced to OCR lines by replaying the stage 4 joining with position tracking (`pageindex.replay`) and verifying the result against the stored text; units that do not reproduce are marked unaligned instead of mis-placed. Stage 2 will keep the per-word boxes Tesseract already returns (`words: [{text, bbox, conf}]` per line, document schema 1.1); existing data falls back to estimated boxes.
+
+**Reason:** unit text is a deterministic function of line texts, so no fuzzy alignment is needed; only a word box can mark a single word on the page. See `GUI.md` D6, D7, section 7.

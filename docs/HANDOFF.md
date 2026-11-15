@@ -4,7 +4,7 @@ Read this first in a new session. It states what works, how to run it, where eve
 pieces fit, what was decided, and what is open. Details live in the other documents in this folder;
 this one is the map.
 
-Last updated: 2026-11-11 (branch `stage2-rework`).
+Last updated: 2026-11-15 (branch `gui`, from `main` after PR #8). New since 2026-11-11: **a GUI, stage A** (section 11, `GUI.md`).
 
 ## 1. What the project is
 
@@ -41,6 +41,9 @@ translated by hand in a chat session (`examples/0001.pl.json`, `examples/0002.pl
   spread: `Finzelheiten` (E/F), `desursprünglichen` (glued), `OBERSCHLESTEN` (I/T), footnote mark `¹`
   read as `‘`.
 - Explanations should be precise and technical.
+- GUI toolkit: **Tkinter** (proposed in session of 2026-11-15, ADR-015, **owner has not confirmed yet**). It needs the MacPorts
+  package `py3NN-tkinter` (NN = Python minor version) and a Pillow with `ImageTk`; Dear PyGui (already used for the sound
+  meter app) was rejected for the editor part, PyQt earlier because of its dependencies. `python envcheck.py` says what is missing.
 - Never type or store tokens or passwords. Pushing works through the attached-repo mechanism of the
   session; if a token is ever needed it must be fine-grained, limited to this repository and revoked
   afterwards.
@@ -56,7 +59,10 @@ python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.jso
 python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 80 tests, a few seconds
+python -m pytest -q ../../tests                                                # 151 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
+python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
+python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
+python gui.py /path/to/project                                                 # a project made with File > New project
 ```
 
 Useful options: `--layout spread|page|crop`, `--scale auto|N`, `--ocr-scale`, `--lang`, `-v`,
@@ -86,6 +92,12 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/translate.py` | translation through an OpenAI-compatible endpoint (LM Studio) or the Anthropic API: glossary block, checks, retries, cache, token usage |
 | `src/booktrans/glossary.py`, `glossary/` | German -> Polish names and terms: lookup before translation, check after (`TRANSLATION.md`) |
 | `src/booktrans/illustrations.py`, `deskew.py`, `imgutil.py`, `log.py` | helpers |
+| `src/booktrans/gui.py` | **GUI main window**: projects, page list with OCR-correction counts, the page JSON in three views (`GUI.md`) |
+| `src/booktrans/gui_dialogs.py`, `gui_correction.py`, `gui_widgets.py` | new-project / environment / command dialogs; the OCR correction window (a shell in stage A); shared Tk widgets and colours |
+| `src/booktrans/project.py` | toolkit-free: project folder, `project.json`, the `booktrans.py` command for a project |
+| `src/booktrans/envcheck.py` | toolkit-free: the environment check (also `python envcheck.py` in a terminal) |
+| `src/booktrans/pageindex.py` | toolkit-free: traces `ocrfix` offsets back to pages/lines (`replay` of stage 4), page rows, the page JSON views, marks |
+| `src/booktrans/gui_demo.py` | a synthetic demo project built with the real stage 4 and `ocrfix.run` |
 | `fonts/` | bundled Crimson Text (SIL OFL) |
 | `prompts/translate_pl.txt` | the translation prompt |
 | `examples/` | `0001.pl.json`, `0002.pl.json` (hand translations), render comparisons, older stage JSONs |
@@ -132,7 +144,8 @@ Full detail: `PIPELINE.md`, `RENDERING.md`, `DATA_MODEL.md`.
   tracking is added. There is no automatic choice between several fonts yet.
 - A synthetic 5x upscale of a drawing page splits the main plate (merge gap limit 40 px); not seen on
   real data.
-- Tesseract confidence is not a calibrated probability; there is no human review tool.
+- Tesseract confidence is not a calibrated probability. The GUI (stage A) shows the page list, the page JSON and the OCR-correction
+  counts per page, but cannot mark words on the page image or edit yet (section 11).
 
 ## 7. Translation
 
@@ -176,13 +189,69 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
    against the scan; the tracking fit already exists).
 4. More samples: two-column pages, ragged right, footnotes, running heads; tune and add tests.
 5. OCR post-correction: dictionary stage done (`ocrfix.py`, `OCR_CORRECTION.md`); `ocrreview.py` asks an LLM about each flag (not yet run against a real model: try it on LM Studio / Gemma and tune `prompts/ocr_review_de.txt`); next: tune on more pages, fill `glossary/vocabulary.txt`.
-6. Human review of units and blocks; export (PDF / per-page images).
+6. Human review: the GUI, stages B-F (section 11, `GUI.md`): word boxes in stage 2, the correction window with marks and a JSON
+   editor, edits applied by `ocrfix.py`, running the pipeline from the GUI. Then export (PDF / per-page images).
 7. DPI-independent thresholds beyond the line-pitch scale factor.
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (53 tests).
+- Run `python -m pytest -q` before every commit (151 tests). On a headless Linux machine the GUI tests need a display:
+  `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
 - Check `render/report.json`: line counts against `lines_original`, `warnings`, `tracking_em`.
 - Native-resolution output must stay unchanged when only the high-resolution path is modified.
+
+## 11. GUI (stage A done 2026-11-15): start here for GUI work
+
+Design, decisions, schemas and the stage plan are in **`docs/GUI.md`** (read it, section 2 and 10 first). ADR-015 ... ADR-018 in
+`DECISIONS.md`. In short: Tkinter; a project folder with `project.json`, `pipeline/<book>/` and `review/`; the GUI reads the pipeline
+output and edits only `review/`; the editable thing is the unit text, shown per page as a "review JSON".
+
+**What the owner asked for** (2026-11-15): a Python GUI with a main window (set up a project: input folder with TIFFs, output
+directory, initial parameters; check that the environment is intact, e.g. dictionaries; list of processed pages; JSON of each page)
+and, as a *separate* window per page, an OCR correction window: the original page with detected errors marked in two or three colours
+(autocorrected / uncertain), and at the bottom the page's OCR document model as JSON to correct by hand and save. Work in stages.
+
+**Done in stage A** (71 new tests): `project.py`, `envcheck.py`, `pageindex.py` (toolkit-free); `gui.py`, `gui_dialogs.py`, `gui_widgets.py`,
+`gui_correction.py` (Tk); `gui_demo.py`. The main window has: new/open/recent project, environment check (also `python envcheck.py`),
+the pipeline command with a warning before a destructive re-run, the page list (sortable; counts of auto-corrected / uncertain / watch /
+human-decided words per page), three read-only JSON tabs per page (page model, review JSON, marks) with search and *Copy JSON*, and
+the per-page correction window as a shell (page image fitted, counts, opens/reuses/closes correctly). The GUI never writes pipeline output;
+the only file it writes is `project.json` (and `~/.booktrans_gui.json` for recent projects).
+
+**Not verified on real data.** Everything was run on the synthetic demo and under Linux/Xvfb, never on a Mac and never on a real
+book's `document.json`. First things to do: `python envcheck.py`, `python gui.py --demo /tmp/demo`, then a real project. To open an existing
+pipeline result in the GUI: create a project with the same input folder and the book's name, then move or symlink the result folder
+(`output/<book>/`) to `<project>/pipeline/<book>/`. Expect to adjust fonts and spacing on macOS (the layout was tuned on Linux Tk 8.6).
+
+**Assumptions to confirm with the owner** (each can still change at small cost; the toolkit-free modules do not depend on them):
+1. Tkinter instead of Dear PyGui (needs `py3NN-tkinter` from MacPorts). 2. The editable text is the *unit* (paragraph, possibly across
+pages), not the OCR line; line texts stay raw. 3. Stage 2 should keep word boxes (stage B; books processed earlier need a re-run of
+stages 1-2 to get exact boxes). 4. Flags of an edited unit count as reviewed. 5. Colours: blue auto, red uncertain, amber watch, green human.
+
+**Next: stage B (word boxes)**, in this order:
+1. `stage2.py`, where the line dicts are built (`out.append({'bbox': ...})`, line 100): add `'words': [{'text', 'bbox' (page coordinates,
+   same offset and scale as the line box), 'conf'} for i in ids]`. `ids` is already the filtered word list (conf < 5 and stray dashes
+   removed), so `' '.join(w['text'])` equals the line `text` and the words correspond one to one to `text.split(' ')`.
+2. Stages 3 and 4 modify the line dicts in place and write the whole JSON back (checked), so an extra `words` key travels through
+   them untouched. Only `docmodel.build_page` builds new line dicts (`'bbox', 'text', 'confidence', 'glyph_height_px',
+   'paragraph_start'`): add `'words'` there. Bump `docmodel.SCHEMA` to `1.1`, update
+   `DATA_MODEL.md`, `CHANGELOG.md`, add a test (docmodel passes `words` through; a line without `words` still works).
+3. `pageindex.py`: `word_boxes(line)` and `mark_boxes(mark)` (exact boxes when `words` is present and its token count matches the line;
+   otherwise estimated: pixel gaps of the line crop, then proportional character widths) with `exact: bool` on each mark. Tests on
+   synthetic lines. `gui_demo.py` already knows the word positions it draws (`_draw_line`): give its lines `words`.
+4. Then stage C (the correction window proper, `GUI.md` section 8).
+
+**Pitfalls found in this session:**
+- `booktrans.py` deletes its result folder before a full run, and the single-TIFF path (`process`) *always* does (it has no `--resume`).
+  Hence `review/` is outside `pipeline/` (ADR-016); `ocr_review.json` inside the book folder is still at risk (stage E backs it up).
+- Unit ids (`u0001` ...) are renumbered on every run; a human edit must be keyed by id *and* a hash of `text_raw` (`GUI.md` section 6).
+- An `ocr_corrections[].offset` for `abbrev_space` is the *end* of the abbreviation (`B.` in `B.in`), a zero-length insertion; every
+  other rule's offset is the start of the replaced token. `pageindex` handles both (test in `test_pageindex.py`).
+- Word marks must survive a hyphenated word at a line end (`Spitz-` / `bogen`): one mark, two fragments, possibly on two pages.
+  Done in `pageindex.replay` / `UnitMap.locate`.
+- The tests found two bugs that only running reveals: widgets used before they exist (menu state before the toolbar) and a dialog that
+  overwrote a name the user had set. Run the GUI tests under a display before declaring anything done.
+- Sandbox notes (not for the Mac): `tkinter` needed `apt-get update && apt-get install python3-tk` for `/usr/bin/python3.12`; headless
+  screenshots work with `Xvfb :99` and `PIL.ImageGrab.grab(xdisplay=':99')`; the default `python3` of the sandbox has OpenCV but no Tk.
