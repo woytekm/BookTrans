@@ -1,6 +1,32 @@
 # Changelog
 
-## Unreleased — stage2-rework
+## Unreleased — gui (stage A)
+
+### GUI: projects, environment check, page list and page JSON (`gui.py`, design in `docs/GUI.md`)
+
+- New `src/booktrans/gui.py` (+ `gui_dialogs.py`, `gui_correction.py`, `gui_widgets.py`), Tkinter: `python gui.py [PROJECT]`,
+  `python gui.py --demo DIR`. File > New project (name, input folder with a live TIFF count, output directory, pipeline parameters,
+  environment check), open/recent; the page list (page, side, TIFF, blocks, figures and per-page counts of words corrected
+  automatically / uncertain / watch / decided by a human; sortable); three read-only JSON tabs per page (page model, review JSON,
+  marks) with search and *Copy JSON*; Project > Pipeline command (the exact `booktrans.py` line, with a warning that a run
+  without `--resume` deletes the result folder including `ocr_review.json`); the OCR correction window per page as a shell (page
+  image, counts; marks and the JSON editor are stage C). The GUI changes no pipeline output; the only file it writes is `project.json`.
+- New `src/booktrans/project.py`: project folder (`project.json`, `pipeline/<book>/`, `review/`: human work lives outside the folder
+  `booktrans.py` deletes), parameter validation, `book_dir` (single-TIFF naming), the pipeline command, atomic JSON writes.
+- New `src/booktrans/envcheck.py` (also `python envcheck.py [PROJECT]`): Python/Tk, pipeline modules, the Tesseract program (also
+  outside `PATH`) and its language models (detects the fast `deu` model by size), the OCR-correction dictionaries (present, non-empty,
+  plausible entry counts and headers), vocabulary and glossary files, fonts and prompts, and for a project its input folder (TIFF
+  count and size, first TIFF opens, free disk space).
+- New `src/booktrans/pageindex.py`: traces every `ocrfix` correction/flag offset back to page, block, line and character range by
+  replaying stage 4's joining with position tracking (checked against the stored text; units that do not reproduce are marked
+  unaligned), including words split by a hyphen at a line end and units that cross a page break; page rows and the three page JSON
+  views.
+- New `src/booktrans/gui_demo.py`: a synthetic demo project built with the real `stage4.build_units` and `ocrfix.run`.
+- 71 new tests (151 in total): the replay equals `stage4.build_units` for every join type, the fragments of every demo mark spell the
+  token `ocrfix` reported, project/environment logic, and window tests (skipped without tkinter or a display).
+- Docs: `docs/GUI.md` (decisions, schemas, windows, stages A-F), ADR-015 ... ADR-018 (proposed), `HANDOFF.md` section 11.
+
+## stage2-rework
 
 ### Aggressive OCR correction
 

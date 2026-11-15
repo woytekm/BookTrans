@@ -22,11 +22,12 @@ A Python-based document reconstruction and translation project for historical bo
 - `src/booktrans/marks.py` — page numbers, printer's marks and rules (kept as image crops).
 - `src/booktrans/stage4.py` — cross-page paragraph links, dehyphenation and translation units (`units.json`).
 - `examples/` — representative JSON and diagnostic outputs from the Stage 2.1 experiments. These are examples, not golden test fixtures.
+- `src/booktrans/gui.py` (+ `gui_*.py`, `project.py`, `envcheck.py`, `pageindex.py`) — **GUI** (Tkinter): projects, environment check, the list of processed pages with their OCR-correction marks and JSON; the per-page OCR correction window is being built in stages (`docs/GUI.md`).
 - `docs/` — architecture, pipeline, data model, decisions and development status.
 
 ## Environment
 
-Python 3.10+ is expected. The scripts are plain standalone files meant to be run from the source directory; no virtual environment or package install is needed. Install the modules listed in `requirements.txt` (numpy, opencv-python, Pillow, pytesseract; `pytest` for the tests) by hand.
+Python 3.10+ is expected. The scripts are plain standalone files meant to be run from the source directory; no virtual environment or package install is needed. Install the modules listed in `requirements.txt` (numpy, opencv-python, Pillow, pytesseract; `pytest` for the tests) by hand. The GUI also needs `tkinter` (a system package: MacPorts `sudo port install py312-tkinter`, replace 312 by your Python version); `python src/booktrans/envcheck.py` reports what is missing.
 
 Tesseract is an external system dependency. Install Tesseract and German language data (`deu`). With MacPorts:
 
@@ -90,6 +91,14 @@ python src/booktrans/stage2.py /path/to/open_spread.tif \
 
 Check each script's `--help` output for available options. Stage 2 currently defaults to German Tesseract OCR (`deu`).
 
+The GUI (stage A: projects, environment check, page list and JSON; try it without scans on a synthetic project):
+
+```bash
+cd src/booktrans
+python envcheck.py
+python gui.py --demo /tmp/demo
+```
+
 ## Development principles
 
 1. Preserve source scans; never destructively modify them.
@@ -107,7 +116,8 @@ Start with `docs/HANDOFF.md` (what works, how to run it, repository map, open is
 - `docs/RENDERING.md`: page assembly, line breaking and font fitting.
 - `glossary/` and `src/booktrans/glossary.py`: German -> Polish place names and terms (lookup before translation, check after).
 - `docs/PIPELINE.md`, `docs/DATA_MODEL.md`: stages and every JSON schema (including `document.json` and the translations/report files).
-- `docs/DECISIONS.md`: durable decisions (ADR-001 ... ADR-013). `docs/DEVELOPMENT.md`: status log. `CHANGELOG.md`: what changed.
+- `docs/GUI.md`: the GUI: decisions, project folder, page JSON views, windows, stages.
+- `docs/DECISIONS.md`: durable decisions (ADR-001 ... ADR-018). `docs/DEVELOPMENT.md`: status log. `CHANGELOG.md`: what changed.
 
 ### Stage 3
 

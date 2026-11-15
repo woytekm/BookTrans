@@ -91,6 +91,8 @@ OCR slip of a much more common one, e.g. `Fin` for `Ein`; low), `stray_letter`, 
 
 ## Human review
 
+The GUI (`python gui.py`, `GUI.md`) shows the corrections and flags per page: counts in the page list and, per page, every mark with the line and character range it was found at. Marking them on the page image and editing the text there are stages B-C; edits will be applied by `ocrfix.py run` (stage D).
+
 Edit `ocr_review.json`: set a flag's `resolution` to the right word (or phrase), or `"="` to accept the word
 as it is; add words to `accepted_words` to accept them everywhere. Run `ocrfix.py run` again: the decisions are
 applied (rule `human`) and moved to `resolved`. A decision is tied to the unit, the word and its occurrence

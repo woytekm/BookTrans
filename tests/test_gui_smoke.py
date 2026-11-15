@@ -1,0 +1,223 @@
+"""GUI smoke tests: the windows build, load the demo project and react.  Skipped without tkinter or a display.
+
+Windows are withdrawn right after creation, so running the tests does not flash windows on a desktop."""
+import time
+
+import pytest
+
+tk = pytest.importorskip('tkinter')
+pytest.importorskip('PIL.ImageTk')
+pytest.importorskip('symspellpy')
+
+try:
+    _probe = tk.Tk()
+    _probe.destroy()
+except tk.TclError as e:                  # no display (headless run without xvfb)
+    pytest.skip('no display for Tk: %s' % e, allow_module_level=True)
+
+import envcheck      # noqa: E402
+import gui           # noqa: E402
+import gui_demo      # noqa: E402
+import gui_dialogs   # noqa: E402
+from project import Project   # noqa: E402
+
+
+def pump(app, until=None, timeout=8.0):
+    """Process events until ``until()`` is true (or the time is up, then fail)."""
+    end = time.time() + timeout
+    while time.time() < end:
+        app.update()
+        if until is None or until():
+            return
+        time.sleep(0.01)
+    if until is not None:
+        raise AssertionError('timed out waiting for the GUI')
+
+
+@pytest.fixture(autouse=True)
+def _no_real_home(monkeypatch, tmp_path):
+    """Opening a project remembers it in ~/.booktrans_gui.json: the tests must not touch the real one."""
+    monkeypatch.setattr(gui, 'RECENT_FILE', tmp_path / 'recent.json')
+
+
+@pytest.fixture(scope='module')
+def demo_dir(tmp_path_factory):
+    d = tmp_path_factory.mktemp('guidemo') / 'p'
+    gui_demo.make_demo(d)
+    return d
+
+
+@pytest.fixture()
+def app(demo_dir):
+    a = gui.MainWindow(str(demo_dir))
+    a.withdraw()
+    pump(a, lambda: a.rows)
+    yield a
+    if a.winfo_exists():
+        a.quit_app()
+
+
+def test_page_list_shows_the_demo_pages(app):
+    assert [r['page'] for r in app.rows] == [1, 2, 3]
+    assert app.tree.get_children() == ('1', '2', '3')
+    assert app._selected_page() == 1
+    vals = dict(zip([c[0] for c in gui.COLUMNS], app.tree.item('2', 'values')))
+    assert (vals['page'], vals['side'], vals['source']) == ('2', 'R', 'demo_0001.tif')
+    assert vals['uncertain'] == '1' and vals['watch'] == '2'
+    assert 'tinted' not in app.tree.item('2', 'tags') and 'attention' in app.tree.item('2', 'tags')
+    assert 'corrected automatically 7' in app.totals.cget('text')
+    assert app.source_lbl.cget('text') == 'showing document.corrected.json'
+
+
+def test_selecting_a_page_fills_the_three_json_tabs(app):
+    app.tree.selection_set('2')
+    pump(app)
+    model, review, marks = (app.views[k].get_text() for k in ('model', 'review', 'marks'))
+    assert '"block_id": "s1-p3"' in model
+    assert '"continues_from_previous_page": true' in review and '"unit_id": "u0004"' in review
+    assert '"abbrev_space"' in marks and '"qwlstig"' in marks
+    app.tree.selection_set('3')
+    pump(app)
+    assert 'Bruchsteinen' in app.views['marks'].get_text() and '"cls": "human"' in app.views['marks'].get_text()
+
+
+def test_find_counts_and_highlights_matches(app):
+    app.tree.selection_set('2')
+    app.nb.select(2)
+    pump(app)
+    app.find_var.set('"cls"')
+    pump(app)
+    assert app.find_count.cget('text') == '4 matches'             # one per mark on page 2
+    assert app.views['marks'].text.tag_ranges('current')
+    app._find(True)
+    app._find(False)
+    app.find_var.set('no such text')
+    pump(app)
+    assert app.find_count.cget('text') == 'no match'
+
+
+def test_sorting_by_a_column(app):
+    app._sort_by('auto')
+    assert app.tree.get_children() == ('3', '2', '1')             # ascending by auto: page 3 (0), page 2 (1), page 1 (6)
+    app._sort_by('auto')
+    assert app.tree.get_children() == ('1', '2', '3')
+
+
+def test_correction_window_is_per_page_reused_and_unregistered_on_close(app):
+    app.tree.selection_set('1')
+    pump(app)
+    app.open_correction()
+    w = app.windows[1]
+    w.withdraw()
+    pump(app)
+    assert w.head.cget('text').startswith('Page 1') and 'auto 6' in w.counts.cget('text')
+    assert w._img is not None and w._img.size == (925, 1315)
+    app.open_correction()
+    assert app.windows[1] is w and len(app.windows) == 1
+    w.close()
+    assert app.windows == {}
+
+
+def test_reload_updates_open_windows_and_keeps_the_selection(app):
+    app.tree.selection_set('2')
+    pump(app)
+    app.open_correction()
+    app.windows[2].withdraw()
+    app.reload()
+    pump(app, lambda: app.status_lbl.cget('text') == '3 pages loaded.')
+    assert app._selected_page() == 2 and 2 in app.windows
+
+
+def test_recent_projects_are_remembered_and_vanished_ones_dropped(app, tmp_path):
+    assert app._recent() == [str(app.project.root)]
+    gone = tmp_path / 'gone'
+    gone.mkdir()
+    (gone / 'project.json').write_text('{}')
+    app._remember(gone)
+    assert app._recent()[0] == str(gone)
+    (gone / 'project.json').unlink()
+    assert app._recent() == [str(app.project.root)]            # a project that no longer exists is not offered
+
+
+def test_closing_the_project_clears_everything(app):
+    app.open_correction()
+    app.windows[1].withdraw()
+    app.close_project()
+    assert app.project is None and app.windows == {} and not app.tree.get_children()
+    assert app.name_lbl.cget('text') == 'BookTrans'
+
+
+def test_project_without_pipeline_result_explains_what_to_do(tmp_path, demo_dir):
+    proj = Project.create(tmp_path / 'fresh', 'fresh', demo_dir / 'scans')
+    a = gui.MainWindow(str(proj.root))
+    a.withdraw()
+    try:
+        pump(a, lambda: 'not run yet' in a.info_lbl.cget('text') and 'No document.json' in a.views['model'].get_text())
+        assert not a.tree.get_children() and str(a.open_btn.cget('state')) == 'disabled'
+    finally:
+        a.quit_app()
+
+
+def test_new_project_dialog_validates_and_creates(app, tmp_path, demo_dir):
+    d = gui_dialogs.NewProjectDialog(app, initial_dir=str(tmp_path))
+    d.withdraw()
+    d.grab_release()
+    d._create()
+    assert d.project is None and 'name' in d.error.cget('text')            # nothing filled in
+    d.v['input'].set(str(demo_dir / 'scans'))
+    pump(app)
+    assert d.v['name'].get() == 'scans'                                    # taken from the input folder
+    assert '2 TIFF files' in d.input_info.cget('text') and str(tmp_path / 'scans') in d.out_info.cget('text')
+    d.v['name'].set('a/b')
+    d._create()
+    assert d.project is None and 'name' in d.error.cget('text')
+    d.v['name'].set('book')
+    d.v['input'].set(str(demo_dir / 'scans') + '/')                        # input changes again: the user's name stays
+    pump(app)
+    assert d.v['name'].get() == 'book'
+    d.ocrfix.set('off')
+    d._create()
+    assert d.project is not None and d.project.root == tmp_path / 'book' and d.project.params['ocrfix'] == 'off'
+    assert (tmp_path / 'book' / 'project.json').is_file()
+
+
+def test_new_project_dialog_warns_about_an_empty_input_folder(app, tmp_path):
+    (tmp_path / 'empty').mkdir()
+    d = gui_dialogs.NewProjectDialog(app, initial_dir=str(tmp_path))
+    d.withdraw()
+    d.grab_release()
+    d.v['input'].set(str(tmp_path / 'empty'))
+    pump(app)
+    assert 'No .tif' in d.input_info.cget('text')
+    d.v['name'].set('x')
+    d._create()
+    assert d.project is None and 'no .tif' in d.error.cget('text')
+    d.destroy()
+
+
+def test_environment_window_lists_the_checks(app, monkeypatch):
+    fake = [envcheck.Check('Group A', 'thing 1', envcheck.OK, 'fine', ''),
+            envcheck.Check('Group A', 'thing 2', envcheck.FAIL, 'gone', 'install it'),
+            envcheck.Check('Group B', 'thing 3', envcheck.WARN, 'meh', 'maybe fix it')]
+    monkeypatch.setattr(envcheck, 'run_checks', lambda **kw: fake)
+    w = gui_dialogs.EnvWindow(app, project=app.project)
+    w.withdraw()
+    pump(app, lambda: w.checks)
+    assert w.summary.cget('text') == 'Something is missing'
+    groups = w.tree.get_children()
+    assert [w.tree.item(g, 'text') for g in groups] == ['Group A', 'Group B']
+    first_fail = w.tree.get_children(groups[0])[1]
+    w.tree.selection_set(first_fail)
+    pump(app)
+    assert 'install it' in w.hint.cget('text')
+    w.destroy()
+
+
+def test_command_dialog_warns_before_a_destructive_rerun(app):
+    d = gui_dialogs.CommandDialog(app, app.project)
+    d.withdraw()
+    assert d.resume.get() is True and d.warn.cget('text') == ''            # a result exists: --resume is the default
+    d.resume.set(False)
+    d._fill()
+    assert 'DELETES' in d.warn.cget('text') and '--resume' not in d.text.get('1.0', 'end')
+    d.destroy()

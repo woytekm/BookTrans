@@ -6,3 +6,4 @@ pytest>=7
 pyphen>=0.14      # optional: Polish hyphenation in render.py
 spylls>=0.1         # OCR correction (ocrfix.py): Hunspell in pure Python
 symspellpy>=6.7     # OCR correction (ocrfix.py): edit-distance lookup
+# GUI (gui.py): tkinter is a system package, not a pip one (MacPorts: py3NN-tkinter); Pillow (above) must have ImageTk
