@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — fix: deskew on pages with too few text lines
+
+- `deskew.estimate_geometry` returned early without `edge_model` when a page had fewer than `MIN_LINES` usable lines, so `stage1.py` failed with `KeyError: 'edge_model'` while logging (seen on a sparse right-hand page). The key is now always present (`'none'` for an untouched page); test extended.
+
 ## Unreleased — gui (stage A)
 
 ### GUI: projects, environment check, page list and page JSON (`gui.py`, design in `docs/GUI.md`)
