@@ -243,6 +243,26 @@ class Project:
     def command_line(self, resume=False):
         return ' '.join(shlex.quote(str(c)) for c in self.command(resume))
 
+    def ocrfix_command(self):
+        """Stage 5 alone: ``ocrfix.py run <book>/document.json`` with the project's OCR-correction mode and the GUI's
+        edits and decisions, as ``booktrans.py`` runs it -> a new ``document.corrected.json`` in seconds, without
+        stage 4.  Raises ProjectError when there is nothing to correct or the correction is switched off."""
+        p = self.params
+        if p['ocrfix'] == 'off':
+            raise ProjectError('OCR correction is switched off in the parameters (OCR correction: off)')
+        doc = self.book_dir() / 'document.json'
+        if not doc.exists():
+            raise ProjectError('no document.json yet in %s: run the pipeline first' % self.book_dir())
+        cmd = [sys.executable, str(HERE / 'ocrfix.py'), 'run', str(doc)]
+        if not p['ocr_suggest']:
+            cmd.append('--no-suggest')
+        if p['ocrfix'] == 'aggressive':
+            cmd.append('--aggressive')
+        return cmd + ['--edits', str(self.edits_file), '--decisions', str(self.decisions_file)]
+
+    def ocrfix_command_line(self):
+        return ' '.join(shlex.quote(str(c)) for c in self.ocrfix_command())
+
 
 def expected_book_dir(input_dir, output_root, name):
     """Where the pipeline will put its result for these inputs (for the new-project dialog, before a project exists)."""

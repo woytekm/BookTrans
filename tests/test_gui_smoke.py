@@ -286,6 +286,52 @@ def test_run_window_runs_the_project_command_and_reports_the_result(app, monkeyp
     assert str(w.start_btn.cget('state')) == 'normal' and str(w.stop_btn.cget('state')) == 'disabled'
 
 
+def test_rerun_ocr_correction_runs_stage_5_alone(app, monkeypatch):
+    import sys
+    import time
+    import tkinter.messagebox as mb
+    app.rerun_ocrfix()
+    w = app.run_window
+    assert w.mode == 'ocrfix' and 'OCR correction' in w.title() and not hasattr(w, 'resume_btn')
+    assert len(w.controls) == 2                                    # only the OCR-correction mode and "suggest"
+    app.run_pipeline()                                             # the other mode replaces an idle window
+    assert app.run_window is not w and app.run_window.mode == 'pipeline'
+    app.rerun_ocrfix()
+    w = app.run_window
+    done = []
+    w.on_done = lambda: done.append(1)
+    real = app.project.ocrfix_command()
+    assert real[1].endswith('ocrfix.py') and '--edits' in real and '--decisions' in real
+    monkeypatch.setattr(app.project, 'ocrfix_command', lambda: [sys.executable, '-c', 'print("ocrfix: 3 units")'])
+    asked = []
+    monkeypatch.setattr(mb, 'askyesno', lambda *a, **k: (asked.append(a), True)[1])
+    w.unsaved = lambda: [7]
+    w.start()
+    assert asked and 'Page 7 has unsaved changes' in asked[0][1]
+    infos = []
+    monkeypatch.setattr(mb, 'showinfo', lambda *a, **k: infos.append(a))
+    app.run_pipeline()                                             # a running window is not replaced
+    assert app.run_window is w and infos and 'in progress' in infos[0][0]
+    t0 = time.time()
+    while not done and time.time() - t0 < 20:
+        app.update()
+        time.sleep(0.02)
+    assert done and 'ocrfix: 3 units' in w.log.get('1.0', 'end') and 'finished' in w.state.cget('text')
+
+
+def test_rerun_ocr_correction_reports_switched_off(app, monkeypatch):
+    import tkinter.messagebox as mb
+    errors = []
+    monkeypatch.setattr(mb, 'showerror', lambda *a, **k: errors.append(a))
+    app.rerun_ocrfix()
+    w = app.run_window
+    w.v['ocrfix'].set('off')
+    w.start()
+    assert errors and 'switched off' in errors[0][1] and w.run is None
+    app.project.params['ocrfix'] = 'strict'                      # leave the project as the other tests expect it
+    app.project.save()
+
+
 def test_run_window_rejects_bad_parameters(app, monkeypatch):
     import tkinter.messagebox as mb
     errors = []

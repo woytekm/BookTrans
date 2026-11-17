@@ -251,6 +251,10 @@ the marks are drawn over the deskewed page PNG the pipeline made, whose pixels a
 
 **Also 2026-11-17: dark theme** (`gui_widgets.apply_dark_theme`, the single palette at the top of `gui_widgets.py`; do not hard-code colours elsewhere, a test fails if you do) and **zoom** in the correction window (buttons, Ctrl/Cmd + wheel, drag, scroll bars; `set_zoom`, `zoom_by`, `zoom_fit`).
 
+**Also 2026-11-17 (late): Re-run OCR correction** (header button, Project menu, Cmd/Ctrl+Shift+O): runs only `ocrfix.py` with the saved
+edits and decisions, so a Save reaches `document.corrected.json` (the file `translate.py` reads) in seconds. And `--resume` now works for a
+project whose input folder holds a single TIFF (before, the wrapper silently redid stages 1-4 and deleted the result folder).
+
 **Also 2026-11-17 (evening): stage C editor and the edit part of D.** The correction window has Prev/Next (PageUp/PageDown), the editable
 review JSON with Save/Revert (`unit_edits.validate_review`, `CorrectionWindow.save`), click a mark to put the cursor on its word
 (`locate`), right-click decisions on flags (`menu_for`, `decide`, `accept_page`; stored by `ocr_decisions.py` in `review/ocr_decisions.json`, applied by `ocrfix.py run --decisions` on the next `--resume` run; `MainWindow.update_decisions`), a find box over the editor text (`find_next`, `_collect`; Cmd/Ctrl+F), unsaved-changes guards. Edits live in `review/unit_edits.json` (`unit_edits.py`: hash of `text_raw`, stale handling,
@@ -259,8 +263,9 @@ review JSON with Save/Revert (`unit_edits.validate_review`, `CorrectionWindow.sa
 into the file `translate.py` reads: Run pipeline with `--resume` (stage 4 onwards, includes ocrfix). Not yet tried on a real book.
 
 **Next** (`GUI.md` sections 6, 8, 10), suggested order:
-1. A "re-run OCR correction" button (runs `ocrfix.py run <document.json> --edits <file>` in the Run window's log) instead of a
-   whole `--resume`; stale edits (`MainWindow.stale_edits`) are named in the status line after loading, but there is no way yet to look at or re-attach them.
+1. ~~A "re-run OCR correction" button~~ **done 2026-11-17** (*Re-run OCR correction…* next to *Run pipeline…*, Cmd/Ctrl+Shift+O: stage 5
+   alone with the saved edits and decisions, `project.ocrfix_command`, the run window in mode `ocrfix`). Still open: stale edits
+   (`MainWindow.stale_edits`) are named in the status line after loading, but there is no way yet to look at or re-attach them.
 2. Mark list next to the image, next/previous mark, keyboard shortcuts for the decisions (they exist only as right-click and menu today).
    Decisions do not need a backup of `ocr_review.json` any more: they live in `review/ocr_decisions.json`.
 3. In an edited unit, the words that differ from `text_ocrfix` get the `human` class (today only its flags turn green).
@@ -271,7 +276,8 @@ into the file `translate.py` reads: Run pipeline with `--resume` (stage 4 onward
   test suite (thread dump with `pytest -o faulthandler_timeout=5` showed `Variable.__del__` / `PhotoImage.__del__` in the worker). `MainWindow`
   disables the collector and collects from the main loop; images are `SafePhoto`. See `GUI.md` section 11.
 - `ImageTk.PhotoImage(img)` without `master=` binds to tkinter's default root, which may be a destroyed one (`pyimage6 doesn't exist`).
-- `booktrans.py` deletes its result folder before a full run, and the single-TIFF path (`process`) *always* does (it has no `--resume`).
+- `booktrans.py` deletes its result folder before a full run. Until 2026-11-17 the single-TIFF path (`process`) *always* did, ignoring `--resume`
+  (and the GUI showed no warning); it now honours `--resume` like a book (stages 1-3 kept when `stages/s3` is complete).
   Hence `review/` is outside `pipeline/` (ADR-016); `ocr_review.json` inside the book folder is still at risk (stage E backs it up).
 - Unit ids (`u0001` ...) are renumbered on every run; a human edit must be keyed by id *and* a hash of `text_raw` (`GUI.md` section 6).
 - An `ocr_corrections[].offset` for `abbrev_space` is the *end* of the abbreviation (`B.` in `B.in`), a zero-length insertion; every

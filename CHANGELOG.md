@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — gui: re-run OCR correction; --resume for a single TIFF
+
+- **Re-run OCR correction…** (button next to *Run pipeline…*, Project menu, `Cmd/Ctrl+Shift+O`): runs only stage 5, `ocrfix.py run <book>/document.json` with the project's OCR-correction mode and `--edits review/unit_edits.json --decisions review/ocr_decisions.json` (`project.ocrfix_command`), in the run window (mode `ocrfix`: live log, Stop, the page list reloads at the end). Saved edits and decisions reach `document.corrected.json`, the file `translate.py` reads, in seconds instead of a stage-4-onwards pipeline run. Errors are named (no `document.json` yet, OCR correction switched off).
+- Both run modes ask before starting when a correction window has unsaved changes (they are not in `review/` yet, so the run would not see them). Only one run window per project: a running pipeline or correction is never replaced, an idle window of the other mode is.
+- Fix: **`booktrans.py --resume` with a single TIFF** (a project whose input folder holds one TIFF) was ignored: the single-file path deleted the result folder and redid stages 1-4, and the GUI showed no warning because `--resume` was ticked. `process()` now keeps stages 1-3 when `stages/s3` is complete and redoes stage 4, `document.json` and stage 5, as for a book.
+- Tests: 5 new (212 with the OCR dictionaries fetched).
+
 ## Unreleased — translation through Claude Code
 
 - **`translate.py --provider claude-code`**: translates through the Claude Code CLI with your Claude subscription (no API key): one headless call per unit (`claude -p --output-format json --model opus --system-prompt … --tools "" --strict-mcp-config --no-session-persistence`, prompt on stdin, in an empty temporary folder). Same prompt, glossary, checks, retries and cache as the other providers. `--model` takes an alias (`opus`, the default, or `sonnet`) or a full id; `--claude-bin` (default `$CLAUDE_BIN`, `claude` on PATH, `~/.local/bin/claude`); `--claude-args`; `ANTHROPIC_API_KEY` is removed from the CLI's environment so the subscription is used (`--claude-use-api-key` keeps it).

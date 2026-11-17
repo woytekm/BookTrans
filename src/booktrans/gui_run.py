@@ -1,4 +1,7 @@
-"""Run window: sets the pipeline parameters, starts ``booktrans.py`` as a subprocess and shows its output live."""
+"""Run window: sets the pipeline parameters, starts ``booktrans.py`` as a subprocess and shows its output live.
+
+Mode ``ocrfix`` runs only stage 5 (``ocrfix.py run``, ``project.ocrfix_command``): the saved edits and decisions of the
+GUI go into ``document.corrected.json`` in seconds, without redoing stage 4."""
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -8,15 +11,19 @@ from project import LAYOUTS, OCRFIX_MODES, PipelineRun, ProjectError, check_para
 
 
 class RunWindow(tk.Toplevel):
-    """One window per project.  ``on_done()`` is called when a run ends (the main window reloads the result)."""
+    """One window per project.  ``on_done()`` is called when a run ends (the main window reloads the result).
+    ``mode``: ``pipeline`` (booktrans.py) or ``ocrfix`` (stage 5 only).  ``unsaved()`` returns the pages whose
+    correction window has unsaved changes: they are not in ``review/`` yet, so the run would not see them."""
 
-    def __init__(self, master, project, on_done=None):
+    def __init__(self, master, project, on_done=None, mode='pipeline', unsaved=None):
         super().__init__(master)
         self.project = project
         self.on_done = on_done
+        self.mode = mode
+        self.unsaved = unsaved or (lambda: [])
         self.run = None
         self.started = 0.0
-        self.title('Run pipeline: %s' % project.name)
+        self.title(('Re-run OCR correction: %s' if mode == 'ocrfix' else 'Run pipeline: %s') % project.name)
         self.geometry('900x640')
         p = project.params
         self.v = {'lang': tk.StringVar(value=p['lang']), 'layout': tk.StringVar(value=p['layout']),
@@ -34,6 +41,8 @@ class RunWindow(tk.Toplevel):
                  ('Scale', ttk.Entry(g, textvariable=self.v['scale'], width=7)),
                  ('OCR scale', ttk.Entry(g, textvariable=self.v['ocr_scale'], width=7)),
                  ('OCR correction', ttk.Combobox(g, textvariable=self.v['ocrfix'], values=OCRFIX_MODES, state='readonly', width=10))]
+        if mode == 'ocrfix':                     # only what stage 5 uses
+            cells = cells[-1:]
         for i, (label, w) in enumerate(cells):
             ttk.Label(g, text=label).grid(row=0, column=i, sticky='w', padx=(0, 10))
             w.grid(row=1, column=i, sticky='w', padx=(0, 10), pady=(0, 4))
@@ -41,10 +50,16 @@ class RunWindow(tk.Toplevel):
         c = ttk.Checkbutton(g, text='suggest OCR fixes', variable=self.v['ocr_suggest'])
         c.grid(row=1, column=len(cells), sticky='w')
         self.controls.append(c)
-        r = ttk.Checkbutton(f, text='--resume: keep finished spreads (stages 1-3), redo stage 4 onwards', variable=self.resume,
-                            command=self._warn)
-        r.pack(anchor='w', pady=(4, 0))
-        self.controls.append(r)
+        if mode == 'ocrfix':
+            ttk.Label(f, text='Runs only the OCR correction (stage 5) on %s, with your saved edits and decisions '
+                              '-> document.corrected.json (the file translate.py reads). Stages 1-4 are not touched.'
+                              % (project.book_dir() / 'document.json'), foreground=MUTED, wraplength=860,
+                      justify='left').pack(anchor='w', pady=(4, 0))
+        else:
+            r = ttk.Checkbutton(f, text='--resume: keep finished spreads (stages 1-3), redo stage 4 onwards', variable=self.resume,
+                                command=self._warn)
+            r.pack(anchor='w', pady=(4, 0))
+            self.controls.append(r)
         self.warn = ttk.Label(f, text='', foreground=STATUS_COLORS['warn'], wraplength=860, justify='left')
         self.warn.pack(anchor='w', pady=(2, 6))
 
@@ -83,7 +98,7 @@ class RunWindow(tk.Toplevel):
 
     def _warn(self):
         b = self.project.book_dir()
-        if b.exists() and not self.resume.get():
+        if self.mode == 'pipeline' and b.exists() and not self.resume.get():
             self.warn.configure(text='Without --resume the pipeline first DELETES %s, including its ocr_review.json. '
                                      'Your own work in %s is not touched.' % (b, self.project.review_dir))
         else:
@@ -114,19 +129,34 @@ class RunWindow(tk.Toplevel):
         except ProjectError as e:
             messagebox.showerror('Parameters', str(e), parent=self)
             return
+        dirty = self.unsaved()
+        if dirty and not messagebox.askyesno('Unsaved changes',
+                                             'Page %s has unsaved changes in its correction window. They are not saved yet, so '
+                                             'this run will not include them.\n\nRun anyway?' % ', '.join(str(n) for n in dirty),
+                                             icon='warning', parent=self):
+            return
         b = self.project.book_dir()
-        if b.exists() and not self.resume.get():
+        if self.mode == 'pipeline' and b.exists() and not self.resume.get():
             if not messagebox.askyesno('Delete the previous result?',
                                        'A run without --resume deletes\n%s\nincluding its ocr_review.json.\n\nContinue?' % b,
                                        icon='warning', parent=self):
                 return
         self.project.data['params'] = params
         self.project.save()
-        cmd = self.project.command(self.resume.get())
+        if self.mode == 'ocrfix':
+            try:
+                cmd = self.project.ocrfix_command()
+            except ProjectError as e:
+                messagebox.showerror('OCR correction', str(e), parent=self)
+                return
+            line = self.project.ocrfix_command_line()
+        else:
+            cmd = self.project.command(self.resume.get())
+            line = self.project.command_line(self.resume.get())
         self.log.configure(state='normal')
         self.log.delete('1.0', 'end')
         self.log.configure(state='disabled')
-        self._append(['$ ' + self.project.command_line(self.resume.get()), ''])
+        self._append(['$ ' + line, ''])
         try:
             self.run = PipelineRun(cmd)
         except OSError as e:

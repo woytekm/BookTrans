@@ -102,6 +102,7 @@ class MainWindow(tk.Tk):
         m.add_cascade(label='Project', menu=p)
         p.add_command(label='Check environment…', accelerator='%s+E' % MOD_LABEL, command=self.check_env)
         p.add_command(label='Run pipeline…', accelerator='%s+Shift+R' % MOD_LABEL, command=self.run_pipeline)
+        p.add_command(label='Re-run OCR correction…', accelerator='%s+Shift+O' % MOD_LABEL, command=self.rerun_ocrfix)
         p.add_command(label='Pipeline command…', command=self.show_command)
         p.add_command(label='Reload from disk', accelerator='%s+R' % MOD_LABEL, command=self.reload)
         p.add_command(label='Show project folder', command=lambda: self.project and reveal_in_file_manager(self.project.root))
@@ -112,6 +113,7 @@ class MainWindow(tk.Tk):
         g.add_command(label='Find in JSON', accelerator='%s+F' % MOD_LABEL, command=lambda: (self.find_entry.focus_set(), self.find_entry.selection_range(0, 'end')))
         self.page_menu = g
         self.bind_all('<%s-R>' % MOD, lambda _e: self.run_pipeline())
+        self.bind_all('<%s-O>' % MOD, lambda _e: self.rerun_ocrfix())
         for key, fn in (('n', self.new_project), ('o', self.open_dialog), ('e', self.check_env), ('r', self.reload),
                         ('f', lambda: (self.find_entry.focus_set(), self.find_entry.selection_range(0, 'end')))):
             self.bind_all('<%s-%s>' % (MOD, key), lambda _e, fn=fn: fn())
@@ -128,8 +130,12 @@ class MainWindow(tk.Tk):
         self.path_lbl = ttk.Label(left, text='', foreground=MUTED)
         self.path_lbl.pack(anchor='w')
         self.info_lbl = ttk.Label(left, text='', wraplength=900, justify='left')
-        self.run_btn = ttk.Button(left, text='Run pipeline\u2026', command=self.run_pipeline)
-        self.run_btn.pack(anchor='w', pady=(6, 0))
+        btns = ttk.Frame(left)
+        btns.pack(anchor='w', pady=(6, 0))
+        self.run_btn = ttk.Button(btns, text='Run pipeline\u2026', command=self.run_pipeline)
+        self.run_btn.pack(side='left')
+        self.ocrfix_btn = ttk.Button(btns, text='Re-run OCR correction\u2026', command=self.rerun_ocrfix)
+        self.ocrfix_btn.pack(side='left', padx=(6, 0))
         self.info_lbl.pack(anchor='w', pady=(4, 0))
         left.bind('<Configure>', lambda e: self.info_lbl.configure(wraplength=max(300, e.width - 10)))
         Legend(head, short=True).pack(side='right', anchor='ne')
@@ -211,6 +217,7 @@ class MainWindow(tk.Tk):
             self.page_menu.entryconfigure(i, state=on)
         self.open_btn.configure(state='normal' if self.project and self.index else 'disabled')
         self.run_btn.configure(state=on)
+        self.ocrfix_btn.configure(state=on)
 
     def _recent(self):
         try:
@@ -509,14 +516,29 @@ class MainWindow(tk.Tk):
         EnvWindow(self, project=self.project)
 
     def run_pipeline(self):
+        self._open_run_window('pipeline')
+
+    def rerun_ocrfix(self):
+        """Stage 5 only (``ocrfix.py run`` with the saved edits and decisions) -> a fresh ``document.corrected.json``."""
+        self._open_run_window('ocrfix')
+
+    def _open_run_window(self, mode):
+        """One run window per project: a pipeline run and an OCR-correction run both write document.corrected.json, so
+        they never run at the same time.  A window of the other mode is replaced unless it is running."""
         if not self.project:
             return
         w = getattr(self, 'run_window', None)
         if w is not None and w.winfo_exists():
-            w.deiconify()
-            w.lift()
-            return
-        self.run_window = RunWindow(self, self.project, on_done=self._pipeline_done)
+            if w.mode == mode or (w.run is not None and w.run.running):
+                if w.mode != mode:
+                    messagebox.showinfo('A run is in progress', 'Wait until the running %s has finished.'
+                                        % ('pipeline' if w.mode == 'pipeline' else 'OCR correction'), parent=w)
+                w.deiconify()
+                w.lift()
+                return
+            w.destroy()
+        self.run_window = RunWindow(self, self.project, on_done=self._pipeline_done, mode=mode,
+                                    unsaved=lambda: sorted(n for n, cw in self.windows.items() if cw.dirty))
 
     def _pipeline_done(self):
         self._header()
