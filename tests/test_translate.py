@@ -1,4 +1,6 @@
 import json
+
+import pytest
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -161,3 +163,111 @@ def test_overload_is_retried_and_errors_carry_the_message(tmp_path, monkeypatch)
             T.post_json(base + '/bad', {}, {}, 5)
     finally:
         srv.shutdown()
+
+
+# ---------------------------------------------------------------- claude-code provider
+FAKE_CLAUDE = r'''#!/usr/bin/env python3
+import json, os, sys
+prompt = sys.stdin.read()
+log = os.environ['FAKE_CLAUDE_LOG']
+with open(log, 'a', encoding='utf-8') as f:
+    f.write(json.dumps({'argv': sys.argv[1:], 'prompt': prompt, 'cwd': os.getcwd(),
+                        'has_key': 'ANTHROPIC_API_KEY' in os.environ}) + '\n')
+mode = os.environ.get('FAKE_CLAUDE_MODE', 'ok')
+if mode == 'limit':
+    print(json.dumps({'type': 'result', 'subtype': 'success', 'is_error': True,
+                      'result': 'Claude usage limit reached. Your limit will reset at 3am.', 'api_error_status': 429}))
+    sys.exit(1)
+print(json.dumps({'type': 'result', 'subtype': 'success', 'is_error': False,
+                  'result': 'Portal w Byczynie jest prosty. Ma 3 stopnie.', 'total_cost_usd': 0.0123,
+                  'usage': {'input_tokens': 900, 'output_tokens': 30, 'cache_read_input_tokens': 100}}))
+'''
+
+
+def _fake_claude(tmp_path, monkeypatch, mode='ok'):
+    exe = tmp_path / 'claude'
+    exe.write_text(FAKE_CLAUDE, encoding='utf-8')
+    exe.chmod(0o755)
+    monkeypatch.setenv('FAKE_CLAUDE_LOG', str(tmp_path / 'calls.jsonl'))
+    monkeypatch.setenv('FAKE_CLAUDE_MODE', mode)
+    return exe
+
+
+def _calls(tmp_path):
+    return [json.loads(l) for l in (tmp_path / 'calls.jsonl').read_text(encoding='utf-8').splitlines()]
+
+
+def test_claude_code_provider_runs_the_cli_headless(tmp_path, monkeypatch):
+    exe = _fake_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-should-not-be-passed')
+    a = _args(tmp_path, only=['u0002'], provider='claude-code', endpoint=str(exe), model='opus')
+    res = T.run(_doc(), a)
+    assert res['units']['u0002']['pl'].startswith('Portal w Byczynie')
+    (c,) = _calls(tmp_path)
+    argv = c['argv']
+    assert argv[:2] == ['-p', '--output-format'] and argv[argv.index('--output-format') + 1] == 'json'
+    assert argv[argv.index('--model') + 1] == 'opus'
+    assert argv[argv.index('--tools') + 1] == '' and '--no-session-persistence' in argv and '--bare' not in argv
+    assert 'Pitschen = Byczyna' in c['prompt'] and 'Text to translate' in c['prompt']     # the whole prompt on stdin
+    assert not c['has_key']                                                              # subscription, not the API
+    assert Path(c['cwd']).name.startswith('booktrans-claude-') and not Path(c['cwd']).exists()   # empty, removed temp dir
+    assert res['usage']['input'] == 900 and res['usage']['output'] == 30 and res['usage']['cache_read'] == 100
+    assert abs(res['usage']['reported_cost'] - 0.0123) < 1e-9
+
+
+def test_claude_code_keeps_the_api_key_only_when_asked(tmp_path, monkeypatch):
+    exe = _fake_claude(tmp_path, monkeypatch)
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-x')
+    T.run(_doc(), _args(tmp_path, only=['u0002'], provider='claude-code', endpoint=str(exe), model='opus',
+                        claude_use_api_key=True, claude_args=['--verbose']))
+    (c,) = _calls(tmp_path)
+    assert c['has_key'] and c['argv'][-1] == '--verbose'
+
+
+def test_claude_code_usage_limit_stops_and_keeps_the_cache(tmp_path, monkeypatch):
+    exe = _fake_claude(tmp_path, monkeypatch)
+    a = _args(tmp_path, only=['u0002', 'u0003'], provider='claude-code', endpoint=str(exe), model='opus', retries=0)
+    a.only = ['u0002']
+    T.run(_doc(), a)                                                  # u0002 cached
+    monkeypatch.setenv('FAKE_CLAUDE_MODE', 'limit')
+    a.only = ['u0002', 'u0003']
+    with pytest.raises(SystemExit) as e:
+        T.run(_doc(), a)
+    assert 'usage limit reached at u0003' in str(e.value) and 'run the same command again' in str(e.value)
+    out = json.loads(a.output.read_text(encoding='utf-8'))
+    assert out['units']['u0002']['pl'].startswith('Portal w Byczynie')   # the finished unit survives in the output
+
+
+def _result(**kw):
+    d = {'type': 'result', 'subtype': 'success', 'is_error': False, 'result': 'ok', 'usage': {}}
+    d.update(kw)
+    return SimpleNamespace(stdout=json.dumps(d), stderr='', returncode=1 if d['is_error'] else 0)
+
+
+def test_claude_code_errors_are_classified(monkeypatch):
+    waits = []
+    # the real CLI (2.1.326) without a login: is_error with subtype "success" and a "network issue" wording
+    auth = _result(is_error=True, result='Authentication error · This may be a temporary network issue, please try again',
+                   api_error_status=None)
+    with pytest.raises(RuntimeError, match='not logged in'):
+        T.chat_claude_code('claude', 'opus', 'x', 5, run=lambda *a, **k: auth, sleep=waits.append)
+    assert waits == []                                                # no retry for a missing login
+    seq = iter([_result(is_error=True, result='API Error: 529 overloaded', api_error_status=529), _result(result='Tekst')])
+    assert T.chat_claude_code('claude', 'opus', 'x', 5, run=lambda *a, **k: next(seq), sleep=waits.append) == 'Tekst'
+    assert waits == [10]
+    with pytest.raises(T.UsageLimit):
+        T.chat_claude_code('claude', 'opus', 'x', 5, run=lambda *a, **k: _result(is_error=True, result='x', api_error_status=429))
+    empty = SimpleNamespace(stdout='', stderr='Invalid API key · Please run /login', returncode=1)
+    with pytest.raises(RuntimeError, match='not logged in'):
+        T.chat_claude_code('claude', 'opus', 'x', 5, run=lambda *a, **k: empty)
+    def slow(*a, **k):
+        raise T.subprocess.TimeoutExpired('claude', 5)
+    with pytest.raises(RuntimeError, match='within 5s'):
+        T.chat_claude_code('claude', 'opus', 'x', 5, run=slow)
+
+
+def test_find_claude(tmp_path, monkeypatch):
+    exe = tmp_path / 'myclaude'; exe.write_text('#!/bin/sh\n'); exe.chmod(0o755)
+    assert T.find_claude(str(exe)) == str(exe)
+    monkeypatch.setenv('CLAUDE_BIN', str(exe))
+    assert T.find_claude() == str(exe)

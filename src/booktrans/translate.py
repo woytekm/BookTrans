@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Translate the units of a ``document.json`` through an OpenAI-compatible endpoint (LM Studio).
+"""Translate the units of a ``document.json`` through an OpenAI-compatible endpoint (LM Studio), the
+Anthropic API or the Claude Code CLI (``--provider claude-code``: your Claude subscription, no API key).
 
     python translate.py output/book/document.json -o translations.json \\
         [--endpoint http://localhost:1234/v1] [--model NAME] [--glossary FILE ...] [--dry-run]
+    python translate.py output/book/document.json --provider claude-code [--model opus|sonnet]
 
 For every unit with ``translation_status: translate``:
 
@@ -25,7 +27,10 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -88,7 +93,7 @@ def clean(answer):
 
 
 # ---------------------------------------------------------------- model
-USAGE = {'calls': 0, 'input': 0, 'output': 0, 'cache_read': 0, 'cache_write': 0, 'seconds': 0.0}
+USAGE = {'calls': 0, 'input': 0, 'output': 0, 'cache_read': 0, 'cache_write': 0, 'seconds': 0.0, 'reported_cost': 0.0}
 
 
 def post_json(url, headers, body, timeout, tries=4):
@@ -167,7 +172,123 @@ def chat_anthropic(endpoint, model, prompt, temperature, max_tokens, timeout, ap
     return content
 
 
-def chat(endpoint, model, prompt, temperature, max_tokens, timeout, api_key=None, extra=None, provider='openai'):
+# ---------------------------------------------------------------- Claude Code CLI
+CLAUDE_SYSTEM = ('You are a translator working inside a batch script. You have no tools and need none. '
+                 'Reply with exactly what the user message asks for and nothing else: no greeting, no comments, '
+                 'no Markdown, no questions.')
+_RETRYABLE = re.compile(r'overloaded|\b529\b|\b50[0234]\b|internal server error|api error: 5|timed? ?out|econnreset|network', re.I)
+_LIMIT = re.compile(r'usage limit|limit reached|rate.?limit|\b429\b|quota', re.I)
+_AUTH = re.compile(r'authenticat|not logged in|/login|invalid api key|oauth|credential|\b401\b|\b403\b', re.I)
+
+
+def classify_claude_error(msg, status=None):
+    """'auth' | 'limit' | 'retry' | 'fatal' for an error text of the CLI (and its ``api_error_status``).  Order matters:
+    the CLI words an authentication failure as "... may be a temporary network issue", which must not be retried."""
+    if status in (401, 403) or _AUTH.search(msg):
+        return 'auth'
+    if status == 429 or _LIMIT.search(msg):
+        return 'limit'
+    if (isinstance(status, int) and status >= 500) or _RETRYABLE.search(msg):
+        return 'retry'
+    return 'fatal'
+
+
+class UsageLimit(RuntimeError):
+    """The subscription's usage limit was hit: stop the run (the cache keeps what is done)."""
+
+
+def find_claude(explicit=None):
+    """The Claude Code program: --claude-bin, $CLAUDE_BIN, ``claude`` on PATH, ~/.local/bin/claude (the native installer)."""
+    for c in (explicit, os.environ.get('CLAUDE_BIN'), shutil.which('claude'), str(Path.home() / '.local' / 'bin' / 'claude')):
+        if c and Path(c).expanduser().is_file():
+            return str(Path(c).expanduser())
+    return None
+
+
+def claude_command(claude_bin, model, extra_args=None):
+    """Headless one-shot call: the prompt comes on stdin, one JSON result object on stdout.  The system prompt replaces
+    Claude Code's own (coding assistant), ``--tools ""`` offers no tool, ``--strict-mcp-config`` skips your MCP servers and
+    ``--no-session-persistence`` keeps thousands of one-shot sessions out of ~/.claude.  (Not ``--bare``: it accepts only
+    an API key, never the subscription login.)  Flags checked against Claude Code 2.1.326."""
+    cmd = [claude_bin, '-p', '--output-format', 'json', '--model', model, '--system-prompt', CLAUDE_SYSTEM,
+           '--tools', '', '--strict-mcp-config', '--no-session-persistence']
+    return cmd + list(extra_args or [])
+
+
+def claude_env(keep_api_key=False):
+    """Environment for the CLI.  ANTHROPIC_API_KEY would make Claude Code bill the API instead of the subscription,
+    so it is removed unless --claude-use-api-key is given."""
+    env = dict(os.environ)
+    if not keep_api_key:
+        env.pop('ANTHROPIC_API_KEY', None)
+    return env
+
+
+def parse_claude_result(stdout):
+    """The JSON object ``claude -p --output-format json`` prints (the last JSON line, in case anything precedes it)."""
+    for line in reversed([ln for ln in stdout.strip().splitlines() if ln.strip()]):
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(data, list):                     # some versions print the whole message list
+            data = next((d for d in reversed(data) if isinstance(d, dict) and d.get('type') == 'result'), {})
+        if isinstance(data, dict):
+            return data
+    try:
+        return json.loads(stdout)
+    except ValueError:
+        raise RuntimeError('Claude Code printed no JSON result: %s' % stdout.strip()[:300])
+
+
+def chat_claude_code(claude_bin, model, prompt, timeout, extra_args=None, keep_api_key=False, tries=4, run=subprocess.run,
+                     sleep=None):
+    sleep = sleep or time.sleep
+    cmd = claude_command(claude_bin, model, extra_args)
+    for k in range(tries):
+        t0 = time.time()
+        try:
+            with tempfile.TemporaryDirectory(prefix='booktrans-claude-') as cwd:   # an empty folder: no project files, no CLAUDE.md
+                p = run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout, cwd=cwd, env=claude_env(keep_api_key))
+        except subprocess.TimeoutExpired:
+            raise RuntimeError('Claude Code did not answer within %.0fs (--timeout)' % timeout)
+        dt = time.time() - t0
+        out, err = p.stdout or '', (p.stderr or '').strip()
+        try:
+            data = parse_claude_result(out)
+        except RuntimeError:
+            if out.strip():
+                raise
+            data = {'is_error': True, 'result': err or 'exit code %d, no output' % p.returncode}
+        text = data.get('result') or ''
+        if data.get('is_error') or data.get('subtype') not in (None, 'success'):
+            msg = (text or data.get('subtype') or err or 'error').strip()
+            kind = classify_claude_error(msg, data.get('api_error_status'))
+            if kind == 'auth':
+                raise RuntimeError('Claude Code is not logged in (%s). Run "claude" once in a terminal, use /login with your '
+                                   'Claude account, then run this again.' % msg[:200])
+            if kind == 'limit':
+                raise UsageLimit(msg[:300])
+            if kind == 'retry' and k < tries - 1:
+                log.info('translate', '  Claude Code: %s; retrying in %ds' % (msg[:120], 10 * 2 ** k)); sleep(10 * 2 ** k); continue
+            raise RuntimeError('Claude Code: %s' % msg[:300])
+        use = data.get('usage') or {}
+        inp, outt = use.get('input_tokens'), use.get('output_tokens')
+        _note_usage(dt, inp, outt, use.get('cache_read_input_tokens'), use.get('cache_creation_input_tokens'))
+        cost = data.get('total_cost_usd', data.get('cost_usd'))
+        if isinstance(cost, (int, float)):
+            USAGE['reported_cost'] += cost
+        log.info('translate', '  model call (claude-code %s): %.1fs, input %s tok (+%s cached), output %s tok%s' % (
+            model, dt, inp if inp is not None else '?', use.get('cache_read_input_tokens') or 0,
+            outt if outt is not None else '?', (', notional cost %.4f USD' % cost) if isinstance(cost, (int, float)) else ''))
+        return text
+    raise RuntimeError('Claude Code: giving up after %d attempts' % tries)
+
+
+def chat(endpoint, model, prompt, temperature, max_tokens, timeout, api_key=None, extra=None, provider='openai', a=None):
+    if provider == 'claude-code':          # temperature / max_tokens: the CLI has no such options
+        return chat_claude_code(endpoint, model, prompt, timeout, getattr(a, 'claude_args', None),
+                                getattr(a, 'claude_use_api_key', False))
     fn = chat_anthropic if provider == 'anthropic' else chat_openai
     return fn(endpoint, model, prompt, temperature, max_tokens, timeout, api_key, extra)
 
@@ -238,6 +359,9 @@ def report_usage(a):
     """Token totals of this run (cached units cost nothing); a cost when --price-in/--price-out are given."""
     u = dict(USAGE)
     u['seconds'] = round(u['seconds'], 1)
+    u['reported_cost'] = round(u['reported_cost'], 4)
+    if not u['reported_cost']:
+        del u['reported_cost']
     pin, pout = getattr(a, 'price_in', None), getattr(a, 'price_out', None)
     if pin is not None and pout is not None:
         u['cost'] = round(u['input'] * pin / 1e6 + u['output'] * pout / 1e6 + u['cache_read'] * pin * 0.1 / 1e6
@@ -246,6 +370,9 @@ def report_usage(a):
         u['calls'], u['input'], u['output'],
         (' (cache: %d read, %d written)' % (u['cache_read'], u['cache_write'])) if u['cache_read'] or u['cache_write'] else '',
         (', cost %.4f' % u['cost']) if 'cost' in u else '', u['seconds']))
+    if 'reported_cost' in u:
+        log.info('translate', 'Claude Code reports %.4f USD for this run: the API price of the tokens; on a Pro/Max subscription '
+                              'it is counted against the plan\'s usage limits, not billed' % u['reported_cost'])
     return u
 
 
@@ -266,9 +393,9 @@ def run(doc, a, call=None):
         extra.setdefault('chat_template_kwargs', {'enable_thinking': False})
         extra.setdefault('reasoning_effort', 'none')
     provider = getattr(a, 'provider', 'openai')
-    call = call or (lambda prompt: chat(a.endpoint, a.model, prompt, a.temperature, a.max_tokens, a.timeout, a.api_key, extra, provider))
+    call = call or (lambda prompt: chat(a.endpoint, a.model, prompt, a.temperature, a.max_tokens, a.timeout, a.api_key, extra, provider, a))
     for k in USAGE:
-        USAGE[k] = 0 if k != 'seconds' else 0.0
+        USAGE[k] = 0.0 if k in ('seconds', 'reported_cost') else 0
     units = collect(doc)
     todo = [u for u in units if u[4] == 'translate' and (not a.only or u[0] in a.only)]
     skipped = [u[0] for u in units if u[4] != 'translate']
@@ -301,6 +428,11 @@ def run(doc, a, call=None):
             for attempt in range(a.retries + 1):
                 try:
                     answer = clean(call(build_prompt(base, rules, block, role, upper, text, ctx, remark)))
+                except UsageLimit as e:
+                    a.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+                    raise SystemExit('usage limit reached at %s (%d of %d units done this run): %s\n'
+                                     'Everything translated so far is cached; run the same command again when the limit resets.'
+                                     % (uid, n - 1, len(todo), e))
                 except (urllib.error.URLError, OSError, KeyError, ValueError, RuntimeError) as e:
                     raise SystemExit('request to %s failed: %s' % (a.endpoint, e))
                 flags, remark = problems(text, answer, hits)
@@ -337,11 +469,17 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('document', type=Path, help='document.json')
     ap.add_argument('-o', '--output', type=Path, default=None, help='translations JSON (default: next to document.json)')
-    ap.add_argument('--provider', choices=['openai', 'anthropic'], default='openai',
-                    help='openai: OpenAI-compatible endpoint such as LM Studio (default); anthropic: Anthropic Messages API (key in $ANTHROPIC_API_KEY)')
+    ap.add_argument('--provider', choices=['openai', 'anthropic', 'claude-code'], default='openai',
+                    help='openai: OpenAI-compatible endpoint such as LM Studio (default); anthropic: Anthropic Messages API (key in $ANTHROPIC_API_KEY); '
+                         'claude-code: the Claude Code CLI with your Claude subscription (claude -p, no API key)')
+    ap.add_argument('--claude-bin', default=None, help='claude-code: the claude program (default: $CLAUDE_BIN, claude on PATH, ~/.local/bin/claude)')
+    ap.add_argument('--claude-args', nargs='*', default=None, help='claude-code: extra arguments for claude, e.g. --claude-args=--verbose')
+    ap.add_argument('--claude-use-api-key', action='store_true',
+                    help='claude-code: keep $ANTHROPIC_API_KEY in the environment (Claude Code then bills the API; by default it is removed so the subscription is used)')
     ap.add_argument('--endpoint', default=None,
                     help='base URL (openai: LM Studio http://localhost:1234/v1, or $LMSTUDIO_ENDPOINT; anthropic: https://api.anthropic.com)')
-    ap.add_argument('--model', default=None, help="model id as LM Studio lists it (default: the first model the endpoint reports)")
+    ap.add_argument('--model', default=None, help="model id as LM Studio lists it (default: the first model the endpoint reports); "
+                                                    "anthropic: default claude-sonnet-5-5; claude-code: an alias (opus, sonnet) or a full id, default opus")
     ap.add_argument('--api-key', default=None, help='default: $ANTHROPIC_API_KEY (anthropic) or $LMSTUDIO_API_KEY (openai)')
     ap.add_argument('--price-in', type=float, help='price per million input tokens, to report a cost')
     ap.add_argument('--price-out', type=float, help='price per million output tokens')
@@ -364,6 +502,14 @@ def main():
         a.model = a.model or 'claude-sonnet-5-5'
         if not a.api_key and not a.dry_run:
             raise SystemExit('no API key: set ANTHROPIC_API_KEY (create one in the Anthropic Console) or pass --api-key')
+    elif a.provider == 'claude-code':
+        a.model = a.model or 'opus'
+        a.endpoint = find_claude(a.claude_bin)
+        if not a.endpoint and not a.dry_run:
+            raise SystemExit('Claude Code not found: install it, pass --claude-bin PATH or set $CLAUDE_BIN')
+        a.endpoint = a.endpoint or 'claude'
+        if os.environ.get('ANTHROPIC_API_KEY') and not a.claude_use_api_key:
+            log.info('translate', 'ANTHROPIC_API_KEY is set: removed for the claude calls so your subscription is used (--claude-use-api-key keeps it)')
     else:
         a.endpoint = a.endpoint or os.environ.get('LMSTUDIO_ENDPOINT', 'http://localhost:1234/v1')
         a.api_key = a.api_key or os.environ.get('LMSTUDIO_API_KEY')

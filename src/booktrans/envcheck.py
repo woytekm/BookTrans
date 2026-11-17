@@ -51,6 +51,7 @@ FAST_MODEL_MAX = 3 * 1024 * 1024
 
 G_PY, G_MOD, G_OCR, G_FIX, G_RENDER, G_PROJECT = ('Python and GUI', 'Pipeline modules', 'OCR engine',
                                                  'OCR correction (stage 5)', 'Fonts and prompts', 'Project')
+G_TRANS = 'Translation'
 
 
 def _mb(n):
@@ -179,6 +180,23 @@ def check_tesseract(lang='deu', find=find_tesseract, run=run_cmd):
         else:
             out.append(Check(G_OCR, 'language %s' % lg, OK, 'installed', ''))
     return out
+
+
+# ------------------------------------------------------------------ translation engines
+def check_translation(find=None, run=run_cmd):
+    """The Claude Code CLI for ``translate.py --provider claude-code`` (optional: only ``info`` when it is missing).
+    Whether it is logged in is not checked: that needs the network."""
+    if find is None:
+        import translate
+        find = translate.find_claude
+    exe = find()
+    if not exe:
+        return [Check(G_TRANS, 'claude (Claude Code CLI)', INFO, 'not found',
+                      'needed only for translate.py --provider claude-code; or set $CLAUDE_BIN')]
+    rc, text = run([exe, '--version'])
+    ver = text.strip().splitlines()[0] if rc == 0 and text.strip() else 'version unknown'
+    return [Check(G_TRANS, 'claude (Claude Code CLI)', OK if rc == 0 else WARN, '%s  (%s)' % (ver, exe),
+                  '' if rc == 0 else '"%s --version" failed: %s' % (exe, text.strip()[:120]))]
 
 
 # ------------------------------------------------------------------ OCR correction data
@@ -320,6 +338,7 @@ def run_checks(root=ROOT, project=None, params=None, lang=None):
     out += check_dictionaries(root, need_fix)
     out += check_glossary(root)
     out += check_assets(root)
+    out += check_translation()
     if project is not None:
         out += check_project(project)
     return out
