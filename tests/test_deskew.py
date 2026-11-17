@@ -63,3 +63,5 @@ def test_page_without_text_lines_is_left_alone():
     out, info = deskew.deskew_page(blank)
     assert info['angle_deg'] == 0.0 and info['edge_tilt_deg'] == 0.0
     assert np.array_equal(out, blank)
+    # stage1 logs these keys for every page; they must exist on this path too (KeyError 'edge_model' on a sparse page)
+    assert info['edge_model'] == 'none' and info['lines_used'] == 0 and 'full_lines_used' in info

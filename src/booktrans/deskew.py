@@ -100,7 +100,7 @@ def estimate_geometry(gray):
         if abs(sl) <= MAX_ABS_SLOPE:
             slopes.append(sl); weights.append(ww)
             rows.append((x, x + ww, y + hh / 2.0, ww))
-    info = {'lines_used': len(slopes), 'full_lines_used': 0}
+    info = {'lines_used': len(slopes), 'full_lines_used': 0, 'edge_model': 'none'}   # 'none': too few lines, page untouched
     if len(slopes) < MIN_LINES:
         return 0.0, 0.0, info
     order = np.argsort(slopes)
