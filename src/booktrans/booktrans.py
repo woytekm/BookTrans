@@ -49,7 +49,7 @@ def run(cmd):
         raise SystemExit('stage failed (exit %d): %s' % (r.returncode, Path(str(cmd[0])).name))
 
 
-def ocr_correct(out, suggest=False, aggressive=False):
+def ocr_correct(out, suggest=False, aggressive=False, edits=None):
     """Stage 5: offline OCR correction of the units (ocrfix.py) -> document.corrected.json, ocr_corrections.json,
     ocr_review.json next to document.json.  Skipped (with the reason) when its requirements are missing."""
     import importlib.util
@@ -60,7 +60,8 @@ def ocr_correct(out, suggest=False, aggressive=False):
         log.info('wrap', 'OCR correction skipped: dictionaries missing, run "python ocrfix.py fetch" once')
         return False
     log.info('wrap', '=== stage 5: OCR correction (ocrfix.py) ===')
-    run([HERE / 'ocrfix.py', 'run', out / 'document.json'] + ([] if suggest else ['--no-suggest']))
+    run([HERE / 'ocrfix.py', 'run', out / 'document.json'] + ([] if suggest else ['--no-suggest'])
+        + (['--aggressive'] if aggressive else []) + (['--edits', edits] if edits else []))
     return True
 
 
@@ -167,6 +168,7 @@ def main():
                     help='spread: open book split at the gutter (default); page: one whole page; crop: part of a page')
     ap.add_argument('--no-ocrfix', action='store_true', help='skip the OCR correction stage (ocrfix.py)')
     ap.add_argument('--aggressive-ocr-fix', action='store_true', help='OCR correction: change everything that has a candidate, flag only very uncertain words')
+    ap.add_argument('--edits', type=Path, help='OCR correction: unit_edits.json of the GUI (human texts, applied after the automatic correction)')
     ap.add_argument('--ocr-suggest', action='store_true', help='OCR correction: also ask Hunspell for suggestions (slow, 3-8 s per hopeless word)')
     ap.add_argument('--translations', type=Path, help='translations JSON ({"units": {unit_id: {"pl": text}}}); if given, the pages are also rebuilt into <out>/<name>/render/')
     ap.add_argument('--background', choices=['paper', 'scan'], default='paper', help='for --translations: clean paper canvas or the scan with text wiped')
@@ -197,7 +199,7 @@ def main():
             nt = sum(b['kind'] == 'text' for b in p['blocks'])
             log.info('wrap', '%s page %d%s: %d text blocks, %d figures' % (label, p['page'], p['side'], nt, nf))
         log.info('wrap', 'done: %s (%d pages, %d units)' % (out, len(doc['pages']), len(doc['units'])))
-        if not a.no_ocrfix and ocr_correct(out, a.ocr_suggest, a.aggressive_ocr_fix):
+        if not a.no_ocrfix and ocr_correct(out, a.ocr_suggest, a.aggressive_ocr_fix, a.edits):
             log.info('wrap', 'next: python ocrreview.py propose %s  (LLM proposals for the flags), then translate.py on document.corrected.json'
                      % (out / 'ocr_review.json'))
         if a.translations:

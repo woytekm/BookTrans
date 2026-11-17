@@ -1,6 +1,7 @@
 """GUI smoke tests: the windows build, load the demo project and react.  Skipped without tkinter or a display.
 
 Windows are withdrawn right after creation, so running the tests does not flash windows on a desktop."""
+import json
 import time
 
 import pytest
@@ -31,7 +32,7 @@ def pump(app, until=None, timeout=8.0):
             return
         time.sleep(0.01)
     if until is not None:
-        raise AssertionError('timed out waiting for the GUI')
+        raise AssertionError('timed out waiting for the GUI: %s' % getattr(app, 'status_lbl', None) and app.status_lbl.cget('text'))
 
 
 @pytest.fixture(autouse=True)
@@ -358,3 +359,180 @@ def test_zoom_buttons_scale_the_page_and_fit_restores_it(app):
     assert w.info.cget('text')
     w.zoom_fit()
     assert w.zoom is None and w.zoom_lbl.cget('text').endswith('(fit)')
+
+
+# ---------------------------------------------------------------- navigation and the editor
+@pytest.fixture()
+def edit_app(tmp_path):
+    """A private demo project per test: saving writes review/unit_edits.json."""
+    proj = gui_demo.make_demo(tmp_path / 'p')
+    a = gui.MainWindow(str(proj.root))
+    a.withdraw()
+    pump(a, lambda: a.rows)
+    yield a
+    if a.winfo_exists():
+        a.windows.clear()
+        a.quit_app()
+
+
+def _open(a, n):
+    a.tree.selection_set(str(n))
+    pump(a)
+    a.open_correction()
+    w = a.windows[n]
+    w.withdraw()
+    pump(a)
+    return w
+
+
+def _set_text(w, uid, new_text):
+    """Change a unit's "text" in the editor the way a user would (through the JSON)."""
+    d = json.loads(w.editor.get('1.0', 'end-1c'))
+    next(u for u in d['units'] if u['unit_id'] == uid)['text'] = new_text
+    w.editor.delete('1.0', 'end')
+    w.editor.insert('1.0', json.dumps(d, ensure_ascii=False, indent=1))
+    pump(w)
+
+
+def test_prev_next_move_through_the_pages_in_one_window(edit_app):
+    a = edit_app
+    w = _open(a, 1)
+    assert str(w.prev_btn.cget('state')) == 'disabled' and str(w.next_btn.cget('state')) == 'normal'
+    w.go(1)
+    assert w.page_no == 2 and list(a.windows) == [2] and a.windows[2] is w
+    assert w.head.cget('text').startswith('Page 2') and a._selected_page() == 2
+    assert w._orig['page'] == 2 and '"page": 2' in w.editor.get('1.0', 'end-1c')
+    w.go(1)
+    assert w.page_no == 3 and str(w.next_btn.cget('state')) == 'disabled'
+    w.go(1)                                                     # at the end: nothing happens
+    assert w.page_no == 3
+    w.go(-1)
+    w.go(-1)
+    assert w.page_no == 1 and str(w.prev_btn.cget('state')) == 'disabled'
+
+
+def test_next_shows_the_existing_window_of_that_page_instead_of_duplicating(edit_app):
+    a = edit_app
+    w1, w2 = _open(a, 1), _open(a, 2)
+    w1.go(1)
+    assert w1.page_no == 1 and a.windows == {1: w1, 2: w2}
+
+
+def test_editing_a_unit_saves_an_edit_applies_it_and_marks_its_flags_as_reviewed(edit_app):
+    a = edit_app
+    w = _open(a, 1)
+    before = next(r for r in a.rows if r['page'] == 1)
+    assert before['uncertain'] + before['watch'] > 0
+    uid = next(m['unit'] for m in w._marks if m['kind'] == 'flag')
+    old = a.index.units[uid]['text']
+    _set_text(w, uid, old + ' (geprüft)')
+    assert w.dirty and 'Unsaved' in w.status.cget('text')
+    assert w.save() is True
+    f = a.project.edits_file
+    saved = json.loads(f.read_text(encoding='utf-8'))
+    assert saved['units'][uid]['text'] == old + ' (geprüft)' and saved['units'][uid]['base']
+    u = a.index.units[uid]
+    assert u['text'] == old + ' (geprüft)' and u['ocr_edited'] and u['text_ocrfix'] == old
+    assert not w.dirty and 'Saved 1 unit' in w.status.cget('text')
+    after = next(r for r in a.rows if r['page'] == 1)
+    assert after['uncertain'] + after['watch'] < before['uncertain'] + before['watch'] and after['human'] > before['human']
+    assert all(m['cls'] == 'human' for m in w._marks if m['unit'] == uid and m['kind'] == 'flag')
+    review = json.loads(w.editor.get('1.0', 'end-1c'))                 # the editor shows the saved state
+    assert next(x for x in review['units'] if x['unit_id'] == uid)['edited'] is True
+    a.reload()                                                          # and the edit survives a reload from disk
+    pump(a, lambda: a.status_lbl.cget('text') == '3 pages loaded.')
+    assert a.index.units[uid]['text'] == old + ' (geprüft)'
+
+
+def test_saving_back_to_the_pipeline_text_removes_the_edit(edit_app):
+    a = edit_app
+    w = _open(a, 1)
+    uid = next(m['unit'] for m in w._marks if m['kind'] == 'flag')
+    old = a.index.units[uid]['text']
+    _set_text(w, uid, old + '!')
+    assert w.save()
+    _set_text(w, uid, old)
+    assert w.save()
+    assert json.loads(a.project.edits_file.read_text(encoding='utf-8'))['units'] == {}
+    assert not a.index.units[uid].get('ocr_edited') and a.index.units[uid]['text'] == old
+
+
+def test_a_forbidden_change_is_refused_and_nothing_is_written(edit_app):
+    a = edit_app
+    w = _open(a, 1)
+    d = json.loads(w.editor.get('1.0', 'end-1c'))
+    d['units'][0]['text_raw'] = 'changed'
+    w.editor.delete('1.0', 'end')
+    w.editor.insert('1.0', json.dumps(d))
+    assert w.save() is False and 'text_raw' in w.status.cget('text') and not a.project.edits_file.exists()
+    w.editor.delete('1.0', 'end')
+    w.editor.insert('1.0', '{"units": [')
+    assert w.save() is False and 'not valid JSON' in w.status.cget('text')
+    w.revert()
+    assert not w.dirty and json.loads(w.editor.get('1.0', 'end-1c'))['units']
+
+
+def test_unsaved_changes_are_not_lost_silently(edit_app, monkeypatch):
+    import tkinter.messagebox as mb
+    a = edit_app
+    w = _open(a, 1)
+    uid = w._orig['units'][0]['unit_id']
+    _set_text(w, uid, 'something else')
+    answers = [None]                                          # Cancel
+    monkeypatch.setattr(mb, 'askyesnocancel', lambda *x, **k: answers[0])
+    w.go(1)
+    assert w.page_no == 1 and w.dirty
+    answers[0] = False                                        # Discard
+    w.go(1)
+    assert w.page_no == 2 and not a.project.edits_file.exists()
+    _set_text(w, w._orig['units'][0]['unit_id'], 'again')
+    answers[0] = True                                         # Save
+    w.close()
+    assert a.windows == {} and a.project.edits_file.exists()
+    w2 = _open(a, 1)
+    _set_text(w2, w2._orig['units'][0]['unit_id'], 'third')
+    monkeypatch.setattr(mb, 'askyesno', lambda *x, **k: False)
+    assert a._can_close_windows() is False
+    w2.revert()
+    assert a._can_close_windows() is True
+
+
+def test_clicking_a_mark_puts_the_cursor_on_its_word_in_the_text(edit_app):
+    a = edit_app
+    w = _open(a, 1)
+    seen = 0
+    for m in w._marks:
+        if not m['where']:
+            continue
+        assert w.locate(m), m
+        rng = w.editor.tag_ranges('locate')
+        word = w.editor.get(rng[0], rng[1])
+        want = json.dumps(m['after'] if m['kind'] in ('auto', 'human') and m.get('after') else m['token'], ensure_ascii=False)[1:-1]
+        assert word == want, (m['kind'], word, want)
+        seen += 1
+    assert seen >= 5
+
+
+def test_a_stale_edit_is_reported_and_not_applied(edit_app):
+    a = edit_app
+    f = a.project.edits_file
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps({'schema': '1.0', 'units': {'u0001': {'base': 'deadbeef', 'text': 'x', 'edited': 'now'}}}))
+    old = a.index.units['u0001']['text']
+    a.reload()
+    pump(a, lambda: 'not applied' in a.status_lbl.cget('text'))
+    assert a.stale_edits == ['u0001'] and a.index.units['u0001']['text'] == old
+
+
+def test_an_image_finalised_in_another_thread_is_parked_not_freed_there(app):
+    import threading
+    import gui_widgets as gw
+    from PIL import Image
+    p = gw.SafePhoto(Image.new('RGB', (4, 4)), master=app)
+    name = str(p)
+    t = threading.Thread(target=lambda: gw.SafePhoto.__del__(p))
+    t.start()
+    t.join()
+    assert p in gw._PENDING_IMAGES and name in app.tk.call('image', 'names')       # no Tk call was made from the thread
+    gw.release_pending_images()
+    assert not gw._PENDING_IMAGES and name not in app.tk.call('image', 'names')

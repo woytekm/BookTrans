@@ -161,6 +161,11 @@ class Project:
         return self.root / 'pipeline'
 
     @property
+    def edits_file(self):
+        """Human text edits of units (``unit_edits.py``)."""
+        return self.review_dir / 'unit_edits.json'
+
+    @property
     def review_dir(self):
         return self.root / 'review'
 
@@ -223,6 +228,7 @@ class Project:
         else:
             if p['ocrfix'] == 'aggressive':
                 cmd.append('--aggressive-ocr-fix')
+            cmd += ['--edits', str(self.edits_file)]          # human texts from the GUI survive a re-run (a missing file is fine)
             if p['ocr_suggest']:
                 cmd.append('--ocr-suggest')
         if resume:

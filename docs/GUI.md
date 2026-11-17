@@ -1,6 +1,6 @@
 # GUI: design, decisions and stages
 
-Status: **stage A done** (2026-11-15); **stage B done and the marks part of stage C** (2026-11-17: marks on the page image, hover text, show/hide by class); **running the pipeline from the GUI (stage E) done**; **dark theme and zoom** (2026-11-17). Still open: the JSON editor and saving (C), applying edits (D), backup of `ocr_review.json` (E), F. Planned stages are below. This document is the contract for the GUI work;
+Status: **stage A done** (2026-11-15); **stage B done and the marks part of stage C** (2026-11-17: marks on the page image, hover text, show/hide by class); **running the pipeline from the GUI (stage E) done**; **dark theme and zoom** (2026-11-17). **Stage C (prev/next, JSON editor, save, click a mark) and the edit part of D (`ocrfix.py run --edits`) done 2026-11-17.** Still open: a mark list, accepting a candidate with one key, `human` class for the words that differ in an edited unit, backup of `ocr_review.json` (E), F. Planned stages are below. This document is the contract for the GUI work;
 `HANDOFF.md` section 11 says where to start in a new session.
 
 ## 1. What the GUI is for
@@ -219,6 +219,7 @@ Stage A already has the window as a separate, per-page, reused toplevel with the
 | `gui.py` | no | main window, menu, page list, JSON tabs, recent projects |
 | `gui_dialogs.py` | no | new project, environment window, command dialog |
 | `gui_correction.py` | no | the OCR correction window: page image with marks (editor in stage C); `compose_marks` needs only PIL |
+| `unit_edits.py` | no | the edit store: hash-tied edits, `apply_edits`, `validate_review` (also used by `ocrfix.py run --edits`) |
 | `gui_run.py` | yes | the Run pipeline window (parameters, Start/Stop, live log) |
 | `gui_widgets.py` | no | colours, `JsonView` (read-only JSON with colouring and search), `run_async`, helpers |
 
@@ -231,8 +232,8 @@ Tests: `test_project.py` (22), `test_envcheck.py` (13), `test_pageindex.py` (17)
 |---|---|---|
 | **A** | this document; project and environment check; page list with counts; page JSON in three views; correction window as a shell; demo project; tests | **done** |
 | **B** | word boxes: stage 2 keeps `words` per line, `docmodel.py` passes them on (document schema 1.1), `pageindex.line_box` maps a mark to word boxes, with the estimate as fallback; the demo gets words | **done** 2026-11-17 |
-| **C** | the correction window: image with marks (**done**: `gui_correction.compose_marks`, hover, show/hide per class, estimated positions as outlines), mark list, JSON editor with validation and save to `review/unit_edits.json`, previous/next page and mark, page status | marks done; the rest open |
-| **D** | `unit_edits.apply_edits` in `ocrfix.py run`, staleness handling, accept-a-candidate writes a `resolution` into `ocr_review.json`, "re-run OCR correction" button | |
+| **C** | the correction window: image with marks (**done**), prev/next page (**done**), JSON editor with validation and save to `review/unit_edits.json` (**done**), click a mark to find the word (**done**); open: mark list, next/previous mark, accept a candidate with one key, page status (todo / reviewed) | mostly done |
+| **D** | `unit_edits.apply_edits` in `ocrfix.py run --edits` (**done**; staleness by hash; `booktrans.py --edits`, passed by the GUI); open: accept-a-candidate writes a `resolution` into `ocr_review.json`, a "re-run OCR correction" button (today: Run pipeline with `--resume`) | partly done |
 | **E** | run the pipeline from the GUI (**done** 2026-11-17: `gui_run.RunWindow`, `project.PipelineRun`; parameters edited in the window and saved to `project.json`, live log, Stop, `--resume`, reloads the result when done); open: progress per stage, backup of `ocr_review.json` before a destructive run | partly done |
 | **F** | later: translation review, export, anything the first real use shows is missing | |
 
@@ -241,6 +242,11 @@ says the positions are estimated. For stage C: an edit made in the window is in 
 survives `ocrfix.py run`, and the page re-marks itself.
 
 ## 11. Risks and open points
+
+- **Threads and the garbage collector (found 2026-11-17).** A tkinter `Variable` or image finalised in a worker thread calls Tk from
+  that thread and hangs the program. The main window disables the cyclic collector and collects from a timer in the main loop
+  (`gc.disable()`, `_gc_tick`); page images are `gui_widgets.SafePhoto`. Never touch a widget, a Variable or an image from a thread
+  (`run_async` does the work in the thread and the result in the main loop). Do not call `gc.enable()` elsewhere.
 
 * **Tk on macOS.** Needs `py3NN-tkinter` from MacPorts and a Pillow with Tk. Tk draws images 1:1 in points (no Retina sharpness):
   fine for ~135 DPI working pages; for full-resolution pages the window will show a downscaled `image_full`. Check with

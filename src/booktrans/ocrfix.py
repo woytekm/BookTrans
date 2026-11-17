@@ -603,6 +603,19 @@ def run(doc, fixer, review_res=None):
     return all_c, all_f
 
 
+def apply_human_edits(doc, path):
+    """Put the texts a human saved in the GUI (``review/unit_edits.json``, see ``unit_edits.py``) on the corrected units, so
+    that a re-run reproduces them instead of overwriting them.  Edits whose OCR text changed are skipped (stale).
+    -> ``{'applied': [...], 'stale': [...]}`` or ``None`` without a file."""
+    if not path:
+        return None
+    import unit_edits
+    r = unit_edits.apply_edits(doc, unit_edits.load_edits(path))
+    doc.setdefault('ocr_correction', {})['edits_applied'] = len(r['applied'])
+    log.info('ocrfix', 'human edits: %d applied, %d stale (the OCR text changed under them)' % (len(r['applied']), len(r['stale'])))
+    return r
+
+
 def cmd_run(a):
     log.info('ocrfix', 'loading dictionaries')
     gl = a.glossary or ([str(p) for p in sorted((ROOT / 'glossary').glob('*.csv'))])
@@ -620,6 +633,7 @@ def cmd_run(a):
             f['llm'] = proposals[f['key']]
     doc['ocr_correction'] = {'version': 1, 'corrections': len(cors), 'flags': len(flags),
                              'mode': 'aggressive' if a.aggressive else 'strict', 'hunspell': bool(lex.hs), 'review_resolutions_applied': len(res)}
+    apply_human_edits(doc, a.edits)
     out.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding='utf-8')
     out.with_name('ocr_corrections.json').write_text(json.dumps(
         {'schema': '1.0', 'corrections': cors}, ensure_ascii=False, indent=1), encoding='utf-8')
@@ -659,6 +673,7 @@ def main():
             p.add_argument('document')
             p.add_argument('-o', '--output')
             p.add_argument('--review')
+            p.add_argument('--edits', help='unit_edits.json written by the GUI: human texts that are applied after the correction')
         else:
             p.add_argument('string')
     a = ap.parse_args()

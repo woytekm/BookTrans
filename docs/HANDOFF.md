@@ -4,7 +4,7 @@ Read this first in a new session. It states what works, how to run it, where eve
 pieces fit, what was decided, and what is open. Details live in the other documents in this folder;
 this one is the map.
 
-Last updated: 2026-11-17. New since 2026-11-11: **a GUI**: stage A, Run pipeline, word boxes (schema 1.1) and marks on the page image (section 11, `GUI.md`).
+Last updated: 2026-11-17 (evening). New since 2026-11-11: **a GUI**: stage A, Run pipeline, word boxes (schema 1.1) and marks on the page image (section 11, `GUI.md`).
 
 ## 1. What the project is
 
@@ -59,7 +59,7 @@ python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.jso
 python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 167 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 190 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -195,7 +195,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (167 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (190 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -240,17 +240,26 @@ the marks are drawn over the deskewed page PNG the pipeline made, whose pixels a
 
 **Also 2026-11-17: dark theme** (`gui_widgets.apply_dark_theme`, the single palette at the top of `gui_widgets.py`; do not hard-code colours elsewhere, a test fails if you do) and **zoom** in the correction window (buttons, Ctrl/Cmd + wheel, drag, scroll bars; `set_zoom`, `zoom_by`, `zoom_fit`).
 
-**Next: stage C, the rest** (`GUI.md` sections 6, 8, 10), in this order:
-1. In `gui_correction.py` add the bottom pane: the page's review JSON (`DocIndex.page_review`), editable, below the image (a
-   vertical `PanedWindow`); Save validates it (valid JSON, `unit_id`/`role`/`blocks`/`pages`/`text_raw` unchanged) and writes
-   `review/unit_edits.json` keyed by unit id with the sha1 of `text_raw` (design in `GUI.md` section 6). Toolkit-free part
-   (`unit_edits.py`: load, validate, save, `apply_edits`) with tests first.
-2. Clicking a mark selects the matching unit text in the editor (`mark['unit']`, `offset`, `length`); previous/next mark, previous/next
-   page.
-3. Stage D: `ocrfix.py run` applies the edits (staleness by hash), so `document.corrected.json` carries them.
-4. Open from stage E: progress per stage in the Run window, backup of `ocr_review.json` before a destructive run.
+**Also 2026-11-17 (evening): stage C editor and the edit part of D.** The correction window has Prev/Next (PageUp/PageDown), the editable
+review JSON with Save/Revert (`unit_edits.validate_review`, `CorrectionWindow.save`), click a mark to put the cursor on its word
+(`locate`), unsaved-changes guards. Edits live in `review/unit_edits.json` (`unit_edits.py`: hash of `text_raw`, stale handling,
+`apply_edits`); `MainWindow.commit_edits` writes the file first, then applies in memory and re-marks; `ocrfix.py run --edits` and
+`booktrans.py --edits` reproduce them in `document.corrected.json` (the GUI's Run command always passes `--edits`). To get saved edits
+into the file `translate.py` reads: Run pipeline with `--resume` (stage 4 onwards, includes ocrfix). Not yet tried on a real book.
+
+**Next** (`GUI.md` sections 6, 8, 10), suggested order:
+1. A "re-run OCR correction" button (runs `ocrfix.py run <document.json> --edits <file>` in the Run window's log) instead of a
+   whole `--resume`; stale edits (`MainWindow.stale_edits`) are named in the status line after loading, but there is no way yet to look at or re-attach them.
+2. Mark list next to the image, next/previous mark, accept a candidate with one key (writes `resolution` into `ocr_review.json`
+   in the book folder: that file dies with a destructive re-run, so back it up into `review/backup/` first: stage E).
+3. In an edited unit, the words that differ from `text_ocrfix` get the `human` class (today only its flags turn green).
+4. Page status (todo / reviewed) in `review/page_status.json` and a column in the page list.
 
 **Pitfalls found in this session:**
+- **Never touch Tk from a thread, and never let the cyclic GC run in one.** A `Variable`/`PhotoImage` finalised in the loading thread hung the
+  test suite (thread dump with `pytest -o faulthandler_timeout=5` showed `Variable.__del__` / `PhotoImage.__del__` in the worker). `MainWindow`
+  disables the collector and collects from the main loop; images are `SafePhoto`. See `GUI.md` section 11.
+- `ImageTk.PhotoImage(img)` without `master=` binds to tkinter's default root, which may be a destroyed one (`pyimage6 doesn't exist`).
 - `booktrans.py` deletes its result folder before a full run, and the single-TIFF path (`process`) *always* does (it has no `--resume`).
   Hence `review/` is outside `pipeline/` (ADR-016); `ocr_review.json` inside the book folder is still at risk (stage E backs it up).
 - Unit ids (`u0001` ...) are renumbered on every run; a human edit must be keyed by id *and* a hash of `text_raw` (`GUI.md` section 6).

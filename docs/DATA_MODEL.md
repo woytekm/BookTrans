@@ -208,7 +208,7 @@ Written by `booktrans.py`. Top level: `schema_version`, `source_file`, `coordina
 - figure: `file` (relative path), `crop_bbox`, `detector`, `captions[]` (block ids).
 - graphic (`kind: graphic`, `role`: `page_mark` | `rule`): `file`, `crop_bbox`; page numbers, printer's marks and horizontal rules (e.g. above a footnote), kept as image crops.
 
-`units[]`: `unit_id`, `type`, `text` (dehyphenated), `source_block_ids`, `dehyphenated`, `joins`.
+`units[]`: `unit_id`, `type`, `text` (dehyphenated), `source_block_ids`, `dehyphenated`, `joins`. In `document.corrected.json` also `text_raw` (what the OCR read), `ocr_corrections`, `ocr_flags`; a unit a human edited (`review/unit_edits.json`, applied by `ocrfix.py run --edits`) has `ocr_edited: true` and `text_ocrfix` (the automatic text) and `text` is the human text.
 
 Per page also: `scale` (full px per working px, 1.0 at the sample resolution), `image_full` (full-resolution deskewed page, or null), `full_width`, `full_height`. Figure and graphic crops are cut from `image_full` when present. All coordinates in the model are working pixels.
 
