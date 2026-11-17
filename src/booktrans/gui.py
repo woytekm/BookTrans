@@ -32,7 +32,7 @@ except ImportError as e:
 from gui_correction import CorrectionWindow          # noqa: E402
 from gui_dialogs import CommandDialog, EnvWindow, NewProjectDialog   # noqa: E402
 from gui_run import RunWindow                          # noqa: E402
-from gui_widgets import (MAC, MOD, MOD_LABEL, ROW_TINT, STATUS_COLORS, TREE_BG, TREE_FG, TREE_SEL_BG, TREE_SEL_FG, JsonView, Legend, copy_to_clipboard,   # noqa: E402
+from gui_widgets import (MAC, MOD, MOD_LABEL, MUTED, ROW_TINT, STATUS_COLORS, TREE_FG, JsonView, apply_dark_theme, Legend, copy_to_clipboard,   # noqa: E402
                          human_bytes, reveal_in_file_manager, run_async)
 from pageindex import DocIndex                       # noqa: E402
 from project import Project, ProjectError, write_json   # noqa: E402
@@ -74,14 +74,7 @@ class MainWindow(tk.Tk):
 
     # ------------------------------------------------------------------ construction
     def _build_style(self):
-        st = ttk.Style(self)
-        if not MAC and 'clam' in st.theme_names():
-            st.theme_use('clam')
-        # Colours are set explicitly: with macOS dark mode the system draws white text, while the row tints
-        # and the field background below are light, which gave white on white.
-        st.configure('Treeview', rowheight=22, background=TREE_BG, fieldbackground=TREE_BG, foreground=TREE_FG)
-        st.configure('Treeview.Heading', foreground=TREE_FG)
-        st.map('Treeview', background=[('selected', TREE_SEL_BG)], foreground=[('selected', TREE_SEL_FG)])
+        apply_dark_theme(self)
 
     def _build_menu(self):
         m = tk.Menu(self)
@@ -124,12 +117,14 @@ class MainWindow(tk.Tk):
         left.pack(side='left', fill='x', expand=True)
         self.name_lbl = ttk.Label(left, text='', font=('TkDefaultFont', 16, 'bold'))
         self.name_lbl.pack(anchor='w')
-        self.path_lbl = ttk.Label(left, text='', foreground='#666666')
+        self.path_lbl = ttk.Label(left, text='', foreground=MUTED)
         self.path_lbl.pack(anchor='w')
         self.info_lbl = ttk.Label(left, text='', wraplength=900, justify='left')
+        self.run_btn = ttk.Button(left, text='Run pipeline\u2026', command=self.run_pipeline)
+        self.run_btn.pack(anchor='w', pady=(6, 0))
         self.info_lbl.pack(anchor='w', pady=(4, 0))
         left.bind('<Configure>', lambda e: self.info_lbl.configure(wraplength=max(300, e.width - 10)))
-        Legend(head).pack(side='right', anchor='ne')
+        Legend(head, short=True).pack(side='right', anchor='ne')
         ttk.Separator(self).pack(fill='x')
 
         pan = ttk.PanedWindow(self, orient='horizontal')
@@ -159,25 +154,24 @@ class MainWindow(tk.Tk):
         pan.add(rf, weight=1)
         bar = ttk.Frame(rf, padding=(8, 6, 8, 2))
         bar.pack(fill='x')
-        self.page_lbl = ttk.Label(bar, text='', font=('TkDefaultFont', 12, 'bold'))
-        self.page_lbl.pack(side='left')
+        # the buttons are packed first: when the window is narrow it is the page title that gets cut, not a button
         self.open_btn = ttk.Button(bar, text='OCR correction\u2026', command=self.open_correction)
         self.open_btn.pack(side='right')
-        self.run_btn = ttk.Button(bar, text='Run pipeline\u2026', command=self.run_pipeline)
-        self.run_btn.pack(side='right', padx=(0, 8))
         ttk.Button(bar, text='Copy JSON', command=self.copy_json).pack(side='right', padx=6)
+        self.page_lbl = ttk.Label(bar, text='', font=('TkDefaultFont', 12, 'bold'))
+        self.page_lbl.pack(side='left')
         bar2 = ttk.Frame(rf, padding=(8, 2, 8, 2))
         bar2.pack(fill='x')
         ttk.Label(bar2, text='Find').pack(side='left', padx=(0, 4))
         self.find_var = tk.StringVar()
         self.find_entry = ttk.Entry(bar2, textvariable=self.find_var, width=26)
         self.find_entry.pack(side='left')
-        self.find_count = ttk.Label(bar2, text='', foreground='#666666')
+        self.find_count = ttk.Label(bar2, text='', foreground=MUTED)
         self.find_count.pack(side='left', padx=8)
         self.find_var.trace_add('write', lambda *_a: self._find(True, keep=True))
         self.find_entry.bind('<Return>', lambda _e: self._find(True))
         self.find_entry.bind('<Shift-Return>', lambda _e: self._find(False))
-        self.help_lbl = ttk.Label(rf, text='', foreground='#666666', padding=(10, 2, 10, 4), wraplength=700, justify='left')
+        self.help_lbl = ttk.Label(rf, text='', foreground=MUTED, padding=(10, 2, 10, 4), wraplength=700, justify='left')
         self.help_lbl.pack(fill='x')
         rf.bind('<Configure>', lambda e: self.help_lbl.configure(wraplength=max(200, e.width - 30)))
         self.nb = ttk.Notebook(rf)
@@ -191,14 +185,14 @@ class MainWindow(tk.Tk):
 
         sb = ttk.Frame(self, padding=(10, 3))
         sb.pack(fill='x', side='bottom')
-        self.status_lbl = ttk.Label(sb, text='', foreground='#555555')
+        self.status_lbl = ttk.Label(sb, text='', foreground=MUTED)
         self.status_lbl.pack(side='left')
-        self.source_lbl = ttk.Label(sb, text='', foreground='#555555')
+        self.source_lbl = ttk.Label(sb, text='', foreground=MUTED)
         self.source_lbl.pack(side='right')
 
     # ------------------------------------------------------------------ small helpers
     def status(self, text, level=None):
-        self.status_lbl.configure(text=text, foreground=STATUS_COLORS.get(level, '#555555'))
+        self.status_lbl.configure(text=text, foreground=STATUS_COLORS.get(level, MUTED))
 
     def _menu_state(self):
         on = 'normal' if self.project else 'disabled'

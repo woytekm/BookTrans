@@ -4,13 +4,19 @@
 
 - `deskew.estimate_geometry` returned early without `edge_model` when a page had fewer than `MIN_LINES` usable lines, so `stage1.py` failed with `KeyError: 'edge_model'` while logging (seen on a sparse right-hand page). The key is now always present (`'none'` for an untouched page); test extended.
 
+## Unreleased — gui: dark theme, zoom
+
+- **Dark theme everywhere** (`gui_widgets.apply_dark_theme`): one palette (`BG`, `PANEL`, `FIELD`, `FG`, `MUTED`, ...), the `clam` theme on every platform (the native macOS theme ignores most colours), Tk widgets and drop-down lists through the option database. Row tints of the page list, status colours and the JSON colours are dark-mode variants; a test checks the contrast of every text/background pair and that no other module hard-codes a colour. The faint rows in the page list are readable now.
+- **Zoom in the correction window**: − / + / Fit / 100% buttons, Ctrl (Cmd) + wheel, keys `+` `-` `0` `1`, scroll bars, drag to move; the marks scale with the page, hover still works. Limits 10%-600%.
+- The Run pipeline button moved into the header; the buttons of the page bar no longer get cut off in a narrow window.
+
 ## Unreleased — gui: marks on the page, run the pipeline from the window
 
 - **Marks on the page image** (`gui_correction.py`): every automatic correction and flag of the page is drawn on the page image in the colour of its class (blue auto, red uncertain, amber watch, green human), translucent for exact positions and outline-only for estimated ones; hovering names the mark (token, correction and rule, or reason and candidates); a check box per class shows/hides it. The page image is the deskewed image the pipeline made from the TIFF; the TIFF is not changed.
 - **Word boxes** (document schema 1.1): `stage2.py` keeps `words` (`text`, `bbox`, `conf`) for every OCR line, `docmodel.py` passes them on, `pageindex.line_box` turns a character range of a line into the union of the word boxes it touches (exact) or, for documents without `words`, a proportional estimate. Books processed before need stages 1-2 re-run for exact positions. The marks JSON view now has `bbox` and `exact` per fragment.
 - **Run pipeline** (`gui_run.py`, `project.PipelineRun`): Project > Run pipeline… (and a button): parameters are edited in the window and saved to `project.json`, `--resume` check box with the warning and a confirmation before a run that deletes the previous result, live log, Stop (ends the whole process group), the page list reloads when the run ends.
 - Fix: the page list was white on white with macOS dark mode; colours of the list are set explicitly.
-- Tests: 164 passed (was 151).
+- Tests: 167 passed (was 151).
 
 ## gui (stage A)
 

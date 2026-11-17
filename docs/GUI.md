@@ -1,6 +1,6 @@
 # GUI: design, decisions and stages
 
-Status: **stage A done** (2026-11-15); **stage B done and the marks part of stage C** (2026-11-17: marks on the page image, hover text, show/hide by class); **running the pipeline from the GUI (stage E) done**. Still open: the JSON editor and saving (C), applying edits (D), backup of `ocr_review.json` (E), F. Planned stages are below. This document is the contract for the GUI work;
+Status: **stage A done** (2026-11-15); **stage B done and the marks part of stage C** (2026-11-17: marks on the page image, hover text, show/hide by class); **running the pipeline from the GUI (stage E) done**; **dark theme and zoom** (2026-11-17). Still open: the JSON editor and saving (C), applying edits (D), backup of `ocr_review.json` (E), F. Planned stages are below. This document is the contract for the GUI work;
 `HANDOFF.md` section 11 says where to start in a new session.
 
 ## 1. What the GUI is for
