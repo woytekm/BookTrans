@@ -4,6 +4,13 @@
 
 - `deskew.estimate_geometry` returned early without `edge_model` when a page had fewer than `MIN_LINES` usable lines, so `stage1.py` failed with `KeyError: 'edge_model'` while logging (seen on a sparse right-hand page). The key is now always present (`'none'` for an untouched page); test extended.
 
+## Unreleased — gui: approve or replace flagged words
+
+- **Decide about a flagged word in the correction window**: right-click (Ctrl+click on a Mac) a red or amber mark: *Accept as it is*, *Replace with* one of its candidates, *Accept „word" everywhere*; a decided flag offers *Undo my decision*. The **Accept as is** menu above the page accepts all watch words, or all uncertain and watch words (after a confirmation), of the page at once. The mark turns green at once and the page counts follow; the hover text says what was decided.
+- Decisions are stored in `review/ocr_decisions.json` (new `ocr_decisions.py`, toolkit-free), outside the folder `booktrans.py` deletes. `ocrfix.py run --decisions FILE` merges them with `ocr_review.json` (the decisions win; `"="` accepts a word as it is), `booktrans.py --decisions FILE` passes it on and the GUI's Run pipeline always does, so the next run with `--resume` puts them into `document.corrected.json`; until then the GUI shows them as decided only. A flag key is `unit|token|occurrence`; unit ids are stable unless stages 1-4 are re-run on different input.
+- Marks JSON: new key `decision` (`null`, `accepted`, `replaced:<word>`, `word accepted`).
+- Tests: 201 passed (was 192).
+
 ## Unreleased — gui: search in the editor
 
 - **Find** box above the editor text of the OCR correction window: every match (case-insensitive) is highlighted, `k of n` is shown, Enter / Shift+Enter (or the arrow buttons) go to the next / previous match and wrap around, `Cmd/Ctrl+F` focuses the box, Esc returns to the text. Matches are collected again on every step, so it keeps working while the text is being edited, and after Prev/Next page or Save refilled the editor.

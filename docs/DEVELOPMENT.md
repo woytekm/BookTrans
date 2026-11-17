@@ -29,7 +29,7 @@ BookTrans is a working prototype: scans go in, a complete page-recreation model 
 - `glossary.py`: glossary lookup (places with OCR-tolerant matching, terms inside compounds), prompt block, post-translation check, place-name CSV importer, candidate extractor; seed `glossary/terms.csv`.
 - `translate.py`: translation through an OpenAI-compatible endpoint (LM Studio) with glossary block, answer cleaning, checks with retries, cache and dry run (tested with a mock server; not yet with a real model).
 - Progress/timing output on stderr; 48 tests.
-- GUI, stage A (`gui.py` and `gui_*.py`, `project.py`, `envcheck.py`, `pageindex.py`, `gui_demo.py`; design in `GUI.md`): projects, environment check, page list with OCR-correction counts, page JSON in three views, the correction window as a shell; 71 new tests (151 in total, 192 with the marks, the dark theme and the editor and run window).
+- GUI, stage A (`gui.py` and `gui_*.py`, `project.py`, `envcheck.py`, `pageindex.py`, `gui_demo.py`; design in `GUI.md`): projects, environment check, page list with OCR-correction counts, page JSON in three views, the correction window as a shell; 71 new tests (151 in total, 201 with the marks, the dark theme and the editor and run window).
 
 ## Experimental results and observations
 

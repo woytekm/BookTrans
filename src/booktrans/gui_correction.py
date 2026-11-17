@@ -17,6 +17,7 @@ from tkinter import messagebox, ttk
 
 from PIL import Image, ImageDraw
 
+import ocr_decisions
 import unit_edits
 from gui_widgets import (CANVAS_BG, CLASS_COLORS, CLASS_LABELS, FIND_CUR_BG, MAC, MOD, MOD_LABEL, MUTED, NOTE_FG, SEL_BG,
                          FIND_BG, SEL_FG, STATUS_COLORS, TEXT_BG, TEXT_FG, SafePhoto, mono_font, release_pending_images)
@@ -68,6 +69,10 @@ def describe_mark(m):
             s += '   (%s)' % m['reason']
         if m.get('candidates'):
             s += '   candidates: %s' % ', '.join(str(c) for c in m['candidates'][:4])
+        if m.get('decision'):
+            d = m['decision']
+            s += '   \u2192 you decided: ' + ('accepted as it is' if d == 'accepted' else 'the word is accepted everywhere' if d == 'word accepted'
+                                           else 'replace with %s' % d.split(':', 1)[1])
     return s
 
 
@@ -103,6 +108,12 @@ class CorrectionWindow(tk.Toplevel):
             ttk.Checkbutton(bar, text=c, variable=self.show[c], command=self._draw).pack(side='left', padx=(0, 10))
         self.note = ttk.Label(bar, text='', foreground=NOTE_FG)
         self.note.pack(side='right')
+        self.accept_btn = ttk.Menubutton(bar, text='Accept as is \u25be')
+        am = tk.Menu(self.accept_btn, tearoff=False)
+        am.add_command(label='all watch words on this page', command=lambda: self.accept_page(('watch',)))
+        am.add_command(label='all uncertain and watch words on this page', command=lambda: self.accept_page(('uncertain', 'watch')))
+        self.accept_btn.configure(menu=am)
+        self.accept_btn.pack(side='right', padx=(0, 10))
         zb = ttk.Frame(self)
         zb.pack(fill='x', padx=10, pady=(6, 0))
         ttk.Button(zb, text='−', width=3, command=lambda: self.zoom_by(1 / ZOOM_STEP)).pack(side='left')
@@ -185,6 +196,8 @@ class CorrectionWindow(tk.Toplevel):
         self.canvas.bind('<ButtonPress-1>', self._press_event)
         self.canvas.bind('<B1-Motion>', lambda e: self.canvas.scan_dragto(e.x, e.y, gain=1))
         self.canvas.bind('<ButtonRelease-1>', self._release_event)
+        for ev in (('<Button-2>', '<Control-Button-1>') if MAC else ('<Button-3>',)):      # right click: decide about a flag
+            self.canvas.bind(ev, self._popup)
         self.canvas.bind('<MouseWheel>', self._wheel)                     # macOS, Windows
         self.canvas.bind('<Button-4>', lambda e: self._wheel(e, 1))       # X11
         self.canvas.bind('<Button-5>', lambda e: self._wheel(e, -1))
@@ -495,6 +508,84 @@ class CorrectionWindow(tk.Toplevel):
         x, y = self.canvas.canvasx(e.x) - self._origin[0], self.canvas.canvasy(e.y) - self._origin[1]
         found = [m for (x1, y1, x2, y2, m) in self._hits if x1 <= x <= x2 and y1 <= y <= y2]
         return found[-1] if found else None          # the last one is drawn on top
+
+    # ------------------------------------------------------------------ decisions about flags
+    def menu_for(self, m):
+        """The actions for a mark: ``[(label, callable)]`` (``None`` is a separator)."""
+        items = [('Find in the text', lambda: self.locate(m))]
+        if m['kind'] != 'flag':
+            return items
+        items.append(None)
+        if m.get('decision'):
+            items.append(('Undo my decision', lambda: self.decide(m, None)))
+            if m['decision'] == 'word accepted':
+                items.append(("Stop accepting \u201e%s\u201d everywhere" % m['token'], lambda: self.accept_everywhere(m, False)))
+            return items
+        items.append(('Accept as it is', lambda: self.decide(m, ocr_decisions.ACCEPT)))
+        for c in m.get('candidates', [])[:4]:
+            if c and c != m['token']:
+                items.append(('Replace with \u201e%s\u201d' % c, lambda c=c: self.decide(m, c)))
+        items.append(('Accept \u201e%s\u201d everywhere' % m['token'], lambda: self.accept_everywhere(m, True)))
+        return items
+
+    def _popup(self, e):
+        m = self._mark_at(e)
+        if m is None:
+            return
+        menu = tk.Menu(self, tearoff=False)
+        for it in self.menu_for(m):
+            if it is None:
+                menu.add_separator()
+            else:
+                menu.add_command(label=it[0], command=it[1])
+        try:
+            menu.tk_popup(e.x_root, e.y_root)
+        finally:
+            menu.grab_release()
+
+    def _decided(self, text):
+        self.status.configure(text=text + '  Stored in review/ocr_decisions.json; the next pipeline run (Run pipeline with --resume) '
+                                          'applies it to the corrected document.', foreground=STATUS_COLORS['ok'])
+
+    def _update(self, mutate, message):
+        try:
+            changed = self.app.update_decisions(mutate)
+        except (OSError, ValueError) as e:
+            self.status.configure(text='Not saved: %s' % e, foreground=STATUS_COLORS['fail'])
+            return False
+        if changed:
+            self._decided(message)
+        return changed
+
+    def decide(self, m, resolution):
+        """Accept the flag as it is (``ocr_decisions.ACCEPT``), replace its word, or (``None``) take the decision back."""
+        key = m['key']
+        if resolution is None:
+            return self._update(lambda d: ocr_decisions.unresolve(d, key), 'Decision taken back.')
+        what = 'accepted as it is' if resolution == ocr_decisions.ACCEPT else 'to be replaced with \u201e%s\u201d' % resolution
+        return self._update(lambda d: ocr_decisions.resolve(d, key, resolution), '\u201e%s\u201d %s.' % (m['token'], what))
+
+    def accept_everywhere(self, m, on=True):
+        w = m['token']
+        if on:
+            return self._update(lambda d: ocr_decisions.accept_word(d, w), '\u201e%s\u201d is accepted everywhere.' % w)
+        return self._update(lambda d: ocr_decisions.forget_word(d, w), '\u201e%s\u201d is no longer accepted everywhere.' % w)
+
+    def accept_page(self, classes):
+        """Accept every still open flag of this page whose class is in ``classes`` as it is."""
+        flags = {m['key']: m for m in self._marks if m['kind'] == 'flag' and m['cls'] in classes and not m.get('decision')}
+        if not flags:
+            self.status.configure(text='No open %s words on this page.' % ' or '.join(classes), foreground=MUTED)
+            return False
+        if 'uncertain' in classes and not messagebox.askyesno(
+                'Accept uncertain words', 'Accept %d flagged words (%d uncertain) on page %d as they are?\n\n'
+                'Uncertain words are the strong candidates for a mistake; accept them only after comparing with the page.' % (
+                    len(flags), sum(m['cls'] == 'uncertain' for m in flags.values()), self.page_no), icon='warning', parent=self):
+            return False
+        def mutate(d):
+            for k in flags:
+                ocr_decisions.resolve(d, k, ocr_decisions.ACCEPT)
+        return self._update(mutate, '%d words accepted as they are.' % len(flags))
 
     def _hover(self, e):
         m = self._mark_at(e)

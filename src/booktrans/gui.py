@@ -35,6 +35,7 @@ from gui_dialogs import CommandDialog, EnvWindow, NewProjectDialog   # noqa: E40
 from gui_run import RunWindow                          # noqa: E402
 from gui_widgets import (MAC, MOD, MOD_LABEL, MUTED, ROW_TINT, STATUS_COLORS, TREE_FG, JsonView, apply_dark_theme, Legend, copy_to_clipboard,   # noqa: E402
                          human_bytes, reveal_in_file_manager, run_async)
+import ocr_decisions                                   # noqa: E402
 import unit_edits                                      # noqa: E402
 from pageindex import DocIndex                       # noqa: E402
 from project import Project, ProjectError, write_json   # noqa: E402
@@ -279,6 +280,7 @@ class MainWindow(tk.Tk):
         self._close_windows()
         self.project, self.index, self.rows = proj, None, []
         self.edits, self.stale_edits = unit_edits.empty(), []
+        self.decisions = ocr_decisions.empty()
         self.tree.delete(*self.tree.get_children())
         self._remember(proj.root)
         self._menu_state()
@@ -313,9 +315,13 @@ class MainWindow(tk.Tk):
                 edits = unit_edits.load_edits(proj.edits_file)
             except ValueError as e:
                 raise ProjectError(str(e))
+            try:
+                decisions = ocr_decisions.load_decisions(proj.decisions_file)
+            except ValueError as e:
+                raise ProjectError(str(e))
             result = unit_edits.apply_edits(doc, edits)
-            ix = DocIndex(doc, proj.load_review(), proj.book_dir())
-            return which, ix, ix.page_rows(), edits, result['stale']
+            ix = DocIndex(doc, proj.load_review(), proj.book_dir(), decisions=decisions)
+            return which, ix, ix.page_rows(), edits, result['stale'], decisions
 
         def done(res, err):
             if proj is not self.project:         # another project was opened while this one loaded
@@ -341,7 +347,7 @@ class MainWindow(tk.Tk):
                 self.status('Nothing to show yet.')
                 self._menu_state()
                 return
-            which, self.index, self.rows, self.edits, self.stale_edits = res
+            which, self.index, self.rows, self.edits, self.stale_edits, self.decisions = res
             self.source_lbl.configure(text='showing document.%sjson' % ('corrected.' if which == 'corrected' else ''))
             self._fill_tree(self.rows, keep)
             for w in list(self.windows.values()):
@@ -375,6 +381,23 @@ class MainWindow(tk.Tk):
         for w in list(self.windows.values()):
             w.load(keep_editor=True)
         return len(changes)
+
+    def update_decisions(self, mutate):
+        """Change the human decisions about OCR flags: ``mutate(decisions)`` edits a copy, the copy is written to
+        ``review/ocr_decisions.json`` first, then the index re-marks.  The next pipeline run (``--resume``) applies them."""
+        new = json.loads(json.dumps(self.decisions))
+        mutate(new)
+        if new == self.decisions:
+            return False
+        ocr_decisions.save_decisions(self.project.decisions_file, new)
+        self.decisions = new
+        self.index.set_decisions(new)
+        self.rows = self.index.page_rows()
+        self._fill_tree(self.rows, self._selected_page())
+        self._on_select()
+        for w in list(self.windows.values()):
+            w.load(keep_editor=True)
+        return True
 
     def _can_close_windows(self):
         """False when the user cancels because a correction window has unsaved changes."""
