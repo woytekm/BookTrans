@@ -59,7 +59,7 @@ python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.jso
 python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 164 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 167 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -195,7 +195,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (164 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (167 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -237,6 +237,8 @@ the page image** in the correction window (`gui_correction.compose_marks`, hover
 the marks are drawn over the deskewed page PNG the pipeline made, whose pixels are the coordinates of the model. A book processed
 *before* schema 1.1 has no word boxes: its marks are estimated (outlines only) until stages 1-2 are re-run (`booktrans.py` without
 `--resume`, which deletes the result folder, see the pitfalls). Not yet verified on a real book: marks on real word boxes.
+
+**Also 2026-11-17: dark theme** (`gui_widgets.apply_dark_theme`, the single palette at the top of `gui_widgets.py`; do not hard-code colours elsewhere, a test fails if you do) and **zoom** in the correction window (buttons, Ctrl/Cmd + wheel, drag, scroll bars; `set_zoom`, `zoom_by`, `zoom_fit`).
 
 **Next: stage C, the rest** (`GUI.md` sections 6, 8, 10), in this order:
 1. In `gui_correction.py` add the bottom pane: the page's review JSON (`DocIndex.page_review`), editable, below the image (a

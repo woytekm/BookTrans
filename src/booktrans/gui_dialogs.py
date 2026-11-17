@@ -4,7 +4,7 @@ from pathlib import Path
 from tkinter import filedialog, ttk
 
 import envcheck
-from gui_widgets import STATUS_COLORS, copy_to_clipboard, human_bytes, mono_font, run_async
+from gui_widgets import MUTED, STATUS_COLORS, copy_to_clipboard, human_bytes, mono_font, run_async
 from project import DEFAULT_PARAMS, LAYOUTS, OCRFIX_MODES, Project, ProjectError, tiffs_in, valid_name
 
 
@@ -41,14 +41,14 @@ class NewProjectDialog(tk.Toplevel):
         ttk.Entry(f, textvariable=v['input'], width=44).grid(row=r, column=1, sticky='ew', pady=3)
         ttk.Button(f, text='Browse…', command=lambda: self._browse('input', 'Folder with the TIFF scans')).grid(row=r, column=2, padx=(6, 0))
         r += 1
-        self.input_info = ttk.Label(f, text='', foreground='#666666', wraplength=470, justify='left')
+        self.input_info = ttk.Label(f, text='', foreground=MUTED, wraplength=470, justify='left')
         self.input_info.grid(row=r, column=1, columnspan=2, sticky='w')
         r += 1
         ttk.Label(f, text='Output directory').grid(row=r, column=0, sticky='w', pady=3)
         ttk.Entry(f, textvariable=v['output'], width=44).grid(row=r, column=1, sticky='ew', pady=3)
         ttk.Button(f, text='Browse…', command=lambda: self._browse('output', 'Where the project folder is created')).grid(row=r, column=2, padx=(6, 0))
         r += 1
-        self.out_info = ttk.Label(f, text='', foreground='#666666', wraplength=470, justify='left')
+        self.out_info = ttk.Label(f, text='', foreground=MUTED, wraplength=470, justify='left')
         self.out_info.grid(row=r, column=1, columnspan=2, sticky='w')
         r += 1
         ttk.Separator(f).grid(row=r, column=0, columnspan=3, sticky='ew', pady=10)
@@ -67,7 +67,7 @@ class NewProjectDialog(tk.Toplevel):
         for i, (label, widget, hint) in enumerate(rows):
             ttk.Label(grid, text=label).grid(row=i, column=0, sticky='w', pady=2)
             widget.grid(row=i, column=1, sticky='w', padx=(8, 10))
-            ttk.Label(grid, text=hint, foreground='#666666').grid(row=i, column=2, sticky='w')
+            ttk.Label(grid, text=hint, foreground=MUTED).grid(row=i, column=2, sticky='w')
         ttk.Checkbutton(grid, text='Hunspell suggestions (slow: 3-8 s per hopeless word)', variable=self.suggest).grid(
             row=len(rows), column=1, columnspan=2, sticky='w', pady=(4, 0), padx=(8, 0))
         r += 1
@@ -112,7 +112,7 @@ class NewProjectDialog(tk.Toplevel):
             self.v['name'].set(nm)               # triggers _refresh again; the name now equals nm, so it stops there
             return
         if not inp:
-            self.input_info.configure(text='', foreground='#666666')
+            self.input_info.configure(text='', foreground=MUTED)
         elif not Path(inp).expanduser().is_dir():
             self.input_info.configure(text='This folder does not exist.', foreground=STATUS_COLORS['fail'])
         else:
@@ -123,14 +123,14 @@ class NewProjectDialog(tk.Toplevel):
                 note = '%d TIFF files, %s: processed as one book.' % (len(t), human_bytes(sum(p.stat().st_size for p in t)))
                 if len(t) == 1:
                     note = '1 TIFF file (%s): the pipeline names its result folder after the file.' % human_bytes(t[0].stat().st_size)
-                self.input_info.configure(text=note, foreground='#666666')
+                self.input_info.configure(text=note, foreground=MUTED)
         root = self.project_root()
         if root is None:
-            self.out_info.configure(text='', foreground='#666666')
+            self.out_info.configure(text='', foreground=MUTED)
         elif (root / 'project.json').exists():
             self.out_info.configure(text='There is already a project in %s.' % root, foreground=STATUS_COLORS['fail'])
         else:
-            self.out_info.configure(text='Project folder: %s' % root, foreground='#666666')
+            self.out_info.configure(text='Project folder: %s' % root, foreground=MUTED)
 
     def _check_env(self):
         EnvWindow(self, params=self._params())
@@ -195,7 +195,7 @@ class EnvWindow(tk.Toplevel):
         self.run()
 
     def run(self):
-        self.summary.configure(text='Checking…', foreground='#444444')
+        self.summary.configure(text='Checking…', foreground=MUTED)
         self.tree.delete(*self.tree.get_children())
         self.hint.configure(text='')
         run_async(self, lambda: envcheck.run_checks(project=self.project, params=self.params), self._done)

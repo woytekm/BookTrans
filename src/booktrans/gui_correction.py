@@ -11,8 +11,9 @@ from tkinter import ttk
 
 from PIL import Image, ImageDraw, ImageTk
 
-from gui_widgets import CLASS_COLORS, CLASS_LABELS, STATUS_COLORS
+from gui_widgets import CANVAS_BG, MAC, MOD_LABEL, CLASS_COLORS, CLASS_LABELS, MUTED, NOTE_FG, STATUS_COLORS
 
+ZOOM_STEP, ZOOM_MIN, ZOOM_MAX = 1.25, 0.1, 6.0       # a click on + / - multiplies by this; limits of the scale
 PAD = 2                      # px around a mark box (page pixels, before scaling)
 
 
@@ -66,11 +67,13 @@ class CorrectionWindow(tk.Toplevel):
     def __init__(self, app, page_no):
         super().__init__(app)
         self.app, self.page_no = app, page_no
-        self.geometry('760x940')
+        self.geometry('820x980')
         self.minsize(420, 400)
         self._photo = None
         self._img = None
         self._marks, self._hits, self._origin = [], [], (0, 0)
+        self.zoom = None                                     # None: the page fitted to the window; else display px per page px
+        self._scale = 1.0                                    # the scale in use
         self.show = {c: tk.BooleanVar(value=True) for c in CLASS_COLORS}
         top = ttk.Frame(self, padding=(10, 8))
         top.pack(fill='x')
@@ -83,16 +86,44 @@ class CorrectionWindow(tk.Toplevel):
         for c in ('auto', 'uncertain', 'watch', 'human'):          # the legend doubles as the show/hide switches
             tk.Label(bar, text='\u25a0', fg=CLASS_COLORS[c], font=('TkDefaultFont', 14)).pack(side='left')
             ttk.Checkbutton(bar, text=c, variable=self.show[c], command=self._draw).pack(side='left', padx=(0, 10))
-        self.note = ttk.Label(bar, text='', foreground='#8a5a00')
+        self.note = ttk.Label(bar, text='', foreground=NOTE_FG)
         self.note.pack(side='right')
-        self.canvas = tk.Canvas(self, bg='#d9d6cf', highlightthickness=0)
-        self.canvas.pack(fill='both', expand=True, padx=10, pady=8)
-        self.info = ttk.Label(self, text='Hover over a mark.  (The JSON editor comes in stage C.)', foreground='#444444',
+        zb = ttk.Frame(self)
+        zb.pack(fill='x', padx=10, pady=(6, 0))
+        ttk.Button(zb, text='\u2212', width=3, command=lambda: self.zoom_by(1 / ZOOM_STEP)).pack(side='left')
+        ttk.Button(zb, text='+', width=3, command=lambda: self.zoom_by(ZOOM_STEP)).pack(side='left', padx=4)
+        ttk.Button(zb, text='Fit', width=4, command=self.zoom_fit).pack(side='left')
+        ttk.Button(zb, text='100%', width=5, command=lambda: self.set_zoom(1.0)).pack(side='left', padx=4)
+        self.zoom_lbl = ttk.Label(zb, text='', foreground=MUTED)
+        self.zoom_lbl.pack(side='left', padx=8)
+        ttk.Label(zb, text='%s + wheel: zoom   drag: move   keys + - 0' % MOD_LABEL, foreground=MUTED).pack(side='right')
+        box = ttk.Frame(self)
+        box.pack(fill='both', expand=True, padx=10, pady=8)
+        self.canvas = tk.Canvas(box, bg=CANVAS_BG, highlightthickness=0)
+        ys = ttk.Scrollbar(box, orient='vertical', command=self.canvas.yview)
+        xs = ttk.Scrollbar(box, orient='horizontal', command=self.canvas.xview)
+        self.canvas.configure(yscrollcommand=ys.set, xscrollcommand=xs.set)
+        self.canvas.grid(row=0, column=0, sticky='nsew')
+        ys.grid(row=0, column=1, sticky='ns')
+        xs.grid(row=1, column=0, sticky='ew')
+        box.rowconfigure(0, weight=1)
+        box.columnconfigure(0, weight=1)
+        self.info = ttk.Label(self, text='Hover over a mark.  (The JSON editor comes in stage C.)', foreground=MUTED,
                               padding=(10, 0, 10, 8), wraplength=720, justify='left')
         self.info.pack(fill='x')
-        self.canvas.bind('<Configure>', lambda _e: self._draw())
+        self.canvas.bind('<Configure>', lambda _e: self._draw() if self.zoom is None else self._place())
         self.canvas.bind('<Motion>', self._hover)
         self.canvas.bind('<Leave>', lambda _e: self.info.configure(text=''))
+        self.canvas.bind('<ButtonPress-1>', lambda e: self.canvas.scan_mark(e.x, e.y))
+        self.canvas.bind('<B1-Motion>', lambda e: self.canvas.scan_dragto(e.x, e.y, gain=1))
+        self.canvas.bind('<MouseWheel>', self._wheel)                     # macOS, Windows
+        self.canvas.bind('<Button-4>', lambda e: self._wheel(e, 1))       # X11
+        self.canvas.bind('<Button-5>', lambda e: self._wheel(e, -1))
+        for key, fn in (('plus', lambda: self.zoom_by(ZOOM_STEP)), ('equal', lambda: self.zoom_by(ZOOM_STEP)),
+                        ('minus', lambda: self.zoom_by(1 / ZOOM_STEP)), ('0', self.zoom_fit), ('1', lambda: self.set_zoom(1.0))):
+            self.bind('<%s>' % key, lambda _e, fn=fn: fn())
+        self.bind('<KP_Add>', lambda _e: self.zoom_by(ZOOM_STEP))
+        self.bind('<KP_Subtract>', lambda _e: self.zoom_by(1 / ZOOM_STEP))
         self.protocol('WM_DELETE_WINDOW', self.close)
         self.load()
 
@@ -128,23 +159,71 @@ class CorrectionWindow(tk.Toplevel):
             self._img, self._error = None, 'Cannot open the page image:\n%s\n%s' % (path, e)
         self._draw()
 
-    def _draw(self):
+    # ------------------------------------------------------------------ zoom
+    def _fit_scale(self):
         c = self.canvas
-        c.delete('all')
         w, h = max(c.winfo_width(), 50), max(c.winfo_height(), 50)
+        return min(w / self._img.width, h / self._img.height) if self._img is not None else 1.0
+
+    def set_zoom(self, value, keep=True):
+        """``value``: display pixels per page pixel (clamped); ``None``: fit the page to the window."""
         if self._img is None:
-            c.create_text(w // 2, h // 2, text=getattr(self, '_error', '') or 'No image', fill=STATUS_COLORS['fail'], justify='center')
             return
-        s = min(w / self._img.width, h / self._img.height)
-        size = (max(1, int(self._img.width * s)), max(1, int(self._img.height * s)))
+        c = self.canvas
+        fx = (c.xview()[0] + c.xview()[1]) / 2          # keep the middle of the visible part where it is
+        fy = (c.yview()[0] + c.yview()[1]) / 2
+        self.zoom = None if value is None else max(ZOOM_MIN, min(ZOOM_MAX, value))
+        self._draw()
+        if keep and self.zoom is not None:
+            c.xview_moveto(fx - (c.xview()[1] - c.xview()[0]) / 2)
+            c.yview_moveto(fy - (c.yview()[1] - c.yview()[0]) / 2)
+
+    def zoom_by(self, factor):
+        self.set_zoom(self._scale * factor)
+
+    def zoom_fit(self):
+        self.set_zoom(None)
+
+    def _wheel(self, e, direction=None):
+        if direction is None:
+            direction = 1 if e.delta > 0 else -1
+        if e.state & (0x4 | 0x8 if MAC else 0x4):                       # Ctrl (Ctrl or Cmd on macOS): zoom
+            self.zoom_by(ZOOM_STEP if direction > 0 else 1 / ZOOM_STEP)
+        else:
+            self.canvas.yview_scroll(-direction * 3, 'units')
+
+    # ------------------------------------------------------------------ drawing
+    def _draw(self):
+        """Render the page with its marks at the current scale and put it on the canvas."""
+        c = self.canvas
+        if self._img is None:
+            c.delete('all')
+            w, h = max(c.winfo_width(), 50), max(c.winfo_height(), 50)
+            c.create_text(w // 2, h // 2, text=getattr(self, '_error', '') or 'No image', fill=STATUS_COLORS['fail'], justify='center')
+            self.zoom_lbl.configure(text='')
+            return
+        self._scale = self._fit_scale() if self.zoom is None else self.zoom
+        size = (max(1, int(self._img.width * self._scale)), max(1, int(self._img.height * self._scale)))
         shown = {k for k, v in self.show.items() if v.get()}
         img, self._hits = compose_marks(self._img, size, self._marks, shown)
         self._photo = ImageTk.PhotoImage(img)
-        self._origin = (w // 2 - size[0] // 2, h // 2 - size[1] // 2)
-        c.create_image(w // 2, h // 2, image=self._photo)
+        self.zoom_lbl.configure(text='%d%%%s' % (round(self._scale * 100), '  (fit)' if self.zoom is None else ''))
+        self._place()
+
+    def _place(self):
+        """Position the rendered image: centred when smaller than the window, scrollable when larger."""
+        c = self.canvas
+        if self._img is None or self._photo is None:
+            return
+        iw, ih = self._photo.width(), self._photo.height()
+        w, h = max(c.winfo_width(), 50), max(c.winfo_height(), 50)
+        self._origin = (max(0, (w - iw) // 2), max(0, (h - ih) // 2))
+        c.delete('all')
+        c.create_image(self._origin[0], self._origin[1], image=self._photo, anchor='nw')
+        c.configure(scrollregion=(0, 0, max(w, iw), max(h, ih)))
 
     def _hover(self, e):
-        x, y = e.x - self._origin[0], e.y - self._origin[1]
+        x, y = self.canvas.canvasx(e.x) - self._origin[0], self.canvas.canvasy(e.y) - self._origin[1]
         found = [m for (x1, y1, x2, y2, m) in self._hits if x1 <= x <= x2 and y1 <= y <= y2]
         self.info.configure(text=describe_mark(found[-1]) if found else '')
 

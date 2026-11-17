@@ -69,12 +69,42 @@ def test_page_list_shows_the_demo_pages(app):
     assert app.source_lbl.cget('text') == 'showing document.corrected.json'
 
 
-def test_page_list_colours_are_explicit_so_dark_mode_cannot_give_white_on_white(app):
+def test_the_whole_gui_is_dark_and_the_list_colours_are_explicit(app):
+    import gui_widgets as gw
     st = gui.ttk.Style(app)
-    assert st.lookup('Treeview', 'foreground') == gui.TREE_FG
-    assert st.lookup('Treeview', 'fieldbackground') == gui.TREE_BG
+    assert st.lookup('Treeview', 'foreground') == gw.TREE_FG and st.lookup('Treeview', 'fieldbackground') == gw.TREE_BG
+    assert st.lookup('TLabel', 'background') == gw.BG and st.lookup('TLabel', 'foreground') == gw.FG
+    assert st.lookup('TButton', 'background') == gw.PANEL
     for tag in ('attention', 'watch'):
-        assert str(app.tree.tag_configure(tag, 'foreground')) == gui.TREE_FG
+        assert str(app.tree.tag_configure(tag, 'foreground')) == gw.TREE_FG
+    assert str(app.cget('background')) == gw.BG
+
+
+def _luminance(hexcol):        # WCAG relative luminance
+    r, g, b = ((v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4) for v in (int(hexcol[i:i + 2], 16) / 255 for i in (1, 3, 5)))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def test_text_is_readable_on_every_background_it_is_drawn_on():
+    import gui_widgets as gw
+    def contrast(a, b):
+        la, lb = sorted((_luminance(a), _luminance(b)), reverse=True)
+        return (la + 0.05) / (lb + 0.05)
+    for bg in (gw.BG, gw.PANEL, gw.FIELD, gw.ROW_TINT['attention'], gw.ROW_TINT['watch']):
+        assert contrast(gw.FG, bg) >= 7, bg
+    assert contrast(gw.SEL_FG, gw.SEL_BG) >= 5
+    for bg in (gw.BG, gw.FIELD):
+        assert contrast(gw.MUTED, bg) >= 4.5 and all(contrast(c, bg) >= 4.5 for c in gw.STATUS_COLORS.values())
+        assert all(contrast(c, bg) >= 4.5 for c in gw.JSON_COLORS.values())
+
+
+def test_colours_are_defined_in_one_place():
+    import re
+    from pathlib import Path
+    for f in Path(gui.__file__).parent.glob('gui*.py'):
+        if f.name in ('gui_widgets.py',):
+            continue
+        assert not re.search(r"#[0-9a-fA-F]{6}\b", f.read_text(encoding='utf-8')), '%s hard-codes a colour' % f.name
 
 
 def test_selecting_a_page_fills_the_three_json_tabs(app):
@@ -301,3 +331,30 @@ def test_correction_window_draws_marks_and_hover_names_them(app):
     w.show['auto'].set(False)
     w._draw()
     assert all(h[4]['cls'] != 'auto' for h in w._hits)
+
+
+def test_zoom_buttons_scale_the_page_and_fit_restores_it(app):
+    app.tree.selection_set(str(app.rows[0]['page']))
+    app.open_correction()
+    w = list(app.windows.values())[0]
+    w.update()
+    assert w.zoom is None
+    fit = w._scale
+    w.zoom_by(1.25)
+    assert w.zoom == pytest.approx(fit * 1.25) and w._photo.width() == int(w._img.width * w.zoom)
+    w.zoom_by(1 / 1.25)
+    w.zoom_by(1 / 1.25)
+    assert w._scale < fit
+    w.set_zoom(100)                                           # clamped
+    assert w.zoom == 6.0
+    w.set_zoom(1.0)
+    assert w._photo.width() == w._img.width and 'scrollregion' in w.canvas.keys()
+    assert w.canvas.cget('scrollregion')
+    w.update()
+    x1, y1, x2, y2, m = w._hits[0]                            # hover still finds the mark when zoomed
+    class E:
+        x, y = int((x1 + x2) / 2 - w.canvas.canvasx(0)) + w._origin[0], int((y1 + y2) / 2 - w.canvas.canvasy(0)) + w._origin[1]
+    w._hover(E)
+    assert w.info.cget('text')
+    w.zoom_fit()
+    assert w.zoom is None and w.zoom_lbl.cget('text').endswith('(fit)')

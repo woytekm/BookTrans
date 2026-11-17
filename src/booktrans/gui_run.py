@@ -3,7 +3,7 @@ import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from gui_widgets import STATUS_COLORS, TEXT_BG, TEXT_FG, mono_font
+from gui_widgets import MUTED, STATUS_COLORS, TEXT_BG, TEXT_FG, SEL_BG, SEL_FG, mono_font
 from project import LAYOUTS, OCRFIX_MODES, PipelineRun, ProjectError, check_params
 
 
@@ -58,11 +58,11 @@ class RunWindow(tk.Toplevel):
         self.state.pack(side='left', padx=10)
         ttk.Button(bar, text='Close', command=self.close).pack(side='right')
 
-        self.last = ttk.Label(f, text='', foreground='#555555')
+        self.last = ttk.Label(f, text='', foreground=MUTED)
         self.last.pack(anchor='w', pady=(6, 2))
         box = ttk.Frame(f)
         box.pack(fill='both', expand=True)
-        self.log = tk.Text(box, wrap='none', font=mono_font(-1), bg=TEXT_BG, fg=TEXT_FG, insertbackground=TEXT_FG,
+        self.log = tk.Text(box, wrap='none', font=mono_font(-1), bg=TEXT_BG, fg=TEXT_FG, insertbackground=TEXT_FG, selectbackground=SEL_BG, selectforeground=SEL_FG, relief='flat',
                            state='disabled', padx=6, pady=4)
         ys = ttk.Scrollbar(box, orient='vertical', command=self.log.yview)
         xs = ttk.Scrollbar(box, orient='horizontal', command=self.log.xview)
