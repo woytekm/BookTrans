@@ -80,6 +80,7 @@ def test_command_line_maps_every_parameter(tmp_path, scans):
     assert c[c.index('--scale') + 1] == '2' and c[c.index('--ocr-scale') + 1] == '3'
     assert '--aggressive-ocr-fix' in c and '--ocr-suggest' in c and '--resume' not in c and '--no-ocrfix' not in c
     assert '--resume' in p.command(resume=True)
+    assert c[c.index('--edits') + 1] == str(p.edits_file)                  # human texts of the GUI survive a re-run
     assert "'my book'" in p.command_line()                      # quoted for a shell
     p.params['ocrfix'] = 'off'
     c = p.command()

@@ -190,6 +190,10 @@ class DocIndex:
         self._maps[uid] = m
         return m
 
+    def refresh(self):
+        """Forget what was derived from unit texts or flags (after ``unit_edits.apply_edits`` changed the document)."""
+        self._marks = None
+
     # ---- marks
     def _all_marks(self):
         """Every automatic correction and open flag as a dict with its line fragments (``where``)."""
@@ -211,7 +215,9 @@ class DocIndex:
                                    rule=c.get('rule'), cost=c.get('cost')))
             for f in flags_by_unit.get(uid, []):
                 lo, hi = f['offset'], f['offset'] + len(f.get('token', ''))
-                marks.append(_mark('flag', uid, um, pages, lo, hi, token=f.get('token'), key=f.get('key'),
+                # a human read the whole paragraph and saved a text: its open flags count as reviewed (docs/GUI.md, section 6)
+                cls = {'cls': 'human'} if u.get('ocr_edited') else {}
+                marks.append(_mark('flag', uid, um, pages, lo, hi, token=f.get('token'), key=f.get('key'), **cls,
                                    reason=f.get('reason'), severity=f.get('severity'), llm=f.get('llm'),
                                    candidates=[c.get('text') for c in f.get('candidates', [])]))
         self._marks = marks
@@ -284,7 +290,7 @@ class DocIndex:
                 'blocks': [bid for bid in u.get('source_block_ids', []) if self.block.get(bid, (None,))[0] == n],
                 'pages': pages,
                 'continues_from_previous_page': pages[0] < n, 'continues_on_next_page': pages[-1] > n,
-                'text_raw': u.get('text_raw', u['text']), 'text': u['text'],
+                'text_raw': u.get('text_raw', u['text']), 'text': u['text'], 'edited': bool(u.get('ocr_edited')),
             })
         return {'schema': REVIEW_SCHEMA, 'page': n, 'side': page.get('side'), 'source_tiff': page.get('source_tiff'),
                 'image': page.get('image'), 'units': units}

@@ -4,6 +4,16 @@
 
 - `deskew.estimate_geometry` returned early without `edge_model` when a page had fewer than `MIN_LINES` usable lines, so `stage1.py` failed with `KeyError: 'edge_model'` while logging (seen on a sparse right-hand page). The key is now always present (`'none'` for an untouched page); test extended.
 
+## Unreleased — gui: page navigation, text editor (stage C), edits applied by ocrfix (stage D)
+
+- **Prev / Next** in the OCR correction window (buttons, PageUp / PageDown): the window moves to the neighbouring page, the page list follows; a page that already has its own window is brought to the front instead.
+- **Editor** below the page image: the page's review JSON (units with `text_raw`, read-only, and `text`), with undo. *Save* (`Cmd/Ctrl+S`) checks the JSON (only a unit's `text` may change; errors are named), stores the changed texts in `review/unit_edits.json` and re-marks the page: the open flags of an edited unit turn green (reviewed). *Revert* drops unsaved changes. Unsaved changes are asked about before leaving a page, closing the window, switching or closing the project, or quitting. **Clicking a mark** puts the cursor on its word in the text.
+- **`unit_edits.py`** (new, toolkit-free): the edit store (an edit is tied to the sha1 of the unit's `text_raw`, survives renumbered unit ids, is *stale* and not applied when the OCR text changed), `apply_edits`, `revert`, `validate_review`. Edited units carry `ocr_edited` and `text_ocrfix` (the pipeline's text) in the corrected document.
+- **`ocrfix.py run --edits FILE`** applies the saved edits after the automatic correction; `booktrans.py --edits FILE` passes it on and the GUI's Run pipeline always does, so a re-run (`--resume` redoes stage 4 onwards) reproduces the human texts in `document.corrected.json`, which `translate.py` reads.
+- Fix: `booktrans.py` accepted `--aggressive-ocr-fix` but never passed it to `ocrfix.py`; it does now.
+- Fix: a GUI hang. Python could finalise a tkinter variable or image (of a closed window) in the loading thread, and a Tk call from another thread blocks. The cyclic garbage collector now runs only in the main loop (`gc.disable()` + a timer), and page images are `SafePhoto`s that are released by the main thread.
+- Tests: 190 passed (was 167).
+
 ## Unreleased — gui: dark theme, zoom
 
 - **Dark theme everywhere** (`gui_widgets.apply_dark_theme`): one palette (`BG`, `PANEL`, `FIELD`, `FG`, `MUTED`, ...), the `clam` theme on every platform (the native macOS theme ignores most colours), Tk widgets and drop-down lists through the option database. Row tints of the page list, status colours and the JSON colours are dark-mode variants; a test checks the contrast of every text/background pair and that no other module hard-codes a colour. The faint rows in the page list are readable now.

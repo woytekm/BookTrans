@@ -13,6 +13,7 @@ opens its OCR correction window.
 Needs tkinter and Pillow's ImageTk (``python envcheck.py`` says what is missing).
 """
 import argparse
+import gc
 import json
 import sys
 from pathlib import Path
@@ -34,6 +35,7 @@ from gui_dialogs import CommandDialog, EnvWindow, NewProjectDialog   # noqa: E40
 from gui_run import RunWindow                          # noqa: E402
 from gui_widgets import (MAC, MOD, MOD_LABEL, MUTED, ROW_TINT, STATUS_COLORS, TREE_FG, JsonView, apply_dark_theme, Legend, copy_to_clipboard,   # noqa: E402
                          human_bytes, reveal_in_file_manager, run_async)
+import unit_edits                                      # noqa: E402
 from pageindex import DocIndex                       # noqa: E402
 from project import Project, ProjectError, write_json   # noqa: E402
 
@@ -60,6 +62,11 @@ class MainWindow(tk.Tk):
         self.index = None
         self.rows = []
         self.windows = {}                        # page number -> CorrectionWindow
+        # Cyclic garbage (a closed window with its Tk variables and images) must be freed by the main thread: finalising
+        # a tkinter Variable or image in the loading thread calls Tk from that thread and hangs.  So the collector is
+        # off and the main loop runs it (also when a window is closed).
+        gc.disable()
+        self._gc_tick()
         self._sort = ('page', False)
         self._build_style()
         self._build_menu()
@@ -238,7 +245,7 @@ class MainWindow(tk.Tk):
     def new_project(self):
         d = NewProjectDialog(self, initial_dir=str(self.project.root.parent) if self.project else str(Path.home()))
         self.wait_window(d)
-        if d.project:
+        if d.project and self._can_close_windows():
             self.set_project(d.project)
 
     def open_dialog(self):
@@ -248,12 +255,16 @@ class MainWindow(tk.Tk):
             self.open_project(d)
 
     def open_project(self, path):
+        if not self._can_close_windows():
+            return
         try:
             self.set_project(Project.load(path))
         except ProjectError as e:
             messagebox.showerror('Cannot open project', str(e), parent=self)
 
     def close_project(self):
+        if not self._can_close_windows():
+            return
         self._close_windows()
         self.project, self.index, self.rows = None, None, []
         self.tree.delete(*self.tree.get_children())
@@ -267,6 +278,7 @@ class MainWindow(tk.Tk):
     def set_project(self, proj):
         self._close_windows()
         self.project, self.index, self.rows = proj, None, []
+        self.edits, self.stale_edits = unit_edits.empty(), []
         self.tree.delete(*self.tree.get_children())
         self._remember(proj.root)
         self._menu_state()
@@ -297,8 +309,13 @@ class MainWindow(tk.Tk):
             if not proj.status()['processed']:
                 return None
             doc, which = proj.load_document()
+            try:
+                edits = unit_edits.load_edits(proj.edits_file)
+            except ValueError as e:
+                raise ProjectError(str(e))
+            result = unit_edits.apply_edits(doc, edits)
             ix = DocIndex(doc, proj.load_review(), proj.book_dir())
-            return which, ix, ix.page_rows()
+            return which, ix, ix.page_rows(), edits, result['stale']
 
         def done(res, err):
             if proj is not self.project:         # another project was opened while this one loaded
@@ -324,20 +341,55 @@ class MainWindow(tk.Tk):
                 self.status('Nothing to show yet.')
                 self._menu_state()
                 return
-            which, self.index, self.rows = res
+            which, self.index, self.rows, self.edits, self.stale_edits = res
             self.source_lbl.configure(text='showing document.%sjson' % ('corrected.' if which == 'corrected' else ''))
             self._fill_tree(self.rows, keep)
             for w in list(self.windows.values()):
                 w.load()
             self._menu_state()
-            self.status('%d pages loaded.' % len(self.rows))
+            if self.stale_edits:
+                self.status('%d pages loaded. %d saved edit%s (%s) not applied: the OCR text changed under %s.' % (
+                    len(self.rows), len(self.stale_edits), '' if len(self.stale_edits) == 1 else 's',
+                    ', '.join(self.stale_edits[:5]), 'it' if len(self.stale_edits) == 1 else 'them'), 'warn')
+            else:
+                self.status('%d pages loaded.' % len(self.rows))
 
         run_async(self, work, done)
+
+    def commit_edits(self, changes):
+        """Store human texts (``{unit id: text}``) in ``review/unit_edits.json``, apply them to the loaded document and
+        re-mark.  The file is written first: when that fails nothing has changed in memory.  -> number of units changed."""
+        ix = self.index
+        edits = json.loads(json.dumps(self.edits))
+        for uid, text in changes.items():
+            unit_edits.set_edit(edits, ix.units[uid], text)
+        unit_edits.save_edits(self.project.edits_file, edits)
+        self.edits = edits
+        for uid in changes:
+            unit_edits.revert(ix.units[uid])
+        unit_edits.apply_edits(ix.doc, {'units': {k: v for k, v in edits['units'].items() if k in changes}})
+        ix.refresh()
+        self.rows = ix.page_rows()
+        self._fill_tree(self.rows, self._selected_page())
+        self._on_select()
+        for w in list(self.windows.values()):
+            w.load(keep_editor=True)
+        return len(changes)
+
+    def _can_close_windows(self):
+        """False when the user cancels because a correction window has unsaved changes."""
+        dirty = [w for w in self.windows.values() if w.dirty]
+        if not dirty:
+            return True
+        pages = ', '.join(str(w.page_no) for w in dirty)
+        return messagebox.askyesno('Unsaved changes', 'Unsaved changes on page %s will be lost.\n\nContinue?' % pages,
+                                   icon='warning', parent=self)
 
     def _close_windows(self):
         for w in list(self.windows.values()):
             w.destroy()
         self.windows.clear()
+        gc.collect()
         w = getattr(self, 'run_window', None)
         if w is not None and w.winfo_exists():
             if w.run is not None:
@@ -421,6 +473,12 @@ class MainWindow(tk.Tk):
             return
         self.windows[n] = CorrectionWindow(self, n)
 
+    def select_page(self, n):
+        """Select page ``n`` in the list (the correction windows follow when they move through the pages)."""
+        if self.tree.exists(str(n)):
+            self.tree.selection_set(str(n))
+            self.tree.see(str(n))
+
     def correction_closed(self, n):
         self.windows.pop(n, None)
 
@@ -445,8 +503,18 @@ class MainWindow(tk.Tk):
         if self.project:
             CommandDialog(self, self.project)
 
+    def _gc_tick(self):
+        if not self.winfo_exists():
+            return
+        gc.collect()
+        self.after(2000, self._gc_tick)
+
     def quit_app(self):
+        if not self._can_close_windows():
+            return
         self._close_windows()
+        gc.collect()
+        gc.enable()
         self.destroy()
 
 

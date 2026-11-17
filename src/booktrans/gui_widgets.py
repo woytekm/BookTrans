@@ -12,6 +12,8 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
 
+from PIL import ImageTk
+
 MAC = sys.platform == 'darwin'
 MOD = 'Command' if MAC else 'Control'          # key modifier of the shortcuts
 MOD_LABEL = 'Cmd' if MAC else 'Ctrl'
@@ -225,3 +227,25 @@ def apply_dark_theme(root):
     st.configure('TLabelframe', background=BG, bordercolor=BORDER)
     st.configure('TLabelframe.Label', background=BG, foreground=FG)
     return st
+
+
+# ---------------------------------------------------------------- images
+# Python may finalise a PhotoImage in *any* thread (cyclic garbage is collected by whichever thread happens to allocate).
+# PhotoImage.__del__ calls Tk, and a Tk call from a worker thread while the main thread is busy hangs: the loading thread of
+# the main window hung in a test exactly like that.  A SafePhoto freed off the main thread is parked and released by the
+# main thread (``release_pending_images``) the next time it draws.
+_PENDING_IMAGES = []
+
+
+class SafePhoto(ImageTk.PhotoImage):
+    def __del__(self):
+        if threading.current_thread() is threading.main_thread():
+            ImageTk.PhotoImage.__del__(self)
+        else:
+            _PENDING_IMAGES.append(self)             # resurrected: Python calls __del__ only once per object
+
+
+def release_pending_images():
+    """Free the images that were finalised in another thread (call from the main thread)."""
+    while _PENDING_IMAGES:
+        ImageTk.PhotoImage.__del__(_PENDING_IMAGES.pop())
