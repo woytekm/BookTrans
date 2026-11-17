@@ -26,6 +26,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from stage4 import ends_hyphen, join_pair   # noqa: E402  (same code that built the unit text)
+import ocr_decisions                       # noqa: E402
 
 # [start, end) of a line's stripped text in the unit text; lead = characters stripped from the line start.
 Span = namedtuple('Span', 'block line start end lead')
@@ -142,7 +143,7 @@ def _mark(kind, uid, um, pages, lo, hi, **kw):
     """One mark.  All marks have the same keys (a consumer never special-cases the kind); keys starting with
     ``_`` are internal and removed by ``DocIndex.page_marks``."""
     m = {'kind': kind, 'cls': mark_class(kind, kw.get('severity')), 'unit': uid, 'token': None, 'after': None,
-         'rule': None, 'cost': None, 'key': None, 'reason': None, 'severity': None, 'candidates': [], 'llm': None,
+         'rule': None, 'cost': None, 'key': None, 'reason': None, 'severity': None, 'candidates': [], 'llm': None, 'decision': None,
          'offset': lo, 'length': hi - lo, 'aligned': um.aligned, '_frags': um.locate(lo, hi), '_pages': pages}
     m.update(kw)
     return m
@@ -152,8 +153,9 @@ def _mark(kind, uid, um, pages, lo, hi, **kw):
 class DocIndex:
     """Index of a ``document(.corrected).json`` and the matching ``ocr_review.json``."""
 
-    def __init__(self, doc, review=None, base_dir=None):
+    def __init__(self, doc, review=None, base_dir=None, decisions=None):
         self.doc = doc
+        self.decisions = decisions or ocr_decisions.empty()
         self.review = review or {}
         self.base_dir = Path(base_dir) if base_dir else None
         self.pages = doc.get('pages', [])
@@ -190,6 +192,11 @@ class DocIndex:
         self._maps[uid] = m
         return m
 
+    def set_decisions(self, decisions):
+        """The human decisions about flags changed (``ocr_decisions``): flags they cover count as decided."""
+        self.decisions = decisions
+        self._marks = None
+
     def refresh(self):
         """Forget what was derived from unit texts or flags (after ``unit_edits.apply_edits`` changed the document)."""
         self._marks = None
@@ -216,8 +223,9 @@ class DocIndex:
             for f in flags_by_unit.get(uid, []):
                 lo, hi = f['offset'], f['offset'] + len(f.get('token', ''))
                 # a human read the whole paragraph and saved a text: its open flags count as reviewed (docs/GUI.md, section 6)
-                cls = {'cls': 'human'} if u.get('ocr_edited') else {}
-                marks.append(_mark('flag', uid, um, pages, lo, hi, token=f.get('token'), key=f.get('key'), **cls,
+                decision = ocr_decisions.status(self.decisions, f.get('key'), f.get('token'))
+                cls = {'cls': 'human'} if (u.get('ocr_edited') or decision) else {}      # decided: shown green until the next run
+                marks.append(_mark('flag', uid, um, pages, lo, hi, token=f.get('token'), key=f.get('key'), decision=decision, **cls,
                                    reason=f.get('reason'), severity=f.get('severity'), llm=f.get('llm'),
                                    candidates=[c.get('text') for c in f.get('candidates', [])]))
         self._marks = marks

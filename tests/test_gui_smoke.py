@@ -577,3 +577,94 @@ def test_find_still_works_after_the_text_was_edited_and_after_a_page_change(edit
     w.go(1)                                                          # a new page refills the editor: highlights follow
     pump(w)
     assert len(w._matches) == w.editor.get('1.0', 'end-1c').lower().count('portal')
+
+
+# ---------------------------------------------------------------- decisions about flags
+def _open_flag(w):
+    return next(m for m in w._marks if m['kind'] == 'flag' and m['where'])
+
+
+def test_accept_a_flag_as_it_is_turns_it_green_and_writes_the_decision(edit_app):
+    a = edit_app
+    w = _open(a, 1)
+    m = _open_flag(w)
+    before = next(r for r in a.rows if r['page'] == 1)
+    labels = [i[0] for i in w.menu_for(m) if i]
+    assert 'Accept as it is' in labels and any(l.startswith('Accept') and 'everywhere' in l for l in labels)
+    assert dict(i for i in w.menu_for(m) if i)['Accept as it is']() is True
+    f = a.project.decisions_file
+    assert json.loads(f.read_text(encoding='utf-8'))['resolutions'] == {m['key']: '='}
+    mm = next(x for x in w._marks if x['key'] == m['key'])
+    assert mm['cls'] == 'human' and mm['decision'] == 'accepted'
+    after = next(r for r in a.rows if r['page'] == 1)
+    assert after['human'] == before['human'] + 1 and after['uncertain'] + after['watch'] == before['uncertain'] + before['watch'] - 1
+    assert 'accepted as it is' in w.status.cget('text') and 'ocr_decisions.json' in w.status.cget('text')
+    assert 'you decided' in gui_describe(mm)
+    a.reload()                                                       # survives a reload from disk
+    pump(a, lambda: a.status_lbl.cget('text') == '3 pages loaded.')
+    assert next(x for x in a.index.page_marks(1) if x['key'] == m['key'])['cls'] == 'human'
+
+
+def gui_describe(m):
+    import gui_correction as gc
+    return gc.describe_mark(m)
+
+
+def test_replace_with_a_candidate_and_undo(edit_app):
+    a = edit_app
+    w = _open(a, 1)
+    m = next(x for x in w._marks if x['kind'] == 'flag' and x['candidates'] and x['where'])
+    items = dict(i for i in w.menu_for(m) if i)
+    cand = m['candidates'][0]
+    assert items['Replace with „%s”' % cand]() is True
+    assert json.loads(a.project.decisions_file.read_text(encoding='utf-8'))['resolutions'][m['key']] == cand
+    mm = next(x for x in w._marks if x['key'] == m['key'])
+    assert mm['decision'] == 'replaced:%s' % cand and 'replace with %s' % cand in gui_describe(mm)
+    undo = dict(i for i in w.menu_for(mm) if i)
+    assert list(undo) == ['Find in the text', 'Undo my decision']        # a decided flag offers undo, not a second decision
+    undo['Undo my decision']()
+    assert json.loads(a.project.decisions_file.read_text(encoding='utf-8'))['resolutions'] == {}
+    assert next(x for x in w._marks if x['key'] == m['key'])['cls'] != 'human'
+
+
+def test_accept_a_word_everywhere_covers_every_occurrence(edit_app):
+    a = edit_app
+    w = _open(a, 1)
+    m = _open_flag(w)
+    same = [x for x in a.index.page_marks(1) if x['kind'] == 'flag' and x['token'].lower() == m['token'].lower()]
+    w.accept_everywhere(m, True)
+    assert json.loads(a.project.decisions_file.read_text(encoding='utf-8'))['accepted_words'] == [m['token']]
+    assert all(x['decision'] == 'word accepted' and x['cls'] == 'human' for x in a.index.page_marks(1) if x['token'].lower() == m['token'].lower()) and same
+    mm = next(x for x in w._marks if x['key'] == m['key'])
+    assert 'Undo my decision' in [i[0] for i in w.menu_for(mm) if i]
+    w.accept_everywhere(mm, False)
+    assert json.loads(a.project.decisions_file.read_text(encoding='utf-8'))['accepted_words'] == []
+
+
+def test_accept_all_watch_words_on_a_page_and_confirm_for_uncertain(edit_app, monkeypatch):
+    import tkinter.messagebox as mb
+    a = edit_app
+    w = _open(a, 2)
+    watch = {m['key'] for m in w._marks if m['kind'] == 'flag' and m['cls'] == 'watch'}
+    unc = {m['key'] for m in w._marks if m['kind'] == 'flag' and m['cls'] == 'uncertain'}
+    assert watch and unc
+    assert w.accept_page(('watch',)) is True
+    assert set(json.loads(a.project.decisions_file.read_text(encoding='utf-8'))['resolutions']) == watch
+    asked = []
+    monkeypatch.setattr(mb, 'askyesno', lambda *x, **k: asked.append(x) or False)
+    assert w.accept_page(('uncertain', 'watch')) is False and asked        # asked, declined: nothing changed
+    assert set(json.loads(a.project.decisions_file.read_text(encoding='utf-8'))['resolutions']) == watch
+    monkeypatch.setattr(mb, 'askyesno', lambda *x, **k: True)
+    assert w.accept_page(('uncertain', 'watch')) is True
+    assert set(json.loads(a.project.decisions_file.read_text(encoding='utf-8'))['resolutions']) == watch | unc
+    assert w.accept_page(('uncertain', 'watch')) is False                   # nothing left open
+    row = next(r for r in a.rows if r['page'] == 2)
+    assert row['uncertain'] == 0 and row['watch'] == 0
+
+
+def test_a_broken_decisions_file_is_reported_not_ignored(edit_app):
+    a = edit_app
+    a.project.decisions_file.parent.mkdir(parents=True, exist_ok=True)
+    a.project.decisions_file.write_text('{broken')
+    a.reload()
+    pump(a, lambda: 'Cannot load' in a.status_lbl.cget('text'))

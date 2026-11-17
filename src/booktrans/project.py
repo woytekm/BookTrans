@@ -166,6 +166,11 @@ class Project:
         return self.review_dir / 'unit_edits.json'
 
     @property
+    def decisions_file(self):
+        """Human decisions about OCR flags (``ocr_decisions.py``)."""
+        return self.review_dir / 'ocr_decisions.json'
+
+    @property
     def review_dir(self):
         return self.root / 'review'
 
@@ -228,7 +233,7 @@ class Project:
         else:
             if p['ocrfix'] == 'aggressive':
                 cmd.append('--aggressive-ocr-fix')
-            cmd += ['--edits', str(self.edits_file)]          # human texts from the GUI survive a re-run (a missing file is fine)
+            cmd += ['--edits', str(self.edits_file), '--decisions', str(self.decisions_file)]          # human texts from the GUI survive a re-run (a missing file is fine)
             if p['ocr_suggest']:
                 cmd.append('--ocr-suggest')
         if resume:

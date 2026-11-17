@@ -624,6 +624,10 @@ def cmd_run(a):
     out = Path(a.output) if a.output else Path(a.document).with_name('document.corrected.json')
     review_path = Path(a.review) if a.review else out.with_name('ocr_review.json')
     res, accepted = load_review(review_path)
+    if a.decisions:                      # decisions made in the GUI (ocr_decisions.py) win over ocr_review.json
+        import ocr_decisions
+        res, accepted = ocr_decisions.merge(res, accepted, ocr_decisions.load_decisions(a.decisions))
+        log.info('ocrfix', 'GUI decisions: %d flags decided, %d words accepted' % (len(res), len(accepted)))
     proposals = load_proposals(review_path)
     fixer = Fixer(lex, suggest=not a.no_suggest, accepted=accepted, aggressive=a.aggressive)
     log.info('ocrfix', '%d units' % len(doc['units']))
@@ -673,6 +677,7 @@ def main():
             p.add_argument('document')
             p.add_argument('-o', '--output')
             p.add_argument('--review')
+            p.add_argument('--decisions', help='ocr_decisions.json written by the GUI: flags accepted or replaced by a human')
             p.add_argument('--edits', help='unit_edits.json written by the GUI: human texts that are applied after the correction')
         else:
             p.add_argument('string')

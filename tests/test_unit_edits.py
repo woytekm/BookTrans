@@ -126,9 +126,9 @@ def test_booktrans_passes_edits_and_the_aggressive_flag_to_ocrfix(monkeypatch, t
     monkeypatch.setattr(booktrans, 'run', lambda cmd: calls.append([str(c) for c in cmd]))
     monkeypatch.setattr(importlib.util, 'find_spec', lambda name: object())
     monkeypatch.setattr(booktrans.Path, 'exists', lambda self: True)
-    assert booktrans.ocr_correct(tmp_path, suggest=False, aggressive=True, edits=tmp_path / 'e.json')
+    assert booktrans.ocr_correct(tmp_path, suggest=False, aggressive=True, edits=tmp_path / 'e.json', decisions=tmp_path / 'd.json')
     c = calls[0]
-    assert '--aggressive' in c and '--no-suggest' in c and c[c.index('--edits') + 1].endswith('e.json')
+    assert c[c.index('--decisions') + 1].endswith('d.json') and '--aggressive' in c and '--no-suggest' in c and c[c.index('--edits') + 1].endswith('e.json')
     calls.clear()
     booktrans.ocr_correct(tmp_path, suggest=True)
-    assert '--aggressive' not in calls[0] and '--edits' not in calls[0] and '--no-suggest' not in calls[0]
+    assert '--aggressive' not in calls[0] and '--edits' not in calls[0] and '--decisions' not in calls[0] and '--no-suggest' not in calls[0]
