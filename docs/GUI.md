@@ -1,6 +1,6 @@
 # GUI: design, decisions and stages
 
-Status: **stage A done** (2026-11-15). Stages B-F are planned below. This document is the contract for the GUI work;
+Status: **stage A done** (2026-11-15); **stage B done and the marks part of stage C** (2026-11-17: marks on the page image, hover text, show/hide by class); **running the pipeline from the GUI (stage E) done**. Still open: the JSON editor and saving (C), applying edits (D), backup of `ocr_review.json` (E), F. Planned stages are below. This document is the contract for the GUI work;
 `HANDOFF.md` section 11 says where to start in a new session.
 
 ## 1. What the GUI is for
@@ -218,7 +218,8 @@ Stage A already has the window as a separate, per-page, reused toplevel with the
 | `gui_demo.py` | yes | synthetic demo project (real stage 4 units, real `ocrfix.run`) |
 | `gui.py` | no | main window, menu, page list, JSON tabs, recent projects |
 | `gui_dialogs.py` | no | new project, environment window, command dialog |
-| `gui_correction.py` | no | the OCR correction window (shell in stage A) |
+| `gui_correction.py` | no | the OCR correction window: page image with marks (editor in stage C); `compose_marks` needs only PIL |
+| `gui_run.py` | yes | the Run pipeline window (parameters, Start/Stop, live log) |
 | `gui_widgets.py` | no | colours, `JsonView` (read-only JSON with colouring and search), `run_async`, helpers |
 
 Tests: `test_project.py` (22), `test_envcheck.py` (13), `test_pageindex.py` (17), `test_gui_demo.py` (6), `test_gui_smoke.py` (12; needs
@@ -229,10 +230,10 @@ Tests: `test_project.py` (22), `test_envcheck.py` (13), `test_pageindex.py` (17)
 | Stage | Content | State |
 |---|---|---|
 | **A** | this document; project and environment check; page list with counts; page JSON in three views; correction window as a shell; demo project; tests | **done** |
-| **B** | word boxes: stage 2 keeps `words` per line, `docmodel.py` passes them on (document schema 1.1), `pageindex` maps a mark to word boxes, with the estimate as fallback; the demo gets words | next |
-| **C** | the correction window: image with marks, mark list, JSON editor with validation and save to `review/unit_edits.json`, previous/next page and mark, page status | |
+| **B** | word boxes: stage 2 keeps `words` per line, `docmodel.py` passes them on (document schema 1.1), `pageindex.line_box` maps a mark to word boxes, with the estimate as fallback; the demo gets words | **done** 2026-11-17 |
+| **C** | the correction window: image with marks (**done**: `gui_correction.compose_marks`, hover, show/hide per class, estimated positions as outlines), mark list, JSON editor with validation and save to `review/unit_edits.json`, previous/next page and mark, page status | marks done; the rest open |
 | **D** | `unit_edits.apply_edits` in `ocrfix.py run`, staleness handling, accept-a-candidate writes a `resolution` into `ocr_review.json`, "re-run OCR correction" button | |
-| **E** | run the pipeline from the GUI (subprocess, live log, progress per stage, `--resume`), backup of `ocr_review.json` before a destructive run, edit project parameters | |
+| **E** | run the pipeline from the GUI (**done** 2026-11-17: `gui_run.RunWindow`, `project.PipelineRun`; parameters edited in the window and saved to `project.json`, live log, Stop, `--resume`, reloads the result when done); open: progress per stage, backup of `ocr_review.json` before a destructive run | partly done |
 | **F** | later: translation review, export, anything the first real use shows is missing | |
 
 Acceptance for stage B: on a project with words, every mark of the demo lands on the box of its word; on one without, the GUI

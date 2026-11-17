@@ -120,3 +120,31 @@ def test_write_json_is_atomic_and_utf8(tmp_path):
     PR.write_json(f, {'ä': 'Pitschen → Byczyna'})
     assert json.loads(f.read_text(encoding='utf-8')) == {'ä': 'Pitschen → Byczyna'} and 'Byczyna' in f.read_text(encoding='utf-8')
     assert not (tmp_path / 'sub' / 'x.json.tmp').exists()
+
+
+def test_pipeline_run_collects_output_and_exit_code():
+    import sys, time
+    from project import PipelineRun
+    run = PipelineRun([sys.executable, '-c', 'import sys; print("one"); print("two", file=sys.stderr); sys.exit(3)'])
+    lines = []
+    t0 = time.time()
+    while run.running and time.time() - t0 < 20:
+        lines += run.drain()
+        time.sleep(0.02)
+    lines += run.drain()
+    assert lines == ['one', 'two'] and run.returncode == 3 and not run.stopped
+
+
+def test_pipeline_run_stop_ends_the_process_group():
+    import sys, time
+    from project import PipelineRun
+    run = PipelineRun([sys.executable, '-c', 'import time; print("up", flush=True); time.sleep(60)'])
+    t0 = time.time()
+    seen = []
+    while 'up' not in seen and time.time() - t0 < 20:
+        seen += run.drain()
+        time.sleep(0.02)
+    run.stop()
+    while run.running and time.time() - t0 < 20:
+        time.sleep(0.02)
+    assert not run.running and run.stopped and run.returncode != 0

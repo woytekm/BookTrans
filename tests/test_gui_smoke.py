@@ -69,6 +69,14 @@ def test_page_list_shows_the_demo_pages(app):
     assert app.source_lbl.cget('text') == 'showing document.corrected.json'
 
 
+def test_page_list_colours_are_explicit_so_dark_mode_cannot_give_white_on_white(app):
+    st = gui.ttk.Style(app)
+    assert st.lookup('Treeview', 'foreground') == gui.TREE_FG
+    assert st.lookup('Treeview', 'fieldbackground') == gui.TREE_BG
+    for tag in ('attention', 'watch'):
+        assert str(app.tree.tag_configure(tag, 'foreground')) == gui.TREE_FG
+
+
 def test_selecting_a_page_fills_the_three_json_tabs(app):
     app.tree.selection_set('2')
     pump(app)
@@ -221,3 +229,75 @@ def test_command_dialog_warns_before_a_destructive_rerun(app):
     d._fill()
     assert 'DELETES' in d.warn.cget('text') and '--resume' not in d.text.get('1.0', 'end')
     d.destroy()
+
+
+def test_run_window_runs_the_project_command_and_reports_the_result(app, monkeypatch):
+    import sys
+    import time
+    seen = []
+    app.run_pipeline()
+    w = app.run_window
+    assert w is app.run_window and (app.run_pipeline() or app.run_window is w)       # one window, reused
+    w.v['scale'].set('1.5')
+    done = []
+    w.on_done = lambda: done.append(1)
+    monkeypatch.setattr(app.project, 'command', lambda resume=False: [sys.executable, '-c', 'print("stage1 hello"); print("done")'])
+    monkeypatch.setattr(gui.messagebox if hasattr(gui, 'messagebox') else __import__('tkinter.messagebox').messagebox, 'askyesno', lambda *a, **k: True)
+    w.resume.set(True)
+    w.start()
+    t0 = time.time()
+    while not done and time.time() - t0 < 20:
+        app.update()
+        time.sleep(0.02)
+    text = w.log.get('1.0', 'end')
+    assert done and 'stage1 hello' in text and 'finished' in w.state.cget('text')
+    assert app.project.params['scale'] == '1.5'               # the parameters set in the window are saved to project.json
+    assert str(w.start_btn.cget('state')) == 'normal' and str(w.stop_btn.cget('state')) == 'disabled'
+
+
+def test_run_window_rejects_bad_parameters(app, monkeypatch):
+    import tkinter.messagebox as mb
+    errors = []
+    monkeypatch.setattr(mb, 'showerror', lambda *a, **k: errors.append(a))
+    app.run_pipeline()
+    w = app.run_window
+    w.v['scale'].set('abc')
+    w.start()
+    assert errors and w.run is None
+
+
+def test_compose_marks_draws_every_class_and_reports_hits(app):
+    from PIL import Image
+    import gui_correction as gc
+    ix = app.index
+    n = app.rows[0]['page']
+    img = Image.open(ix.image_path(n)).convert('RGB')
+    marks = ix.page_marks(n)
+    assert marks
+    size = (img.width // 2, img.height // 2)
+    out, hits = gc.compose_marks(img, size, marks)
+    assert out.size == size and len(hits) == sum(len(m['where']) for m in marks)
+    from PIL import ImageChops
+    assert ImageChops.difference(out, img.resize(size)).getbbox() is not None     # something was drawn
+    none, no_hits = gc.compose_marks(img, size, marks, show=set())
+    assert no_hits == [] and none.size == size
+    for (x1, y1, x2, y2, m) in hits:                                          # hits lie inside the image, in its pixels
+        assert 0 <= x1 < x2 <= size[0] + 4 and 0 <= y1 < y2 <= size[1] + 4
+    assert gc.describe_mark(marks[0])
+
+
+def test_correction_window_draws_marks_and_hover_names_them(app):
+    app.tree.selection_set(str(app.rows[0]['page']))
+    app.open_correction()
+    w = list(app.windows.values())[0]
+    w.update()
+    assert w._hits, 'marks were not drawn'
+    x1, y1, x2, y2, m = w._hits[0]
+
+    class E:
+        x, y = (x1 + x2) // 2 + w._origin[0], (y1 + y2) // 2 + w._origin[1]
+    w._hover(E)
+    assert w.info.cget('text')
+    w.show['auto'].set(False)
+    w._draw()
+    assert all(h[4]['cls'] != 'auto' for h in w._hits)

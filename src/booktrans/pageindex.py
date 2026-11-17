@@ -99,6 +99,37 @@ class UnitMap:
         return out
 
 
+def line_words_ok(line):
+    """True when the line carries word boxes (schema 1.1) that spell exactly the line text."""
+    ws = line.get('words')
+    return bool(ws) and ' '.join(w['text'] for w in ws) == line.get('text')
+
+
+def line_box(line, c0, c1):
+    """Box (page coordinates) of the characters ``[c0, c1)`` of a line's raw text -> ``(bbox, exact)``.
+
+    ``exact``: the box is the union of the Tesseract word boxes the range touches (stage 2 stores them since
+    schema 1.1).  Otherwise (older documents) it is an estimate: the line box cut proportionally to the
+    character position, which is good to a few characters for a proportional font."""
+    n = max(1, len(line.get('text', '')))
+    if line_words_ok(line):
+        hit, pos = [], 0
+        for w in line['words']:
+            s, e = pos, pos + len(w['text'])
+            pos = e + 1
+            if (c0 < e and c1 > s) or (c0 == c1 and s <= c0 <= e):
+                hit.append(w['bbox'])
+        if hit:
+            return [min(b[0] for b in hit), min(b[1] for b in hit), max(b[2] for b in hit), max(b[3] for b in hit)], True
+    x1, y1, x2, y2 = line['bbox']
+    w = (x2 - x1) / n
+    c0, c1 = max(0, min(c0, n)), max(0, min(c1, n))
+    if c1 <= c0:
+        c1 = min(n, c0 + 1)
+        c0 = max(0, c1 - 1)
+    return [int(round(x1 + c0 * w)), y1, int(round(x1 + c1 * w)), y2], False
+
+
 def mark_class(kind, severity=None):
     if kind == 'auto':
         return 'auto'
@@ -192,8 +223,12 @@ class DocIndex:
         out = []
         for m in self._all_marks():
             if m['aligned']:
-                where = [{'block': f.block, 'line': f.line, 'c0': f.c0, 'c1': f.c1}
-                         for f in m['_frags'] if self.block[f.block][0] == n]
+                where = []
+                for f in m['_frags']:
+                    if self.block[f.block][0] != n:
+                        continue
+                    box, exact = line_box(self.block[f.block][1]['lines'][f.line], f.c0, f.c1)
+                    where.append({'block': f.block, 'line': f.line, 'c0': f.c0, 'c1': f.c1, 'bbox': box, 'exact': exact})
                 if not where:
                     continue
             else:

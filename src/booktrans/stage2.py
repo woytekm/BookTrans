@@ -100,7 +100,12 @@ def ocr_lines(page, bbox, lang, context=10, scale=2.0, hires=None, f=1.0):
         out.append({'bbox':[int(round(x1+ox)),int(round(y1+oy)),int(round(x2+ox)),int(round(y2+oy))],'text':txt,
                     'glyph_height':round(float(np.median(hs)),1) if hs else 0,
                     'confidence':round(float(np.mean([float(d['conf'][i]) for i in ids])),1),
-                    'uppercase_ratio':round(caps,2),'word_count':len(ids)})
+                    'uppercase_ratio':round(caps,2),'word_count':len(ids),
+                    # word boxes (same coordinates as the line box): lets a GUI mark single words on the page
+                    'words':[{'text':d['text'][i].strip(),
+                              'bbox':[int(round(d['left'][i]+ox)),int(round(d['top'][i]+oy)),
+                                      int(round(d['left'][i]+d['width'][i]+ox)),int(round(d['top'][i]+d['height'][i]+oy))],
+                              'conf':round(float(d['conf'][i]),1)} for i in ids]})
     return sorted(out,key=lambda x:(x['bbox'][1],x['bbox'][0]))
 
 

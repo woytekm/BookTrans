@@ -31,7 +31,8 @@ except ImportError as e:
 
 from gui_correction import CorrectionWindow          # noqa: E402
 from gui_dialogs import CommandDialog, EnvWindow, NewProjectDialog   # noqa: E402
-from gui_widgets import (MAC, MOD, MOD_LABEL, ROW_TINT, STATUS_COLORS, JsonView, Legend, copy_to_clipboard,   # noqa: E402
+from gui_run import RunWindow                          # noqa: E402
+from gui_widgets import (MAC, MOD, MOD_LABEL, ROW_TINT, STATUS_COLORS, TREE_BG, TREE_FG, TREE_SEL_BG, TREE_SEL_FG, JsonView, Legend, copy_to_clipboard,   # noqa: E402
                          human_bytes, reveal_in_file_manager, run_async)
 from pageindex import DocIndex                       # noqa: E402
 from project import Project, ProjectError, write_json   # noqa: E402
@@ -76,7 +77,11 @@ class MainWindow(tk.Tk):
         st = ttk.Style(self)
         if not MAC and 'clam' in st.theme_names():
             st.theme_use('clam')
-        st.configure('Treeview', rowheight=22)
+        # Colours are set explicitly: with macOS dark mode the system draws white text, while the row tints
+        # and the field background below are light, which gave white on white.
+        st.configure('Treeview', rowheight=22, background=TREE_BG, fieldbackground=TREE_BG, foreground=TREE_FG)
+        st.configure('Treeview.Heading', foreground=TREE_FG)
+        st.map('Treeview', background=[('selected', TREE_SEL_BG)], foreground=[('selected', TREE_SEL_FG)])
 
     def _build_menu(self):
         m = tk.Menu(self)
@@ -95,6 +100,7 @@ class MainWindow(tk.Tk):
         p = tk.Menu(m, tearoff=False)
         m.add_cascade(label='Project', menu=p)
         p.add_command(label='Check environment…', accelerator='%s+E' % MOD_LABEL, command=self.check_env)
+        p.add_command(label='Run pipeline…', accelerator='%s+Shift+R' % MOD_LABEL, command=self.run_pipeline)
         p.add_command(label='Pipeline command…', command=self.show_command)
         p.add_command(label='Reload from disk', accelerator='%s+R' % MOD_LABEL, command=self.reload)
         p.add_command(label='Show project folder', command=lambda: self.project and reveal_in_file_manager(self.project.root))
@@ -104,6 +110,7 @@ class MainWindow(tk.Tk):
         g.add_command(label='OCR correction for the selected page', accelerator='Return', command=self.open_correction)
         g.add_command(label='Find in JSON', accelerator='%s+F' % MOD_LABEL, command=lambda: (self.find_entry.focus_set(), self.find_entry.selection_range(0, 'end')))
         self.page_menu = g
+        self.bind_all('<%s-R>' % MOD, lambda _e: self.run_pipeline())
         for key, fn in (('n', self.new_project), ('o', self.open_dialog), ('e', self.check_env), ('r', self.reload),
                         ('f', lambda: (self.find_entry.focus_set(), self.find_entry.selection_range(0, 'end')))):
             self.bind_all('<%s-%s>' % (MOD, key), lambda _e, fn=fn: fn())
@@ -142,8 +149,8 @@ class MainWindow(tk.Tk):
         self.totals.grid(row=1, column=0, columnspan=2, sticky='ew')
         lf.rowconfigure(0, weight=1)
         lf.columnconfigure(0, weight=1)
-        self.tree.tag_configure('attention', background=ROW_TINT['attention'])
-        self.tree.tag_configure('watch', background=ROW_TINT['watch'])
+        self.tree.tag_configure('attention', background=ROW_TINT['attention'], foreground=TREE_FG)
+        self.tree.tag_configure('watch', background=ROW_TINT['watch'], foreground=TREE_FG)
         self.tree.bind('<<TreeviewSelect>>', lambda _e: self._on_select())
         self.tree.bind('<Double-1>', lambda _e: self.open_correction())
         self.tree.bind('<Return>', lambda _e: self.open_correction())
@@ -156,6 +163,8 @@ class MainWindow(tk.Tk):
         self.page_lbl.pack(side='left')
         self.open_btn = ttk.Button(bar, text='OCR correction\u2026', command=self.open_correction)
         self.open_btn.pack(side='right')
+        self.run_btn = ttk.Button(bar, text='Run pipeline\u2026', command=self.run_pipeline)
+        self.run_btn.pack(side='right', padx=(0, 8))
         ttk.Button(bar, text='Copy JSON', command=self.copy_json).pack(side='right', padx=6)
         bar2 = ttk.Frame(rf, padding=(8, 2, 8, 2))
         bar2.pack(fill='x')
@@ -199,6 +208,7 @@ class MainWindow(tk.Tk):
         for i in range(self.page_menu.index('end') + 1):
             self.page_menu.entryconfigure(i, state=on)
         self.open_btn.configure(state='normal' if self.project and self.index else 'disabled')
+        self.run_btn.configure(state=on)
 
     def _recent(self):
         try:
@@ -278,7 +288,7 @@ class MainWindow(tk.Tk):
         if st['processed']:
             parts.append('pipeline result: %s' % ('with OCR correction' if st['corrected'] else 'without OCR correction (document.json only)'))
         else:
-            parts.append('pipeline not run yet (Project › Pipeline command…)')
+            parts.append('pipeline not run yet (Project › Run pipeline…)')
         self.info_lbl.configure(text='   ·   '.join(parts))
 
     def reload(self):
@@ -312,7 +322,7 @@ class MainWindow(tk.Tk):
                 self.index, self.rows = None, []
                 self._fill_tree([])
                 self.source_lbl.configure(text='')
-                msg = 'No document.json yet in\n%s\n\nRun the pipeline first: Project › Pipeline command… shows the command.' % proj.book_dir()
+                msg = 'No document.json yet in\n%s\n\nRun the pipeline first: Project › Run pipeline…' % proj.book_dir()
                 for v in self.views.values():
                     v.set_text(msg)
                 self.page_lbl.configure(text='')
@@ -334,6 +344,12 @@ class MainWindow(tk.Tk):
         for w in list(self.windows.values()):
             w.destroy()
         self.windows.clear()
+        w = getattr(self, 'run_window', None)
+        if w is not None and w.winfo_exists():
+            if w.run is not None:
+                w.run.stop()                       # a run belongs to the project that is being closed
+            w.destroy()
+        self.run_window = None
 
     # ------------------------------------------------------------------ the list
     def _fill_tree(self, rows, keep=None):
@@ -416,6 +432,20 @@ class MainWindow(tk.Tk):
 
     def check_env(self):
         EnvWindow(self, project=self.project)
+
+    def run_pipeline(self):
+        if not self.project:
+            return
+        w = getattr(self, 'run_window', None)
+        if w is not None and w.winfo_exists():
+            w.deiconify()
+            w.lift()
+            return
+        self.run_window = RunWindow(self, self.project, on_done=self._pipeline_done)
+
+    def _pipeline_done(self):
+        self._header()
+        self.reload()
 
     def show_command(self):
         if self.project:

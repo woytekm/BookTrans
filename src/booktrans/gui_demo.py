@@ -100,17 +100,19 @@ def _font(size):
 
 
 def _draw_line(draw, font, y, text, justify):
-    """Draw one line from LEFT; justified lines are spread to RIGHT.  -> bbox."""
+    """Draw one line from LEFT; justified lines are spread to RIGHT.  -> (bbox, word boxes)."""
     words = text.split(' ')
     widths = [draw.textlength(w, font=font) for w in words]
     space = draw.textlength(' ', font=font)
     if justify and len(words) > 1:
         space = max(space, (RIGHT - LEFT - sum(widths)) / (len(words) - 1))
     x = LEFT
+    boxes = []
     for w, wd in zip(words, widths):
         draw.text((x, y), w, font=font, fill=(25, 22, 18))
+        boxes.append({'text': w, 'bbox': [int(round(x)), y + 2, int(round(x + wd)), y + 2 + GLYPH], 'conf': 90.0})
         x += wd + space
-    return [LEFT, y + 2, int(round(x - space)), y + 2 + GLYPH]
+    return [LEFT, y + 2, int(round(x - space)), y + 2 + GLYPH], boxes
 
 
 def _build_page(spec, out):
@@ -152,9 +154,9 @@ def _build_page(spec, out):
         ln_out, top = [], y
         for i, t in enumerate(lines):
             last = i == len(lines) - 1
-            bb = _draw_line(d, font, y, t, justify=not (last or is_head or is_caption or is_foot))
+            bb, wb = _draw_line(d, font, y, t, justify=not (last or is_head or is_caption or is_foot))
             ln_out.append({'bbox': bb, 'text': t, 'confidence': round(96.0 - (i * 3.7) % 31, 1), 'glyph_height_px': float(GLYPH),
-                           'paragraph_start': i == 0})
+                           'paragraph_start': i == 0, 'words': wb})
             y += PITCH
         out_blocks.append({'block_id': bid, 'kind': 'text', 'role': 'heading' if is_head else role,
                            'bbox': [LEFT, top, RIGHT, y], 'text': ' '.join(lines), 'line_count': len(lines),
@@ -212,7 +214,7 @@ def make_demo(root, force=False):
         for b in pg['blocks']:
             if b['block_id'] in unit_of:
                 b['unit_id'] = unit_of[b['block_id']]
-    doc = {'schema_version': '1.0', 'source_file': str(scans), 'pages': pages, 'units': units,
+    doc = {'schema_version': '1.1', 'source_file': str(scans), 'pages': pages, 'units': units,
            'coordinate_system': 'pixels of each page image (synthetic demo)'}
     write_json(book / 'document.json', doc, indent=2)
     try:

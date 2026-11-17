@@ -36,3 +36,21 @@ def test_caption_line_is_translated_not_excluded():
     assert ln['content_context']=='caption' and ln['translation_status']=='translate'
     assert ln['associated_illustration_id']=='p1-ill-1'
     assert out['pages'][0]['regions'][0]['translation_status']=='translate'
+
+
+def test_ocr_lines_keep_word_boxes_that_spell_the_line_and_stay_inside_it(monkeypatch):
+    import numpy as np
+    import stage2
+    texts = ['', 'der', 'Spitzbogen', 'ist']
+    d = {'text': texts, 'conf': ['-1', '90', '85', '40'], 'block_num': [1] * 4, 'par_num': [1] * 4, 'line_num': [1] * 4,
+         'left': [0, 20, 80, 240], 'top': [0, 10, 10, 12], 'width': [400, 50, 140, 40], 'height': [40, 20, 22, 18]}
+    monkeypatch.setattr(stage2.pytesseract, 'image_to_data', lambda *a, **k: d)
+    page = np.full((200, 600, 3), 240, np.uint8)
+    lines = stage2.ocr_lines(page, [100, 50, 500, 100], 'deu', scale=1.0)
+    assert len(lines) == 1
+    ln = lines[0]
+    assert ln['text'] == 'der Spitzbogen ist' == ' '.join(w['text'] for w in ln['words'])
+    x1, y1, x2, y2 = ln['bbox']
+    for w in ln['words']:
+        b = w['bbox']
+        assert x1 <= b[0] < b[2] <= x2 and y1 <= b[1] < b[3] <= y2 and w['conf'] > 0
