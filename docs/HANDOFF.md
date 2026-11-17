@@ -4,7 +4,7 @@ Read this first in a new session. It states what works, how to run it, where eve
 pieces fit, what was decided, and what is open. Details live in the other documents in this folder;
 this one is the map.
 
-Last updated: 2026-11-17 (evening). New since 2026-11-11: **a GUI**: stage A, Run pipeline, word boxes (schema 1.1) and marks on the page image (section 11, `GUI.md`).
+Last updated: 2026-11-17 (late evening). New since 2026-11-11: **a GUI**: stage A, Run pipeline, word boxes (schema 1.1) and marks on the page image (section 11, `GUI.md`). **New: translation through Claude Code** (`--provider claude-code`, section 7b).
 
 ## 1. What the project is
 
@@ -57,9 +57,10 @@ cd src/booktrans
 python booktrans.py /path/to/0001.tif -o /path/to/output                       # stages 1-4 -> document.json
 python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.json   # ... and rebuild the pages
 python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
+python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 201 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 207 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -89,7 +90,7 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/scale.py` | resolution detection from the body line pitch |
 | `src/booktrans/ocrfix.py` | stage 5: offline OCR correction of the units (dictionaries, confusions, lost spaces), corrections log and review file (`OCR_CORRECTION.md`) |
 | `src/booktrans/ocrreview.py` | stage 5b: LLM proposals for the flags `ocrfix.py` left open (`propose` / `show` / `accept`), prompt `prompts/ocr_review_de.txt` |
-| `src/booktrans/translate.py` | translation through an OpenAI-compatible endpoint (LM Studio) or the Anthropic API: glossary block, checks, retries, cache, token usage |
+| `src/booktrans/translate.py` | translation through an OpenAI-compatible endpoint (LM Studio), the Claude Code CLI or the Anthropic API: glossary block, checks, retries, cache, token usage |
 | `src/booktrans/glossary.py`, `glossary/` | German -> Polish names and terms: lookup before translation, check after (`TRANSLATION.md`) |
 | `src/booktrans/illustrations.py`, `deskew.py`, `imgutil.py`, `log.py` | helpers |
 | `src/booktrans/gui.py` | **GUI main window**: projects, page list with OCR-correction counts, the page JSON in three views (`GUI.md`) |
@@ -165,6 +166,16 @@ non-words ("Uwarunkom", "kościojachach", "przedejejsze"), one sentence translat
 Fürstentümern, a caption in broken Polish. Ideas not yet built: a second "Polish editor" pass, a larger
 model, a Polish spell-check (hunspell) to flag non-words, the model-comparison mode.
 
+## 7b. Translation through Claude Code (2026-11-17, branch `translate-claude-code`)
+
+The owner decided to set the local models aside for a while: what runs on his machines is too weak for a
+quality translation. `translate.py --provider claude-code` runs the Claude Code CLI (`~/.local/bin/claude` on the
+Mac, logged in with his Claude subscription; no API key) headless, one call per unit, with the same prompt,
+glossary, checks, retries and cache as before. A usage limit stops the run cleanly; re-running continues from the
+cache. Details, flags and why not `--bare`: `TRANSLATION.md`, section "Claude Code as the translation engine".
+**Not yet run with a real login.** Next: translate the two sample spreads (`--only` one unit first), compare with
+the hand translations in `examples/`, then a whole book; Opus vs Sonnet on the same units.
+
 ## 8. Batch mode (books) and units cut at a spread boundary
 
 `booktrans.py` takes a folder of TIFFs (name order) or several files and builds **one** `document.json`:
@@ -182,7 +193,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 9. Roadmap
 
-1. First real run of `translate.py` against LM Studio; tune prompt, rules and checks on the output.
+1. First real run of `translate.py --provider claude-code` (section 7b); tune prompt, rules and checks on the output. (LM Studio was run once, section 7a; set aside for now.)
 2. Glossary content: import the place-name CSV, review `proposed` terms, resolve ambiguous places; (the glossary is already wired into
    `translate.py`).
 3. Automatic font choice among supplied fonts (score x-height ratio, advance width, stem darkness
@@ -195,7 +206,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (201 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (207 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).

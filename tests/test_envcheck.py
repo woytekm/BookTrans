@@ -121,3 +121,12 @@ def test_report_and_exit_logic():
     rep = E.format_report(cs)
     assert '-> do x' in rep and rep.index('g\n') < rep.index('h\n')
     assert E.worst(cs + [E.Check('h', 'd', E.FAIL, '', '')]) == E.FAIL
+
+
+def test_claude_code_cli_is_optional():
+    (c,) = E.check_translation(lambda: None)
+    assert c.status == E.INFO and 'claude-code' in c.hint
+    (c,) = E.check_translation(lambda: '/home/w/.local/bin/claude', lambda args: (0, '2.1.326 (Claude Code)\n'))
+    assert c.status == E.OK and '2.1.326' in c.detail
+    (c,) = E.check_translation(lambda: '/x/claude', lambda args: (1, 'boom'))
+    assert c.status == E.WARN

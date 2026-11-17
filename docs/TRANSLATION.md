@@ -114,7 +114,7 @@ Settings: `--temperature` (0.2), `--max-tokens` (4096), `--timeout` (600 s per r
 
 Diagnostics: every request logs its time, prompt and answer token counts, tokens per second, the finish reason and any hidden reasoning (`reasoning_content`); an empty answer is explained (thinking model that used its tokens for reasoning, or cut off by the token/context limit). Use it to judge a model's real speed before changing anything.
 
-Providers: `--provider openai` (default; LM Studio or any OpenAI-compatible server) or `--provider anthropic`
+Providers: `--provider openai` (default; LM Studio or any OpenAI-compatible server), `--provider claude-code` (the Claude Code CLI with the owner's subscription, see below) or `--provider anthropic`
 (Anthropic Messages API, `POST https://api.anthropic.com/v1/messages`; key in `$ANTHROPIC_API_KEY` or
 `--api-key`, model default `claude-sonnet-5-5`, change with `--model`). An API key is created in the
 Anthropic Console and is billed per token, separately from a Claude Pro/Max subscription (as far as the
@@ -130,6 +130,48 @@ server, not against the real API.
 export ANTHROPIC_API_KEY=...            # never commit or paste a key; create a key limited to this use and revoke it when done
 python translate.py output/book/document.json --provider anthropic --price-in 3 --price-out 15   # use the real prices
 ```
+
+### Claude Code as the translation engine (`--provider claude-code`)
+
+Added 2026-11-17 because the local models the owner can run (Gemma 4 12B on a 16 GB Mac) translate too
+poorly (section 7a of `HANDOFF.md`). `translate.py` runs the **Claude Code CLI** once per unit in headless mode,
+logged in with the owner's Claude subscription: **no API key, no per-token bill**; the tokens count against the
+plan's usage limits instead.
+
+```bash
+claude                      # once, in a terminal: /login with the Claude account, then /exit
+python translate.py output/book/document.json --provider claude-code                 # model opus (default)
+python translate.py output/book/document.json --provider claude-code --model sonnet  # lighter on the usage limits
+python translate.py output/book/document.json --provider claude-code --only u0021    # one unit, to look at the quality first
+```
+
+The call (checked against Claude Code 2.1.326; `claude --help` on the Mac shows the installed version's flags):
+
+```
+claude -p --output-format json --model opus --system-prompt "<translator, no tools, answer only>" \
+       --tools "" --strict-mcp-config --no-session-persistence          (the prompt on stdin)
+```
+
+- The prompt is the same as for the other providers (base prompt, rules, glossary list, kind of text, context,
+  text), sent on stdin. `--system-prompt` *replaces* Claude Code's own coding-assistant system prompt, `--tools ""`
+  offers no tool at all, `--strict-mcp-config` skips the owner's MCP servers (faster start, fewer tokens),
+  `--no-session-persistence` keeps thousands of one-shot sessions out of `~/.claude`. Each call runs in a fresh,
+  empty temporary folder so no `CLAUDE.md` or project files are picked up.
+- **Not `--bare`**: it would be the cleanest mode, but it accepts only an API key, never the subscription login.
+- `ANTHROPIC_API_KEY` is **removed** from the CLI's environment, because with it Claude Code would bill the API
+  instead of the subscription; `--claude-use-api-key` keeps it.
+- The program is found as `--claude-bin`, `$CLAUDE_BIN`, `claude` on `PATH`, or `~/.local/bin/claude` (the native
+  installer's place, where the owner has it). `python envcheck.py` shows it under *Translation*.
+- `--temperature` and `--max-tokens` do not apply (the CLI has no such options). `--timeout` is per call.
+- The JSON result gives token counts (logged per call and totalled as `usage`) and `total_cost_usd`: on a
+  subscription that is the notional API price, reported as `reported_cost`, not a bill.
+- Errors: not logged in (the CLI words it "Authentication error · This may be a temporary network issue") stops the
+  run at once with a hint to `/login`; overload / 5xx is retried after 10, 20, 40 s; **a usage limit stops the run**,
+  writes what is done to `translations.json` and says so. Everything finished is in the cache, so the same command
+  run after the limit resets continues where it stopped.
+- `--claude-args ARG ...` passes anything else on (for example `--claude-args=--verbose`).
+- Tests run against a fake `claude` program and against results recorded from the real CLI (not logged in); **the
+  provider has not yet translated a page with a real login** (first thing to do on the Mac).
 
 Reasoning models: a "thinking" model can spend all `--max-tokens` on hidden reasoning and return an empty
 answer. Seen with `google/gemma-4-12b` in LM Studio: 15,000 characters of reasoning, 4095 tokens, 420 s at

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — translation through Claude Code
+
+- **`translate.py --provider claude-code`**: translates through the Claude Code CLI with your Claude subscription (no API key): one headless call per unit (`claude -p --output-format json --model opus --system-prompt … --tools "" --strict-mcp-config --no-session-persistence`, prompt on stdin, in an empty temporary folder). Same prompt, glossary, checks, retries and cache as the other providers. `--model` takes an alias (`opus`, the default, or `sonnet`) or a full id; `--claude-bin` (default `$CLAUDE_BIN`, `claude` on PATH, `~/.local/bin/claude`); `--claude-args`; `ANTHROPIC_API_KEY` is removed from the CLI's environment so the subscription is used (`--claude-use-api-key` keeps it).
+- Errors: a missing login stops at once with a hint to `/login` (the CLI calls it a "temporary network issue", so it is recognised before the retry rule); overload / 5xx is retried; a **usage limit stops the run**, keeps `translations.json` and the cache, and the same command continues later. Token counts are logged and totalled; the CLI's `total_cost_usd` is reported as a notional `reported_cost`.
+- `envcheck.py`: new group *Translation* shows the Claude Code CLI and its version (only `info` when it is missing).
+- Docs: `TRANSLATION.md` (new section), `HANDOFF.md` section 7b. Tests: 207 passed (was 201).
+
 ## Unreleased — fix: deskew on pages with too few text lines
 
 - `deskew.estimate_geometry` returned early without `edge_model` when a page had fewer than `MIN_LINES` usable lines, so `stage1.py` failed with `KeyError: 'edge_model'` while logging (seen on a sparse right-hand page). The key is now always present (`'none'` for an untouched page); test extended.
