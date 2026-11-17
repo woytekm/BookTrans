@@ -14,6 +14,8 @@ import json
 import os
 import re
 import shlex
+import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -235,3 +237,63 @@ def expected_book_dir(input_dir, output_root, name):
     """Where the pipeline will put its result for these inputs (for the new-project dialog, before a project exists)."""
     t = tiffs_in(input_dir)
     return Path(output_root) / 'pipeline' / (t[0].stem if len(t) == 1 else name)
+
+
+class PipelineRun:
+    """``booktrans.py`` as a subprocess whose combined output is collected line by line (toolkit-free).
+
+    ``drain()`` returns the lines that arrived since the last call, ``running`` / ``returncode`` tell the state and
+    ``stop()`` ends the whole process group (booktrans.py starts the stages as child processes)."""
+
+    def __init__(self, cmd, cwd=None):
+        import queue
+        import threading
+        self.cmd = [str(c) for c in cmd]
+        self._q = queue.Queue()
+        env = dict(os.environ, PYTHONUNBUFFERED='1')
+        kw = {'start_new_session': True} if hasattr(os, 'killpg') else {}
+        self.proc = subprocess.Popen(self.cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                     stdin=subprocess.DEVNULL, text=True, encoding='utf-8', errors='replace', bufsize=1, **kw)
+        self.stopped = False
+        self._eof = False
+        self._reader = threading.Thread(target=self._read, daemon=True)
+        self._reader.start()
+
+    def _read(self):
+        for line in self.proc.stdout:
+            self._q.put(line.rstrip('\n'))
+        self.proc.stdout.close()
+        self._q.put(None)                       # end marker: everything has been read
+
+    def drain(self):
+        out = []
+        while True:
+            try:
+                item = self._q.get_nowait()
+            except Exception:
+                break
+            if item is None:
+                self._eof = True
+            else:
+                out.append(item)
+        return out
+
+    @property
+    def running(self):
+        return self.proc.poll() is None or self._reader.is_alive()
+
+    @property
+    def returncode(self):
+        return self.proc.poll()
+
+    def stop(self):
+        if self.proc.poll() is not None:
+            return
+        self.stopped = True
+        try:
+            if hasattr(os, 'killpg'):
+                os.killpg(self.proc.pid, signal.SIGTERM)
+            else:
+                self.proc.terminate()
+        except (OSError, ProcessLookupError):
+            pass

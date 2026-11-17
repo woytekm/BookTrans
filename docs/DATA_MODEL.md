@@ -195,7 +195,7 @@ Per OCR line (Stage 2): `paragraph_break` (first line of a paragraph) and `parag
 
 Stage 4 (`units.json`, schema 0.4.0): paragraph regions get `continues_from` / `continues_to` (object ids, made unique per input file as `sN-pM-reg-K`). `units[]` hold `unit_id`, `type`, dehyphenated `text`, `source_object_ids`, `pages` as `[input_index, page]`, `joins[]` (rule `removed_hyphen`, `kept_hyphen_uppercase` or `suspended_compound`; `across_page` for joins over a page break) and `dehyphenated`.
 
-## Page-recreation document model (`document.json`, schema 1.0)
+## Page-recreation document model (`document.json`, schema 1.1)
 
 Written by `booktrans.py`. Top level: `schema_version`, `source_file`, `coordinate_system`, `pages[]`, `units[]`.
 
@@ -204,7 +204,7 @@ Written by `booktrans.py`. Top level: `schema_version`, `source_file`, `coordina
 `layout`: `paper_color_rgb`, `text_area` (body/heading/footnote text), `content_area` (everything incl. figures), `columns[]` (`left`, `right` edge of justified text), `body_glyph_height_px`, `default_alignment`.
 
 `blocks[]` (in `reading_order`): `block_id`, `kind` (`text` | `figure`), `role`, `bbox`.
-- text: `text`, `lines[]` (`bbox`, `text`, `confidence`, `glyph_height_px`, `paragraph_start`), `unit_id`, `continues_from`/`continues_to`, `figure_ids`, `translation_status`, `content_context`, `typography` (`glyph_height_px`, `relative_size`, `line_pitch_px`, `style`, `uppercase_ratio`, `alignment` [`justified`/`left`/`center`], `alignment_measured`, `first_line_indent_px`, `last_line_shortfall_px`, `gap_above_px`).
+- text: `text`, `lines[]` (`bbox`, `text`, `confidence`, `glyph_height_px`, `paragraph_start`, and since schema 1.1 `words[]`: `text`, `bbox` (page pixels, same system as the line box), `conf`; `' '.join` of the word texts is the line `text`; documents made before 1.1 have no `words`), `unit_id`, `continues_from`/`continues_to`, `figure_ids`, `translation_status`, `content_context`, `typography` (`glyph_height_px`, `relative_size`, `line_pitch_px`, `style`, `uppercase_ratio`, `alignment` [`justified`/`left`/`center`], `alignment_measured`, `first_line_indent_px`, `last_line_shortfall_px`, `gap_above_px`).
 - figure: `file` (relative path), `crop_bbox`, `detector`, `captions[]` (block ids).
 - graphic (`kind: graphic`, `role`: `page_mark` | `rule`): `file`, `crop_bbox`; page numbers, printer's marks and horizontal rules (e.g. above a footnote), kept as image crops.
 

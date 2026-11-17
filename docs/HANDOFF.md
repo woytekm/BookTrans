@@ -4,7 +4,7 @@ Read this first in a new session. It states what works, how to run it, where eve
 pieces fit, what was decided, and what is open. Details live in the other documents in this folder;
 this one is the map.
 
-Last updated: 2026-11-15 (branch `gui`, from `main` after PR #8). New since 2026-11-11: **a GUI, stage A** (section 11, `GUI.md`).
+Last updated: 2026-11-17. New since 2026-11-11: **a GUI**: stage A, Run pipeline, word boxes (schema 1.1) and marks on the page image (section 11, `GUI.md`).
 
 ## 1. What the project is
 
@@ -59,7 +59,7 @@ python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.jso
 python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 151 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 164 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -195,7 +195,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (151 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (164 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -230,18 +230,23 @@ pipeline result in the GUI: create a project with the same input folder and the 
 pages), not the OCR line; line texts stay raw. 3. Stage 2 should keep word boxes (stage B; books processed earlier need a re-run of
 stages 1-2 to get exact boxes). 4. Flags of an edited unit count as reviewed. 5. Colours: blue auto, red uncertain, amber watch, green human.
 
-**Next: stage B (word boxes)**, in this order:
-1. `stage2.py`, where the line dicts are built (`out.append({'bbox': ...})`, line 100): add `'words': [{'text', 'bbox' (page coordinates,
-   same offset and scale as the line box), 'conf'} for i in ids]`. `ids` is already the filtered word list (conf < 5 and stray dashes
-   removed), so `' '.join(w['text'])` equals the line `text` and the words correspond one to one to `text.split(' ')`.
-2. Stages 3 and 4 modify the line dicts in place and write the whole JSON back (checked), so an extra `words` key travels through
-   them untouched. Only `docmodel.build_page` builds new line dicts (`'bbox', 'text', 'confidence', 'glyph_height_px',
-   'paragraph_start'`): add `'words'` there. Bump `docmodel.SCHEMA` to `1.1`, update
-   `DATA_MODEL.md`, `CHANGELOG.md`, add a test (docmodel passes `words` through; a line without `words` still works).
-3. `pageindex.py`: `word_boxes(line)` and `mark_boxes(mark)` (exact boxes when `words` is present and its token count matches the line;
-   otherwise estimated: pixel gaps of the line crop, then proportional character widths) with `exact: bool` on each mark. Tests on
-   synthetic lines. `gui_demo.py` already knows the word positions it draws (`_draw_line`): give its lines `words`.
-4. Then stage C (the correction window proper, `GUI.md` section 8).
+**Added 2026-11-17** (after the owner tried stage A on a Mac and merged it): the page list is readable again (explicit colours; macOS
+dark mode gave white on white); **Run pipeline** (Project menu or the button: parameters, `--resume`, live log, Stop; `gui_run.py`,
+`project.PipelineRun`); **stage B done**: `stage2.py` stores `words` per OCR line, document schema 1.1, `pageindex.line_box`; **marks on
+the page image** in the correction window (`gui_correction.compose_marks`, hover, show/hide per class). The TIFF is never changed:
+the marks are drawn over the deskewed page PNG the pipeline made, whose pixels are the coordinates of the model. A book processed
+*before* schema 1.1 has no word boxes: its marks are estimated (outlines only) until stages 1-2 are re-run (`booktrans.py` without
+`--resume`, which deletes the result folder, see the pitfalls). Not yet verified on a real book: marks on real word boxes.
+
+**Next: stage C, the rest** (`GUI.md` sections 6, 8, 10), in this order:
+1. In `gui_correction.py` add the bottom pane: the page's review JSON (`DocIndex.page_review`), editable, below the image (a
+   vertical `PanedWindow`); Save validates it (valid JSON, `unit_id`/`role`/`blocks`/`pages`/`text_raw` unchanged) and writes
+   `review/unit_edits.json` keyed by unit id with the sha1 of `text_raw` (design in `GUI.md` section 6). Toolkit-free part
+   (`unit_edits.py`: load, validate, save, `apply_edits`) with tests first.
+2. Clicking a mark selects the matching unit text in the editor (`mark['unit']`, `offset`, `length`); previous/next mark, previous/next
+   page.
+3. Stage D: `ocrfix.py run` applies the edits (staleness by hash), so `document.corrected.json` carries them.
+4. Open from stage E: progress per stage in the Run window, backup of `ocr_review.json` before a destructive run.
 
 **Pitfalls found in this session:**
 - `booktrans.py` deletes its result folder before a full run, and the single-TIFF path (`process`) *always* does (it has no `--resume`).

@@ -28,7 +28,7 @@ from marks import find_marks
 
 from imgutil import paper_color
 
-SCHEMA = '1.0'
+SCHEMA = '1.1'          # 1.1: lines may carry 'words' (text, bbox, conf) from stage 2
 JUSTIFY_TOL = 6        # px: a line ends "on the edge" if within this of the column edge
 FIG_PAD = 2            # px added around a figure crop
 
@@ -158,7 +158,8 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_
                     fig_of[i]['captions'].append(rid(r['object_id']))
         b['lines'] = [{'bbox': l['bbox'], 'text': l['text'], 'confidence': l.get('confidence'),
                        'glyph_height_px': l.get('glyph_height'),
-                       'paragraph_start': l.get('paragraph_break', False)} for l in r['lines']]
+                       'paragraph_start': l.get('paragraph_break', False),
+                       **({'words': l['words']} if l.get('words') else {})} for l in r['lines']]
         blocks.append(b)
     blocks += list(fig_of.values())
     layout_cols = [{'left': round(L, 1), 'right': round(R, 1)}] if edges else []

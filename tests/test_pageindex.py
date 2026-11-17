@@ -144,3 +144,53 @@ def test_page_review_lists_units_once_with_their_blocks_on_this_page():
     assert u['blocks'] == ['s1-a'] and u['pages'] == [1, 2] and u['continues_on_next_page'] and not u['continues_from_previous_page']
     assert r2['units'][0]['blocks'] == ['s1-b'] and r2['units'][0]['continues_from_previous_page']
     assert u['text'] == text and u['text_raw'] == text
+
+
+# ---------------------------------------------------------------- word boxes (schema 1.1) and mark boxes
+def _wline(words, x0=100, y0=50, w=40, gap=10, h=20):
+    x, ws = x0, []
+    for t in words:
+        ws.append({'text': t, 'bbox': [x, y0, x + w * len(t) // 4, y0 + h], 'conf': 90.0})
+        x += w * len(t) // 4 + gap
+    return {'bbox': [x0, y0, x - gap, y0 + h], 'text': ' '.join(words), 'words': ws}
+
+
+def test_line_box_is_the_union_of_the_touched_word_boxes():
+    ln = _wline(['der', 'Spitzbogen', 'ist'])
+    box, exact = P.line_box(ln, 4, 14)                 # "Spitzbogen"
+    assert exact and box == ln['words'][1]['bbox']
+    box, exact = P.line_box(ln, 6, 8)                  # inside the word: the whole word
+    assert exact and box == ln['words'][1]['bbox']
+    box, exact = P.line_box(ln, 0, 14)                 # two words: one box around both
+    assert exact and box[0] == ln['words'][0]['bbox'][0] and box[2] == ln['words'][1]['bbox'][2]
+
+
+def test_line_box_zero_length_range_picks_the_word_it_touches():
+    ln = _wline(['B.', 'in', 'Wien'])
+    box, exact = P.line_box(ln, 2, 2)                  # an insertion right after "B."
+    assert exact and box == ln['words'][0]['bbox']
+
+
+def test_line_box_estimates_when_there_are_no_word_boxes_or_they_do_not_match():
+    ln = {'bbox': [100, 50, 300, 70], 'text': 'abcdefghij' * 2}
+    box, exact = P.line_box(ln, 5, 10)
+    assert not exact and box == [150, 50, 200, 70]
+    bad = dict(_wline(['ab', 'cd']), text='ab cx')              # words do not spell the line text
+    assert P.line_box(bad, 0, 2)[1] is False
+    assert P.line_box(ln, 20, 20)[0][0] <= 300           # a range at the very end stays inside the line
+
+
+def test_demo_marks_carry_exact_boxes_around_the_token(tmp_path):
+    from gui_demo import make_demo
+    proj = make_demo(tmp_path / 'demo')
+    ix = P.DocIndex(proj.load_document()[0], proj.load_review(), base_dir=proj.book_dir())
+    seen = 0
+    for p in ix.pages:
+        for m in ix.page_marks(p['page']):
+            for w in m['where']:
+                ln = ix.block[w['block']][1]['lines'][w['line']]
+                assert w['exact'] and len(w['bbox']) == 4
+                x1, y1, x2, y2 = w['bbox']
+                assert ln['bbox'][0] <= x1 < x2 <= ln['bbox'][2] and ln['bbox'][1] <= y1 < y2 <= ln['bbox'][3]
+                seen += 1
+    assert seen >= 5

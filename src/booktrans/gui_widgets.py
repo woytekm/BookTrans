@@ -22,6 +22,7 @@ CLASS_LABELS = {'auto': 'corrected automatically', 'uncertain': 'uncertain: plea
                 'watch': 'watch: probably fine', 'human': 'decided by a human'}
 STATUS_COLORS = {'ok': '#2a7a2a', 'warn': '#b36b00', 'fail': '#c0261f', 'info': '#666666'}
 ROW_TINT = {'attention': '#fdeaea', 'watch': '#fff4d6'}
+TREE_BG, TREE_FG, TREE_SEL_BG, TREE_SEL_FG = '#ffffff', '#222222', '#cfe2f7', '#111111'   # list widgets
 TEXT_BG, TEXT_FG = '#fbfaf6', '#222222'         # set explicitly: the system dark mode must not recolour only half of a widget
 
 JSON_TOKEN = re.compile(r'(?P<key>"(?:[^"\\]|\\.)*"(?=\s*:))|(?P<str>"(?:[^"\\]|\\.)*")'

@@ -90,3 +90,17 @@ def test_expand_inputs(tmp_path):
         (tmp_path / n).write_bytes(b'')
     tiffs, folder = expand_inputs([tmp_path])
     assert [t.name for t in tiffs] == ['0001.TIF', '0002.tif'] and folder == tmp_path
+
+
+def test_word_boxes_pass_through_and_lines_without_them_still_work(tmp_path):
+    import docmodel
+    assert docmodel.SCHEMA == '1.1'
+    img = np.full((400, 700, 3), 240, np.uint8)
+    para = _para('s1-p1-reg-3', 200)
+    words = [{'text': 'text', 'bbox': [100, 200, 140, 212], 'conf': 91.0}]
+    para['lines'][0]['words'] = words                       # stage 2 output; the other lines are "old data"
+    page = {'page': 1, 'side': 'L', 'x_offset': 0, 'width': 700, 'height': 400, 'x': 0, 'regions': [para], 'illustrations': []}
+    m = build_page(page, 'pages/p.png', img, tmp_path / 'figures', {'s1-p1-reg-3': 'u0001'})
+    lines = m['blocks'][0]['lines']
+    assert lines[0]['words'] == words
+    assert all('words' not in ln for ln in lines[1:])
