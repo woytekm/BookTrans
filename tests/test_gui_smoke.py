@@ -536,3 +536,44 @@ def test_an_image_finalised_in_another_thread_is_parked_not_freed_there(app):
     assert p in gw._PENDING_IMAGES and name in app.tk.call('image', 'names')       # no Tk call was made from the thread
     gw.release_pending_images()
     assert not gw._PENDING_IMAGES and name not in app.tk.call('image', 'names')
+
+
+def test_find_in_the_editor_highlights_counts_and_cycles(edit_app):
+    a = edit_app
+    w = _open(a, 1)
+    text = w.editor.get('1.0', 'end-1c')
+    want = text.lower().count('portal')
+    assert want >= 2
+    w.find_var.set('PORTAL')                                         # case-insensitive
+    pump(w)
+    assert len(w._matches) == want and w.find_count.cget('text') == '1 of %d' % want
+    assert len(w.editor.tag_ranges('found')) == 2 * want and len(w.editor.tag_ranges('current')) == 2
+    first = w.editor.index('insert')
+    for k in range(2, want + 1):
+        w.find_next(1)
+        assert w.find_count.cget('text') == '%d of %d' % (k, want)
+    w.find_next(1)                                                   # wraps around
+    assert w.find_count.cget('text') == '1 of %d' % want and w.editor.index('insert') == first
+    w.find_next(-1)
+    assert w.find_count.cget('text') == '%d of %d' % (want, want)
+    assert w.editor.get('insert', 'insert+6c').lower() == 'portal'
+    w.find_var.set('no such word anywhere')
+    assert w.find_count.cget('text') == 'no match' and not w.editor.tag_ranges('found')
+    w.find_var.set('')
+    assert w.find_count.cget('text') == ''
+
+
+def test_find_still_works_after_the_text_was_edited_and_after_a_page_change(edit_app):
+    a = edit_app
+    w = _open(a, 1)
+    w.find_var.set('portal')
+    pump(w)
+    n = len(w._matches)
+    w.editor.insert('1.0', 'portal portal ')                          # typing adds matches before the cursor
+    w.find_next(1)
+    assert len(w._matches) == n + 2
+    w.revert()                                                       # (unsaved typing would ask before leaving the page)
+    assert len(w._matches) == n
+    w.go(1)                                                          # a new page refills the editor: highlights follow
+    pump(w)
+    assert len(w._matches) == w.editor.get('1.0', 'end-1c').lower().count('portal')

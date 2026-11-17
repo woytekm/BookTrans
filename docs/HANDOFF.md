@@ -59,7 +59,7 @@ python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.jso
 python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 190 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 192 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -195,7 +195,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (190 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (192 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -242,7 +242,7 @@ the marks are drawn over the deskewed page PNG the pipeline made, whose pixels a
 
 **Also 2026-11-17 (evening): stage C editor and the edit part of D.** The correction window has Prev/Next (PageUp/PageDown), the editable
 review JSON with Save/Revert (`unit_edits.validate_review`, `CorrectionWindow.save`), click a mark to put the cursor on its word
-(`locate`), unsaved-changes guards. Edits live in `review/unit_edits.json` (`unit_edits.py`: hash of `text_raw`, stale handling,
+(`locate`), a find box over the editor text (`find_next`, `_collect`; Cmd/Ctrl+F), unsaved-changes guards. Edits live in `review/unit_edits.json` (`unit_edits.py`: hash of `text_raw`, stale handling,
 `apply_edits`); `MainWindow.commit_edits` writes the file first, then applies in memory and re-marks; `ocrfix.py run --edits` and
 `booktrans.py --edits` reproduce them in `document.corrected.json` (the GUI's Run command always passes `--edits`). To get saved edits
 into the file `translate.py` reads: Run pipeline with `--resume` (stage 4 onwards, includes ocrfix). Not yet tried on a real book.

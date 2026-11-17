@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw
 
 import unit_edits
 from gui_widgets import (CANVAS_BG, CLASS_COLORS, CLASS_LABELS, FIND_CUR_BG, MAC, MOD, MOD_LABEL, MUTED, NOTE_FG, SEL_BG,
-                         SEL_FG, STATUS_COLORS, TEXT_BG, TEXT_FG, SafePhoto, mono_font, release_pending_images)
+                         FIND_BG, SEL_FG, STATUS_COLORS, TEXT_BG, TEXT_FG, SafePhoto, mono_font, release_pending_images)
 
 ZOOM_STEP, ZOOM_MIN, ZOOM_MAX = 1.25, 0.1, 6.0       # a click on + / - multiplies by this; limits of the scale
 PAD = 2                      # px around a mark box (page pixels, before scaling)
@@ -142,6 +142,19 @@ class CorrectionWindow(tk.Toplevel):
         self.save_btn.pack(side='right')
         self.revert_btn = ttk.Button(eb, text='Revert', command=self.revert)
         self.revert_btn.pack(side='right', padx=6)
+        fb = ttk.Frame(ef)
+        fb.pack(fill='x', pady=(0, 4))
+        ttk.Label(fb, text='Find').pack(side='left', padx=(0, 4))
+        self.find_var = tk.StringVar()
+        self.find_entry = ttk.Entry(fb, textvariable=self.find_var, width=28)
+        self.find_entry.pack(side='left')
+        ttk.Button(fb, text='\u25b2', width=3, command=lambda: self.find_next(-1)).pack(side='left', padx=(6, 2))
+        ttk.Button(fb, text='\u25bc', width=3, command=lambda: self.find_next(1)).pack(side='left')
+        self.find_count = ttk.Label(fb, text='', foreground=MUTED)
+        self.find_count.pack(side='left', padx=8)
+        ttk.Label(fb, text='Enter: next   Shift+Enter: previous   %s+F: here   Esc: back to the text' % MOD_LABEL,
+                  foreground=MUTED).pack(side='right')
+        self._matches, self._cur = [], -1
         wrap = ttk.Frame(ef)
         wrap.pack(fill='both', expand=True)
         self.editor = tk.Text(wrap, wrap='word', undo=True, maxundo=-1, font=mono_font(), bg=TEXT_BG, fg=TEXT_FG,
@@ -153,7 +166,15 @@ class CorrectionWindow(tk.Toplevel):
         ey.grid(row=0, column=1, sticky='ns')
         wrap.rowconfigure(0, weight=1)
         wrap.columnconfigure(0, weight=1)
+        self.editor.tag_configure('found', background=FIND_BG)
         self.editor.tag_configure('locate', background=FIND_CUR_BG)
+        self.editor.tag_configure('current', background=FIND_CUR_BG)
+        self.editor.tag_raise('sel')
+        self.find_var.trace_add('write', lambda *_: self._find_update(jump=True))
+        self.find_entry.bind('<Return>', lambda _e: self.find_next(1))
+        self.find_entry.bind('<Shift-Return>', lambda _e: self.find_next(-1))
+        self.find_entry.bind('<Escape>', lambda _e: self.editor.focus_set())
+        self.bind('<%s-f>' % MOD, lambda _e: (self.find_entry.focus_set(), self.find_entry.selection_range(0, 'end'), 'break')[2])
         self.editor.bind('<<Modified>>', self._modified)
         self.status = ttk.Label(ef, text='', foreground=MUTED, wraplength=800, justify='left')
         self.status.pack(fill='x', pady=(4, 0))
@@ -269,9 +290,69 @@ class CorrectionWindow(tk.Toplevel):
         self.editor.edit_reset()
         self.editor.edit_modified(False)
         self.editor.tag_remove('locate', '1.0', 'end')
+        self._find_update(jump=False)
         self.save_btn.configure(state='normal' if review is not None else 'disabled')
         self.revert_btn.configure(state='normal' if review is not None else 'disabled')
         self.status.configure(text='', foreground=MUTED)
+
+    # ------------------------------------------------------------------ find in the editor text
+    def _collect(self):
+        """All matches of the search text (case-insensitive) as ``[(start, end)]``, tagged ``found``."""
+        ed = self.editor
+        ed.tag_remove('found', '1.0', 'end')
+        self._matches = []
+        needle = self.find_var.get()
+        if not needle:
+            return
+        n = tk.IntVar(master=ed)
+        pos = '1.0'
+        while len(self._matches) < 5000:
+            pos = ed.search(needle, pos, stopindex='end', nocase=True, count=n)
+            if not pos or n.get() == 0:
+                break
+            end = '%s+%dc' % (pos, n.get())
+            ed.tag_add('found', pos, end)
+            self._matches.append((pos, end))
+            pos = end
+
+    def _find_update(self, jump):
+        """The search text changed (or the editor was refilled): re-highlight; ``jump``: go to the first match at or after the cursor."""
+        self.editor.tag_remove('current', '1.0', 'end')
+        self._collect()
+        if not self.find_var.get():
+            self.find_count.configure(text='')
+        elif not self._matches:
+            self.find_count.configure(text='no match', foreground=NOTE_FG)
+        elif jump:
+            here = self.editor.index('insert')
+            self._goto(next((i for i, (a, _b) in enumerate(self._matches) if self.editor.compare(a, '>=', here)), 0))
+        else:
+            self.find_count.configure(text='%d match%s' % (len(self._matches), '' if len(self._matches) == 1 else 'es'), foreground=MUTED)
+
+    def find_next(self, direction=1):
+        """Next (1) / previous (-1) match after the cursor, wrapping around.  Matches are collected again first: the text
+        may have been edited since the last search."""
+        self._collect()
+        if not self._matches:
+            self.find_count.configure(text='no match' if self.find_var.get() else '', foreground=NOTE_FG)
+            return
+        ed, here = self.editor, self.editor.index('insert')
+        if direction > 0:
+            i = next((k for k, (a, _b) in enumerate(self._matches) if ed.compare(a, '>', here)), 0)
+        else:
+            i = next((k for k in range(len(self._matches) - 1, -1, -1) if ed.compare(self._matches[k][0], '<', here)),
+                     len(self._matches) - 1)
+        self._goto(i)
+
+    def _goto(self, i):
+        a, b = self._matches[i]
+        ed = self.editor
+        ed.tag_remove('current', '1.0', 'end')
+        ed.tag_add('current', a, b)
+        ed.tag_remove('locate', '1.0', 'end')
+        ed.mark_set('insert', a)
+        ed.see(a)
+        self.find_count.configure(text='%d of %d' % (i + 1, len(self._matches)), foreground=MUTED)
 
     def _modified(self, _e=None):
         if self.editor.edit_modified():

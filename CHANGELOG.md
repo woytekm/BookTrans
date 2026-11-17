@@ -4,6 +4,11 @@
 
 - `deskew.estimate_geometry` returned early without `edge_model` when a page had fewer than `MIN_LINES` usable lines, so `stage1.py` failed with `KeyError: 'edge_model'` while logging (seen on a sparse right-hand page). The key is now always present (`'none'` for an untouched page); test extended.
 
+## Unreleased — gui: search in the editor
+
+- **Find** box above the editor text of the OCR correction window: every match (case-insensitive) is highlighted, `k of n` is shown, Enter / Shift+Enter (or the arrow buttons) go to the next / previous match and wrap around, `Cmd/Ctrl+F` focuses the box, Esc returns to the text. Matches are collected again on every step, so it keeps working while the text is being edited, and after Prev/Next page or Save refilled the editor.
+- Tests: 192 passed (was 190).
+
 ## Unreleased — gui: page navigation, text editor (stage C), edits applied by ocrfix (stage D)
 
 - **Prev / Next** in the OCR correction window (buttons, PageUp / PageDown): the window moves to the neighbouring page, the page list follows; a page that already has its own window is brought to the front instead.
