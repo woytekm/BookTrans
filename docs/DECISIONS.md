@@ -156,3 +156,19 @@ partial run and a full run share cache keys.
 **Consequences.** Re-running the pipeline never costs a re-translation of unchanged units. The translations are
 keyed by unit id, which a pipeline re-run renumbers; units whose text is unchanged are found again through the
 cache, the output file itself is rebuilt by the next full translation run.
+
+## ADR-021 — Rendering is a layout plan plus per-page drawing; body text flows through line slots in step with the pages
+
+**Context.** `render.py` laid out and drew the whole book in one function at full resolution. The body was one
+rectangle per page filled line after line from the top of its first paragraph, so a figure between paragraphs was
+overprinted and other layouts (two columns, text beside a picture) could not work; size and letter-spacing were
+chosen once for the book and the text flowed freely, so in a whole book paragraphs drift away from their pages
+and figures. A GUI viewer and per-block adjustments need to change or show one page without redrawing the book.
+**Decision.** Split into `typeset.py` (line breaking), `layout.py` (a JSON plan of every line for the whole book)
+and `render.py` (draw one page from the plan). Body text is poured into the original line slots. A paragraph never
+starts before its original page; size (0.90-1.03x) and letter-spacing (+-0.02 em) are fitted per page with a cost
+(delay, empty slots, orphans/widows, carried lines, change from the page before) and one page of lookahead.
+**Consequences.** Rebuilt pages keep the original line positions and the text-figure correspondence; a page may
+end with empty slots when the Polish is shorter (reported, not filled by pulling text back). Size can differ
+slightly between pages (the change cost keeps neighbours together). The plan is the interface for the GUI and for
+quality checks; `render()` keeps its signature for `booktrans.py`.

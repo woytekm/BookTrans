@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — render: layout plan, line slots, page-synchronised flow
+
+- **Rendering in two steps** (ADR-021): `layout.py` computes a **layout plan** of the whole book (every line: unit, block, style, size, letter-spacing, x, baseline, words with widths, justification gap; per page the kept and wiped blocks and the body fit), written as `layout.json`; `render.py` draws a page from it (`draw_page(doc, plan, page_index)`). `typeset.py` holds the line breaking (moved out of `render.py`, which re-exports the old names). `render()` keeps its signature.
+- `render.py --pages 3,5-7`: draw only these pages (the layout still covers the book). `--no-page-fit`: one body size for the book (shrink only).
+- **Body text through line slots**: every original body line is a slot (regularised top, column edges, narrowed by a figure beside it); the Polish lines go into the slots in column order. Fixes: a figure between two paragraphs was overprinted by the second paragraph; a text label inside a figure (a text block without a unit) moved the top of the body; two-column pages and text beside a picture now work; an untranslated body paragraph's slots were reused by the flow and overprinted.
+- **Flow kept in step with the pages**: a paragraph never starts before its original page; size and letter-spacing are fitted per page (cost of delay, empty slots, orphan/widow, carried lines, change from the previous page; one page of lookahead). Orphans and widows are avoided. Warnings: paragraphs pushed to a later page, empty slots at a page foot, overflow after the last page.
+- Text blocks without a unit outside figures keep their original pixels (on a paper background they vanished).
+- Paper colour estimated from the page when `layout.paper_color_rgb` is missing.
+- Speed: piece widths are measured once per text at a reference size and scaled; a 60-page synthetic book lays out in 3.5 s.
+- `report.json`: body units have `original_page`; pages have `blank`, `size_px`, `tracking_em`, `delayed`.
+- Tests: 12 new in `test_layout.py` (235 passed).
+- Docs: `RENDERING.md` rewritten; `DECISIONS.md` ADR-021; `HANDOFF.md`.
+
 ## Unreleased — translate: --force
 
 - **`translate.py --force`**: ignores cached answers for the selected units (`--only` / `--pages`; otherwise the whole book) and asks the model again; the new answer replaces the cached one. For a translation you do not like: without it a repeated run returns the same cached answer.

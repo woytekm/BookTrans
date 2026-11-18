@@ -4,7 +4,8 @@ Read this first in a new session. It states what works, how to run it, where eve
 pieces fit, what was decided, and what is open. Details live in the other documents in this folder;
 this one is the map.
 
-Last updated: 2026-11-18. New since 2026-11-11: **a GUI** (projects, Run pipeline, word boxes and marks on the page image, the
+Last updated: 2026-11-18. **Newest: rendering rework** (section 12: layout plan + per-page drawing, body text through
+line slots, flow kept in step with the pages; ADR-021). New since 2026-11-11: **a GUI** (projects, Run pipeline, word boxes and marks on the page image, the
 correction editor, Re-run OCR correction, Run translation; section 11, `GUI.md`) and **translation through Claude Code**
 (`translate.py --provider claude-code`, the owner's Claude subscription; section 7b). Neither has been tried on a real book yet.
 
@@ -14,8 +15,8 @@ A Python pipeline that turns a scanned page or spread (TIFF) of an old German ar
 Silesian church portals into a Polish edition with the same layout:
 
 ```
-TIFF -> layout + OCR -> document.json -> OCR correction -> translation -> render -> Polish page PNG
-        (stages 1-4)    (docmodel.py)     (ocrfix.py, GUI)  (translate.py)  (render.py)
+TIFF -> layout + OCR -> document.json -> OCR correction -> translation -> layout plan -> draw -> Polish page PNG
+        (stages 1-4)    (docmodel.py)     (ocrfix.py, GUI)  (translate.py)  (layout.py)  (render.py)
 ```
 
 Goals: keep the layout, drawings and photographs exactly, set the Polish text in a similar font so the
@@ -65,9 +66,9 @@ python booktrans.py /path/to/0001.tif -o /path/to/output                       #
 python booktrans.py 0001.tif -o output --translations ../../examples/0001.pl.json   # ... and rebuild the pages
 python translate.py output/book/document.json -o output/book/translations.json   # LM Studio, glossary, checks
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
-python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
+python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only (--pages 3,5-7: draw some pages)
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 223 tests, ~25 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 235 tests, ~30 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -93,7 +94,9 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/stage4.py` | cross-page paragraph links, dehyphenation, translation units (`units.json`) |
 | `src/booktrans/docmodel.py` | builds `document.json` (layout, typography, blocks, figures, units), crops figures |
 | `src/booktrans/marks.py` | page numbers, printer's marks, rules (kept as image crops) |
-| `src/booktrans/render.py` | page assembly: typesetting of Polish text, font fitting, compositing |
+| `src/booktrans/typeset.py` | fonts, pieces, optimum-fit line breaking (no page model) |
+| `src/booktrans/layout.py` | the layout plan of the book: line slots, page-synchronised body flow, per-page fit, fixed frames (`RENDERING.md`) |
+| `src/booktrans/render.py` | drawing a page from the plan (canvas, figures, kept text, lines), `render()`, the CLI |
 | `src/booktrans/scale.py` | resolution detection from the body line pitch |
 | `src/booktrans/ocrfix.py` | stage 5: offline OCR correction of the units (dictionaries, confusions, lost spaces), corrections log and review file (`OCR_CORRECTION.md`) |
 | `src/booktrans/ocrreview.py` | stage 5b: LLM proposals for the flags `ocrfix.py` left open (`propose` / `show` / `accept`), prompt `prompts/ocr_review_de.txt` |
@@ -134,18 +137,21 @@ Full detail: `PIPELINE.md`, `RENDERING.md`, `DATA_MODEL.md`.
 - **Document model.** `document.json` holds everything needed to rebuild a page: layout, columns, per
   block typography (glyph height, line pitch, alignment, indent, shortfall), figures with file links,
   page marks and rules, translation units.
-- **Render.** Optimum-fit line breaking with justification and Polish hyphenation, original line
-  pitch and anchoring, body text flowing through the original columns and across pages, headings,
-  captions and footnotes in fixed frames. The font size and letter-spacing are fitted per block so the
-  Polish text fills the original line widths (font fitting, see `RENDERING.md`).
+- **Render.** Two steps: `layout.py` makes a plan of every line of the book (`layout.json`), `render.py` draws
+  a page from it. Optimum-fit line breaking with justification and Polish hyphenation; body text poured into
+  the original line slots (so it never overprints a figure; two columns and text beside a picture work), kept in
+  step with the pages (a paragraph never starts before its original page), size and letter-spacing fitted per
+  page around one book size, orphans and widows avoided; headings, captions and footnotes in fixed frames
+  (`RENDERING.md`).
 
 ## 6. Known limits (things that will bite)
 
 - Tuned to one book. Two-column pages, same-size captions, ragged-right or indented paragraphs,
   running heads and multi-line footnotes are not covered (the owner will supply more samples).
-- Reading order and multi-column layouts are not modelled.
-- A paragraph that starts as the only line at the bottom of a page (an orphan) is not avoided: the body
-  flows through the page capacity without widow/orphan control.
+- Reading order is not modelled beyond the renderer's column order (columns found per page from the body
+  blocks; untested on a real two-column page).
+- A page whose Polish is much shorter keeps empty lines at its foot (the flow is kept in step with the pages
+  rather than pulling the next page's text back; `report.json` warns).
 - OCR at ~135 DPI makes slips: digit confusions (3/5), lost spaces ("Portalmiteiner"), `F`/`E`, `k`/`E`
   ("Fin", "Kinfassung"), "s ist" for "Es ist". Higher resolution did not measurably improve clean
   text; its gain is in figure crops.
@@ -209,7 +215,8 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 1. First real run of `translate.py --provider claude-code` (section 7b; from the GUI: *Run translation*); tune prompt, rules and checks on the output; a Polish spell-check (hunspell) to flag non-words. (LM Studio was run once, section 7a; set aside for now.)
 2. Glossary content: import the place-name CSV, review `proposed` terms, resolve ambiguous places; (the glossary is already wired into
    `translate.py`).
-3. Automatic font choice among supplied fonts (score x-height ratio, advance width, stem darkness
+3. **Rendering (in progress, section 12):** checks in `report.json`, render settings and per-block overrides, ink and
+   font (light Antiqua), then the GUI render window. Automatic font choice among supplied fonts (score x-height ratio, advance width, stem darkness
    against the scan; the tracking fit already exists).
 4. More samples: two-column pages, ragged right, footnotes, running heads; tune and add tests.
 5. OCR post-correction: dictionary stage done (`ocrfix.py`, `OCR_CORRECTION.md`); `ocrreview.py` asks an LLM about each flag (not yet run against a real model: try it on LM Studio / Gemma and tune `prompts/ocr_review_de.txt`); next: tune on more pages, fill `glossary/vocabulary.txt`.
@@ -220,7 +227,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (223 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (235 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -311,3 +318,24 @@ Also: `--force` (GUI: *re-translate* checkbox) asks the model again for the sele
   overwrote a name the user had set. Run the GUI tests under a display before declaring anything done.
 - Sandbox notes (not for the Mac): `tkinter` needed `apt-get update && apt-get install python3-tk` for `/usr/bin/python3.12`; headless
   screenshots work with `Xvfb :99` and `PIL.ImageGrab.grab(xdisplay=':99')`; the default `python3` of the sandbox has OpenCV but no Tk.
+
+## 12. Rendering rework (started 2026-11-18; start here for render work)
+
+The owner asked to work on output page rendering, viewing and adjusting layout and font, and agreed that the render
+engine should be complete before a GUI goes on top. Agreed order (2026-11-18):
+
+1. ~~Split layout from drawing~~ **done**: `typeset.py` / `layout.py` (plan, `layout.json`) / `render.py` (`draw_page`).
+2. ~~Line slots~~ **done**: body text into the original line positions (column order, figure wrap).
+3. ~~Flow in step with the pages~~ **done**: per-page fit with lookahead, orphan/widow control.
+4. Checks in `report.json`: text colliding with figures or other blocks, overflow and drift per page, loose lines.
+5. Settings: book defaults in `project.json`, per-block overrides in `review/render_overrides.json` (keyed by block and
+   a hash of the unit text, like `unit_edits`).
+6. Ink colour measured from the scan; lighter OFL Antiquas to compare (the rebuilt page is darker than the original).
+7. PDF export; run-level emphasis (Sperrsatz, italics) in the model; more tests. Then the GUI render window (viewer over
+   `layout.json` + `draw_page`).
+
+Assumptions (the owner did not answer; confirm): adjustments are book-wide plus per block; manual font choice before
+automatic; test data synthetic (`tests/test_layout.py`, the GUI demo) until real pipeline output is supplied.
+**Not yet run on the real sample pages** (`0001.tif`, `0002.tif` are not in the repository): render both and compare
+`compare.png` with `examples/0001_render_compare.jpg` / `0002_render_compare.jpg`; expect the same look on those
+simple pages, the slots matter on pages with figures in the column.
