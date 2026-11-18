@@ -280,6 +280,7 @@ nothing is drawn for it); *OCR text* restores; *Apply* writes the texts into the
 | `project.py` | yes | project folder, `project.json`, parameter and translation-setting validation, `book_dir`, the `booktrans.py`, `ocrfix.py` and `translate.py` commands, atomic JSON writes |
 | `envcheck.py` | yes | the environment check (also a terminal command) |
 | `pageindex.py` | yes | `replay`, `UnitMap`, `DocIndex`: page rows, the three JSON views, marks with their lines |
+| `assets/booktrans_icon.png` | - | the window / Dock icon (`assets/make_icon.py` draws it; `gui.set_app_icon`) |
 | `caption_tools.py` | yes | the correction window's caption helper: caption units of a page, the enlarged row, read again, join, apply to the review JSON |
 | `gui_demo.py` | yes | synthetic demo project (real stage 4 units, real `ocrfix.run`) |
 | `gui.py` | no | main window, menu, page list, JSON tabs, recent projects |
