@@ -693,7 +693,8 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
         near = (1.0,)                                 # already at the page's shared (smaller) size: no further shrink
     tries = [(k, [capacity], Ws) for k in near] if (extra or Ws_wide) else []
     tries += [(k, [capacity], Ws_wide) for k in near] if Ws_wide else []
-    tries += [(k, caps, Ws_wide or Ws) for k in (1.0, 0.98, 0.96, 0.94, 0.92, 0.9, 0.86, 0.82)]
+    ladder = (1.0,) if size_cap else (1.0, 0.98, 0.96, 0.94, 0.92, 0.9, 0.86, 0.82)   # capped: the page's size, no less
+    tries += [(k, caps, Ws_wide or Ws) for k in ladder]
     for shrink, cps, wset in tries:
         size = size0 * shrink
         if tracking is not None:
@@ -718,7 +719,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
         if chosen:
             break
     if not chosen:
-        shrink, Wc = 0.82, (Ws_wide or Ws)[-1]; size = size0 * shrink
+        shrink, Wc = ladder[-1], (Ws_wide or Ws)[-1]; size = size0 * shrink
         font = fonts.get(style, size * M)
         lines, relaxed = typeset(text, font, Wc * M, 0.0, False, space_factor=word_space, track=0.0,
                                  fonts_for=lambda st, sz=size: fonts.get(st, sz * M), style=style, hyphenate=hyph)
@@ -931,8 +932,7 @@ def make_plan(doc, trans, fonts, settings=None):
             res = _fixed_unit(doc, uid, chains[uid], tr[uid]['pl'].strip(), fonts, ratios, st, report, plan['pages'],
                               base=bases[uid], noise=noise, emit=False)
             key = (res['page_index'], bases[uid][0])
-            if res['size_px'] >= 0.88 * bases[uid][0] * st['size_scale']:   # one over-long caption shrinks alone
-                page_cap[key] = min(page_cap.get(key, 1e9), res['size_px'])
+            page_cap[key] = min(page_cap.get(key, 1e9), res['size_px'])
     for uid in fixed_units:
         if uid not in tr:
             keep(chains[uid], '%s: no translation; original pixels kept' % uid)

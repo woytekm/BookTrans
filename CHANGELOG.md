@@ -6,7 +6,7 @@ Captions were the weakest part of the rendered book (owner's review of the 14-pa
 were made:
 
 - **Renderer.** One caption size for the book (`layout.caption_bases`: the median fitted size of all captions near the
-  book's median glyph height) and per page the smallest size any caption of the page needs; a caption takes room from
+  book's median glyph height) and per page one size for all its captions (the smallest any of them needs); a caption takes room from
   the free space around it and follows its figure (`layout.caption_geometry`: flush towards a picture it stands beside,
   centred / flush under one, first within the picture's width); captions and headings are never hyphenated
   (`typeset(..., hyphenate=False)`); one line kept when 90 % of the size allows it. Line drawings are composited

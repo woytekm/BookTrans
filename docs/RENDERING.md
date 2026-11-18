@@ -220,8 +220,8 @@ are never hyphenated (`typeset(..., hyphenate=False)`).
 
 - **One size.** `caption_bases`: all captions whose glyph height is within 0.7-1.6x the book's median caption form one
   group (OCR heights scatter with accents and fragments); each gets the group's median fitted size and letter-spacing.
-  Captions of one page then share the smallest size any of them needs (a dry run first); one caption that would
-  need less than 88 % of the base shrinks alone instead of shrinking the page.
+  Captions of one page then all share the smallest size any of them needs (a dry run first; a capped caption does not
+  shrink below the page's size, it takes extra lines instead).
 - **Room.** `caption_geometry`: the caption's figure (`figure_ids`, else the nearest figure above / beside), its
   alignment to it (beside: flush towards the picture; under: centred when centred on it, flush right / left when
   flush), how far it may reach (neighbours on the same rows, the page content; under a figure first only the
