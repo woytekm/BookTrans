@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — translation: titles of cited works
+
+- Rule in `prompts/translate_rules_pl.txt`: titles of cited books, articles, journals stay in their original language
+  and spelling, in italics (`<i>…</i>`, which the renderer sets in the italic font), the reference in Polish citation
+  form ("Zob. Richard Hamann, <i>Deutsche und französische Kunst im Mittelalter</i>, t. II, 1923."). Claude already kept
+  that title untranslated on its own; the rule makes it dependable.
+- `translate.tag_problems`: only balanced `<i>` is allowed in an answer; another tag or Markdown emphasis makes a retry.
+- The rules file changed: the next translation run sends every unit again.
+- Tests: 1 new.
+
 ## Unreleased — translation: punctuation rules
 
 - Owner's finding: "... z owych czasów, - chodzi tu w istocie o kościoły -, zostało ..." (the old German print's `, -`

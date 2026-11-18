@@ -103,7 +103,9 @@ What it does for every unit with `translation_status: translate` (excluded and r
    digits equal to the source, punctuation (`punctuation_problems`, since 2026-11-18: a comma or semicolon next to a
    dash, the long dash `—`, a spaced hyphen used as a dash, two marks together such as `?,`; the rules in
    `prompts/translate_rules_pl.txt` ask for the Polish short dash `–` with spaces and an inserted phrase set off by
-   dashes or commas, never both). Glossary, length and punctuation problems trigger up to `--retries` (default 2) repeats of
+   dashes or commas, never both), markup (`tag_problems`: only `<i>…</i>`, balanced, around titles of cited works,
+   which the rules keep untranslated and in italics; any other tag or Markdown emphasis is a problem). Glossary, length,
+   punctuation and markup problems trigger up to `--retries` (default 2) repeats of
    the request with an `IMPORTANT:` remark naming the problem; digit differences are only reported (OCR
    often misreads digits in the source);
 5. output `translations.json` in the format above plus, per unit, `glossary` (what was given) and `flags`
