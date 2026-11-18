@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — GUI: clear project data
+
+- **Project > Clear project data…** (`gui_dialogs.ClearDataDialog`): removes the results of processing for a fresh start, the settings in `project.json` stay. Ticked by default: pipeline output, translation, rendered pages; optional: the translation cache and the review work (unit edits, OCR decisions, render adjustments; asks again before deleting them). Shows sizes; refuses while a run is going; closes the correction and render windows first.
+- `Project.data_parts()` / `Project.clear_data(keys)`: only paths inside the project folder, a symbolic link loses the link and not its target, `project.json` never.
+- Fix: the Project menu's enable/disable loop now skips separators.
+- Tests: 2 new (276 passed).
+
 ## Unreleased — stage 2: stray marks no longer cut paragraphs
 
 - **Cause of the split on page 62** ("Bei der im Jahre 1900" | "erfolgten Restauration ..."): a margin mark read as a line `)` at x 800, sorted between the two lines, passed the *first-line indent* test (it starts 570 px right of the column edge) and started a new paragraph; the next line, starting in lower case, then stayed with the `)`. Same at `Ef` ("erneuert | worden") and `5` ("völlig | neu eingebaut").

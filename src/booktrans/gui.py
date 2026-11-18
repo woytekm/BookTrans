@@ -31,7 +31,7 @@ except ImportError as e:
              'Check everything with:  python envcheck.py' % (e, sys.version_info[0], sys.version_info[1]))
 
 from gui_correction import CorrectionWindow          # noqa: E402
-from gui_dialogs import CommandDialog, EnvWindow, NewProjectDialog   # noqa: E402
+from gui_dialogs import ClearDataDialog, CommandDialog, EnvWindow, NewProjectDialog   # noqa: E402
 from gui_run import RunWindow, TranslateWindow                          # noqa: E402
 from gui_widgets import (MAC, MOD, MOD_LABEL, MUTED, ROW_TINT, STATUS_COLORS, TREE_FG, JsonView, apply_dark_theme, Legend, copy_to_clipboard,   # noqa: E402
                          human_bytes, reveal_in_file_manager, run_async)
@@ -108,6 +108,8 @@ class MainWindow(tk.Tk):
         p.add_command(label='Pipeline command…', command=self.show_command)
         p.add_command(label='Reload from disk', accelerator='%s+R' % MOD_LABEL, command=self.reload)
         p.add_command(label='Show project folder', command=lambda: self.project and reveal_in_file_manager(self.project.root))
+        p.add_separator()
+        p.add_command(label='Clear project data…', command=self.clear_project)
         self.project_menu = p
         g = tk.Menu(m, tearoff=False)
         m.add_cascade(label='Page', menu=g)
@@ -219,7 +221,7 @@ class MainWindow(tk.Tk):
     def _menu_state(self):
         on = 'normal' if self.project else 'disabled'
         for i in range(self.project_menu.index('end') + 1):
-            if i != 0:                                # "Check environment" works without a project
+            if i != 0 and self.project_menu.type(i) != 'separator':   # "Check environment" works without a project
                 self.project_menu.entryconfigure(i, state=on)
         for i in range(self.page_menu.index('end') + 1):
             self.page_menu.entryconfigure(i, state=on)
@@ -375,7 +377,8 @@ class MainWindow(tk.Tk):
                     v.set_text(msg)
                 self.page_lbl.configure(text='')
                 self.help_lbl.configure(text='')
-                self.status('Nothing to show yet.')
+                self.status(*getattr(self, '_pending_status', None) or ('Nothing to show yet.',))
+                self._pending_status = None
                 self._menu_state()
                 return
             which, self.index, self.rows, self.edits, self.stale_edits, self.decisions = res
@@ -597,6 +600,36 @@ class MainWindow(tk.Tk):
             return
         from gui_render import RenderWindow
         self.render_window = RenderWindow(self, self.project, page=self._selected_page())
+
+    def clear_project(self):
+        """Remove the results of processing (pipeline output, translation, rendered pages; optionally the translation
+        cache and the review work) for a fresh start; the settings stay.  Not while a run is going."""
+        if not self.project:
+            return
+        runs = [w for w in (getattr(self, 'run_window', None),
+                            getattr(getattr(self, 'render_window', None), 'run_window', None))
+                if w is not None and w.winfo_exists() and w.run is not None and w.run.running]
+        if runs:
+            messagebox.showinfo('A run is in progress', 'Wait until the running %s has finished (or stop it).' % runs[0].WHAT,
+                                parent=self)
+            return
+        d = ClearDataDialog(self, self.project)
+        self.wait_window(d)
+        if not d.result or not self._can_close_windows():
+            return
+        self._close_windows()
+        try:
+            removed = self.project.clear_data(d.result)
+        except (OSError, ProjectError) as e:
+            messagebox.showerror('Clear project data', str(e), parent=self)
+            return
+        msg = ('Cleared %s: %d item(s) removed. Settings kept; Run pipeline starts afresh.'
+               % (', '.join(d.result), len(removed)), 'ok')
+        self._pending_status = msg if 'pipeline' in d.result else None
+        self.reload()
+        self._header()
+        if 'pipeline' not in d.result:
+            self.status(*msg)
 
     def show_command(self):
         if self.project:
