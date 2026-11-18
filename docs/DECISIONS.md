@@ -131,3 +131,28 @@ A human corrects the text of a *unit* (what is translated), shown per page as th
 A correction or flag offset in a unit is traced to OCR lines by replaying the stage 4 joining with position tracking (`pageindex.replay`) and verifying the result against the stored text; units that do not reproduce are marked unaligned instead of mis-placed. Stage 2 will keep the per-word boxes Tesseract already returns (`words: [{text, bbox, conf}]` per line, document schema 1.1); existing data falls back to estimated boxes.
 
 **Reason:** unit text is a deterministic function of line texts, so no fuzzy alignment is needed; only a word box can mark a single word on the page. See `GUI.md` D6, D7, section 7.
+
+## ADR-019 — Translation through the Claude Code CLI on the owner's subscription; local models set aside
+
+**Context.** The first real run with a local model (Gemma 4 12B in LM Studio, 16 GB Mac; HANDOFF 7a) gave
+mediocre Polish: non-words, a nonsense sentence, wrong terms. Larger models do not fit the owner's machines. The
+owner has a Claude subscription and Claude Code installed (`~/.local/bin/claude`), but no wish to pay per token.
+**Decision.** `translate.py --provider claude-code` runs `claude -p --output-format json` once per unit with the same
+prompt, glossary, checks, retries and cache as the other engines, own system prompt, no tools, no MCP servers, no
+saved sessions, in an empty temporary folder; `ANTHROPIC_API_KEY` is removed from its environment so the
+subscription is used. Not `--bare` (it accepts only an API key). Default engine of a GUI project (2026-11-18).
+**Consequences.** Usage counts against the plan's limits: a limit stops the run cleanly and the cache makes the
+re-run continue. The CLI's flags can change between versions (checked against 2.1.326). LM Studio and the Anthropic
+API stay as engines; nothing in the translation contract (ADR-013) changed.
+
+## ADR-020 — Translation output lives in the project, outside the pipeline folder
+
+**Context.** A full `booktrans.py` run deletes `pipeline/<book>/` (ADR-016); `translate.py` wrote next to
+`document.json` by default, and its cache holds paid-for (or limit-counted) answers.
+**Decision.** A GUI project translates to `<project>/translation/translations.json`, the cache
+`translations.cache.json` beside it; the settings live in `project.json` (schema 1.1). A partial run (`--pages`,
+`--only`) merges into the existing output, and the paragraph context always comes from the whole book, so a
+partial run and a full run share cache keys.
+**Consequences.** Re-running the pipeline never costs a re-translation of unchanged units. The translations are
+keyed by unit id, which a pipeline re-run renumbers; units whose text is unchanged are found again through the
+cache, the output file itself is rebuilt by the next full translation run.

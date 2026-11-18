@@ -5,6 +5,7 @@
 - **`translate.py --force`**: ignores cached answers for the selected units (`--only` / `--pages`; otherwise the whole book) and asks the model again; the new answer replaces the cached one. For a translation you do not like: without it a repeated run returns the same cached answer.
 - GUI, *Run translation*: per-run checkbox *re-translate* (`--force`); with no pages given it asks first, since the whole book would be sent again. `Project.translate_command(..., force=True)`.
 - Tests: 223 passed (was 221).
+- Docs: `HANDOFF.md` brought up to date (status, pipeline diagram, repository map, translation section, roadmap, GUI section in date order); `DECISIONS.md` ADR-019 (Claude Code as translation engine) and ADR-020 (translation output in the project, outside `pipeline/`).
 
 ## Unreleased — gui: translation settings and Run translation
 
