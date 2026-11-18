@@ -60,7 +60,7 @@ Translating the units (LM Studio running with a model loaded and its server star
 python translate.py output/mybook/document.json -o output/mybook/translations.json [--endpoint URL] [--model NAME] [--dry-run]
 ```
 
-Or through Claude Code with your Claude subscription (log in once with `claude` and `/login`; details in `docs/TRANSLATION.md`):
+In the GUI: *Run translation…* (translation settings are kept in the project). Or on the command line through Claude Code with your Claude subscription (log in once with `claude` and `/login`; details in `docs/TRANSLATION.md`):
 
 ```bash
 python translate.py output/mybook/document.json --provider claude-code [--model opus|sonnet] [--only u0001]

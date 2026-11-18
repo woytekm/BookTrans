@@ -4,7 +4,7 @@ Read this first in a new session. It states what works, how to run it, where eve
 pieces fit, what was decided, and what is open. Details live in the other documents in this folder;
 this one is the map.
 
-Last updated: 2026-11-17 (late evening). New since 2026-11-11: **a GUI**: stage A, Run pipeline, word boxes (schema 1.1) and marks on the page image (section 11, `GUI.md`). **New: translation through Claude Code** (`--provider claude-code`, section 7b).
+Last updated: 2026-11-18. New since 2026-11-11: **a GUI**: stage A, Run pipeline, word boxes (schema 1.1) and marks on the page image (section 11, `GUI.md`). **New: translation through Claude Code** (`--provider claude-code`, section 7b). **New 2026-11-18: Run translation from the GUI** (translation settings in `project.json`, section 11).
 
 ## 1. What the project is
 
@@ -60,7 +60,7 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 207 tests, ~10 s (the 12 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 221 tests, ~25 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -206,7 +206,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (207 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (221 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -250,6 +250,13 @@ the marks are drawn over the deskewed page PNG the pipeline made, whose pixels a
 `--resume`, which deletes the result folder, see the pitfalls). Not yet verified on a real book: marks on real word boxes.
 
 **Also 2026-11-17: dark theme** (`gui_widgets.apply_dark_theme`, the single palette at the top of `gui_widgets.py`; do not hard-code colours elsewhere, a test fails if you do) and **zoom** in the correction window (buttons, Ctrl/Cmd + wheel, drag, scroll bars; `set_zoom`, `zoom_by`, `zoom_fit`).
+
+**2026-11-18: Run translation** (header button, Project menu, Cmd/Ctrl+Shift+T; `gui_run.TranslateWindow`): the project keeps
+translation settings in `project.json` (schema 1.1: engine, default `claude-code`; model; endpoint; glossary files; source
+corrected/raw; timeout; retries; no-think) and runs `translate.py` -> `<project>/translation/translations.json`, for the whole
+book or some pages (`--pages`, new), with a dry-run option. It warns when `document.corrected.json` is missing or older than the
+saved edits/decisions. `translate.py` fixes found on the way: a partial run (`--only`/`--pages`) now keeps the other units in the
+output and uses the whole book's context (same cache keys as a full run), and the output folder is created.
 
 **Also 2026-11-17 (late): Re-run OCR correction** (header button, Project menu, Cmd/Ctrl+Shift+O): runs only `ocrfix.py` with the saved
 edits and decisions, so a Save reaches `document.corrected.json` (the file `translate.py` reads) in seconds. And `--resume` now works for a

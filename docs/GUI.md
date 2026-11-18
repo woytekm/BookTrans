@@ -93,6 +93,9 @@ again raises it; closing the project closes them.
         unit_edits.json               edited unit texts (section 6)
         page_status.json              per page: todo / reviewed                                (stage C)
         backup/                       copies of ocr_review.json before a destructive re-run    (stage E)
+    translation/                      translate.py -o <project>/translation/translations.json (Run translation; outside pipeline/)
+        translations.json             the translation render.py reads (+ glossary and flags per unit)
+        translations.cache.json       translate.py's answer cache (a repeated run only translates what changed)
 ```
 
 `<book>` is the project name, except when the input folder holds a single TIFF: `booktrans.py` then names the folder after the
@@ -102,12 +105,19 @@ file (`Project.book_dir` knows). The GUI shows `document.corrected.json` when it
 `project.json`:
 
 ```json
-{"kind": "booktrans-project", "schema": "1.0", "name": "silesia", "created": "2026-11-15T14:20:00",
+{"kind": "booktrans-project", "schema": "1.1", "name": "silesia", "created": "2026-11-15T14:20:00",
  "input_dir": "/scans/silesia",
- "params": {"lang": "deu", "layout": "spread", "scale": "auto", "ocr_scale": 2.0, "ocrfix": "strict", "ocr_suggest": false}}
+ "params": {"lang": "deu", "layout": "spread", "scale": "auto", "ocr_scale": 2.0, "ocrfix": "strict", "ocr_suggest": false},
+ "translation": {"provider": "claude-code", "model": "", "endpoint": "", "glossary": "", "source": "corrected",
+                 "timeout": 600, "retries": 2, "no_think": false}}
 ```
 
 `Project.command()` turns the parameters into the exact `booktrans.py` command line (shown by Project > Pipeline command).
+Schema 1.1 (2026-11-18) adds `translation`; a 1.0 file loads with the defaults. `Project.translate_command(pages, dry_run)` turns
+the translation settings into the `translate.py` command: `<book>/document.json` (translate.py takes `document.corrected.json`
+beside it unless `source` is `raw`, which adds `--raw`), `-o translation/translations.json`, `--provider`, `--model` and
+`--endpoint` when set (no endpoint for `claude-code`), `--glossary` (paths separated by `;`, relative ones from the project
+folder), `--timeout`, `--retries`, `--no-think` (openai only), `--pages`, `--dry-run`.
 
 ## 4. Data flow
 
@@ -197,6 +207,16 @@ dictionaries (present, non-empty and plausible: entry counts, a Hunspell header 
 TIFF count and size, first TIFF opens, free disk space). Statuses `ok`, `warn`, `fail`, `info`; missing OCR-correction data is only
 `info` when the project switched the correction off. No network access.
 
+**Run translation** (`gui_run.TranslateWindow`; header button, Project menu, Cmd/Ctrl+Shift+T): the translation settings of the
+project (engine `claude-code` / `openai` / `anthropic`, model with a hint about the engine's default, source text `corrected` /
+`raw`, timeout, retries, endpoint and "no thinking" only where the engine uses them, glossary files with *Add…*), saved to
+`project.json` on Start; per run, not saved: *pages* (`3` or `1,4-6`, blank = the whole book) and *dry run* (prompts only).
+Before starting it says, in the window and again in a question, when the translation would not see your work: no
+`document.corrected.json`, or `review/unit_edits.json` / `ocr_decisions.json` newer than it (press *Re-run OCR correction*
+first); and it asks about unsaved correction windows like the other runs. Live log, Stop; at the end the header shows
+"translation: N of M units, K flagged". A page run keeps the other pages' translations (translate.py merges, section 7 of
+`TRANSLATION.md`). One run window per project: pipeline, OCR correction and translation never run at the same time.
+
 **OCR correction window** (`gui_correction.py`): target design for stage C, one window per page, top to bottom:
 1. *Header*: page, side, source TIFF, counts, legend, previous/next page, "next mark".
 2. *Page image* (about two thirds of the height): fit / zoom / pan; marks as translucent boxes in the four colours with a thin outline
@@ -212,7 +232,7 @@ Stage A already has the window as a separate, per-page, reused toplevel with the
 
 | File | Toolkit-free | Role |
 |---|---|---|
-| `project.py` | yes | project folder, `project.json`, parameter validation, `book_dir`, the `booktrans.py` command, atomic JSON writes |
+| `project.py` | yes | project folder, `project.json`, parameter and translation-setting validation, `book_dir`, the `booktrans.py`, `ocrfix.py` and `translate.py` commands, atomic JSON writes |
 | `envcheck.py` | yes | the environment check (also a terminal command) |
 | `pageindex.py` | yes | `replay`, `UnitMap`, `DocIndex`: page rows, the three JSON views, marks with their lines |
 | `gui_demo.py` | yes | synthetic demo project (real stage 4 units, real `ocrfix.run`) |
@@ -220,10 +240,10 @@ Stage A already has the window as a separate, per-page, reused toplevel with the
 | `gui_dialogs.py` | no | new project, environment window, command dialog |
 | `gui_correction.py` | no | the OCR correction window: page image with marks (editor in stage C); `compose_marks` needs only PIL |
 | `unit_edits.py` | no | the edit store: hash-tied edits, `apply_edits`, `validate_review` (also used by `ocrfix.py run --edits`) |
-| `gui_run.py` | yes | the Run pipeline window (parameters, Start/Stop, live log); mode `ocrfix`: Re-run OCR correction (stage 5 only) |
+| `gui_run.py` | no | `ProcessWindow` (Start/Stop, live log); `RunWindow`: Run pipeline, mode `ocrfix`: Re-run OCR correction (stage 5 only); `TranslateWindow`: Run translation |
 | `gui_widgets.py` | no | colours, `JsonView` (read-only JSON with colouring and search), `run_async`, helpers |
 
-Tests: `test_project.py` (22), `test_envcheck.py` (13), `test_pageindex.py` (17), `test_gui_demo.py` (6), `test_gui_smoke.py` (12; needs
+Tests: `test_project.py` (30), `test_envcheck.py` (14), `test_pageindex.py` (21), `test_gui_demo.py` (6), `test_gui_smoke.py` (41; needs
 `tkinter` and a display, skipped otherwise, windows are kept withdrawn).
 
 ## 10. Stages
@@ -235,7 +255,7 @@ Tests: `test_project.py` (22), `test_envcheck.py` (13), `test_pageindex.py` (17)
 | **C** | the correction window: image with marks (**done**), prev/next page (**done**), JSON editor with validation and save to `review/unit_edits.json` (**done**), click a mark to find the word (**done**), find box in the editor (**done**), accept / replace / accept everywhere for a flag and accept-all on a page (**done**, `ocr_decisions.py`); open: mark list, next/previous mark, accept a candidate with one key, page status (todo / reviewed) | mostly done |
 | **D** | `unit_edits.apply_edits` in `ocrfix.py run --edits` (**done**; staleness by hash; `booktrans.py --edits`, passed by the GUI); open: accept-a-candidate writes a `resolution` into `ocr_review.json`, the **Re-run OCR correction** button (**done** 2026-11-17: header button, Project menu, Cmd/Ctrl+Shift+O; the run window in mode `ocrfix` runs `project.ocrfix_command()` = `ocrfix.py run <book>/document.json [--aggressive] [--no-suggest] --edits … --decisions …`, seconds instead of a stage-4-onwards run; asks first when a correction window has unsaved changes) | partly done |
 | **E** | run the pipeline from the GUI (**done** 2026-11-17: `gui_run.RunWindow`, `project.PipelineRun`; parameters edited in the window and saved to `project.json`, live log, Stop, `--resume`, reloads the result when done); open: progress per stage, backup of `ocr_review.json` before a destructive run | partly done |
-| **F** | later: translation review, export, anything the first real use shows is missing | |
+| **F** | run the translation from the GUI (**done** 2026-11-18: translation settings in `project.json`, `TranslateWindow`, pages and dry run per run, stale-correction warning, summary in the header); open: translation review (German and Polish side by side, flags), render from the GUI, export, anything the first real use shows is missing | started |
 
 Acceptance for stage B: on a project with words, every mark of the demo lands on the box of its word; on one without, the GUI
 says the positions are estimated. For stage C: an edit made in the window is in `unit_edits.json`, in `document.corrected.json`,

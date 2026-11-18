@@ -6,6 +6,7 @@ A project is one folder, chosen by the user as "output directory" + project name
     <project>/project.json       name, input folder, pipeline parameters (this module)
     <project>/pipeline/<book>/   output of booktrans.py (-o <project>/pipeline --name <book>); a re-run may wipe it
     <project>/review/            human decisions made in the GUI; never written or deleted by the pipeline
+    <project>/translation/       translations.json (+ its .cache.json) of translate.py; outside pipeline/ for the same reason
 
 The split is deliberate: ``booktrans.py`` removes its result folder before a full (non ``--resume``) run, so
 nothing a human typed may live inside it (see docs/GUI.md, decision D4).
@@ -23,7 +24,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 
-SCHEMA = '1.0'
+SCHEMA = '1.1'           # 1.1: "translation" settings (a 1.0 file loads with the defaults)
 KIND = 'booktrans-project'
 FILE = 'project.json'
 LAYOUTS = ('spread', 'page', 'crop')
@@ -36,6 +37,18 @@ DEFAULT_PARAMS = {
     'ocr_scale': 2.0,       # booktrans.py --ocr-scale
     'ocrfix': 'strict',     # strict | aggressive | off  (stage 5, ocrfix.py)
     'ocr_suggest': False,   # ocrfix: slow Hunspell suggestions
+}
+PROVIDERS = ('claude-code', 'openai', 'anthropic')
+TR_SOURCES = ('corrected', 'raw')
+DEFAULT_TRANSLATION = {
+    'provider': 'claude-code',  # claude-code (your subscription) | openai (LM Studio ...) | anthropic (API key)
+    'model': '',                # '' = translate.py's default for the provider (claude-code: opus)
+    'endpoint': '',             # openai / anthropic only; '' = translate.py's default ($LMSTUDIO_ENDPOINT, localhost)
+    'glossary': '',             # glossary CSV files separated by ';' ('' = the repository's glossary/*.csv)
+    'source': 'corrected',      # corrected: document.corrected.json when it exists | raw: document.json (--raw)
+    'timeout': 600,             # seconds per request
+    'retries': 2,               # extra attempts when a check fails
+    'no_think': False,          # openai: ask a reasoning model not to think
 }
 
 
@@ -92,6 +105,41 @@ def check_params(p):
     return p
 
 
+def glossary_files(spec, base=None):
+    """'a.csv; ~/b.csv' -> [Path, ...]; relative paths are taken from ``base`` (the project folder)."""
+    out = []
+    for part in str(spec or '').split(';'):
+        part = part.strip()
+        if part:
+            q = Path(os.path.expanduser(part))
+            out.append(q if q.is_absolute() or base is None else Path(base) / q)
+    return out
+
+
+def check_translation(t, base=None):
+    """Validate translation settings; raises ProjectError with a readable message."""
+    if t.get('provider') not in PROVIDERS:
+        raise ProjectError('translation engine must be one of %s' % ', '.join(PROVIDERS))
+    if t.get('source') not in TR_SOURCES:
+        raise ProjectError('source text must be one of %s' % ', '.join(TR_SOURCES))
+    if re.search(r'\s', str(t.get('model', '')).strip()):
+        raise ProjectError('model must be a single word such as opus, sonnet or a model id')
+    try:
+        if float(t.get('timeout')) <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ProjectError('timeout must be a positive number of seconds')
+    try:
+        if int(str(t.get('retries'))) < 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ProjectError('retries must be a whole number, 0 or more')
+    missing = [str(g) for g in glossary_files(t.get('glossary'), base) if not g.is_file()]
+    if missing:
+        raise ProjectError('glossary file not found: %s' % ', '.join(missing))
+    return t
+
+
 class Project:
     def __init__(self, root, data):
         self.root = Path(root)
@@ -110,7 +158,8 @@ class Project:
         check_params(p)
         data = {'kind': KIND, 'schema': SCHEMA, 'name': name,
                 'created': time.strftime('%Y-%m-%dT%H:%M:%S'),
-                'input_dir': os.path.abspath(os.path.expanduser(str(input_dir))), 'params': p}
+                'input_dir': os.path.abspath(os.path.expanduser(str(input_dir))), 'params': p,
+                'translation': dict(DEFAULT_TRANSLATION)}
         pr = cls(root, data)
         pr.save()
         pr.review_dir.mkdir(parents=True, exist_ok=True)
@@ -134,6 +183,9 @@ class Project:
         params = dict(DEFAULT_PARAMS)
         params.update(data.get('params') or {})
         data['params'] = params
+        tr = dict(DEFAULT_TRANSLATION)
+        tr.update(data.get('translation') or {})
+        data['translation'] = tr
         return cls(f.parent, data)
 
     def save(self):
@@ -155,6 +207,19 @@ class Project:
     @property
     def params(self):
         return self.data['params']
+
+    @property
+    def translation(self):
+        return self.data.setdefault('translation', dict(DEFAULT_TRANSLATION))
+
+    @property
+    def translation_dir(self):
+        return self.root / 'translation'
+
+    @property
+    def translations_file(self):
+        """translate.py's output (render.py reads it); the answer cache is ``translations.cache.json`` beside it."""
+        return self.translation_dir / 'translations.json'
 
     @property
     def pipeline_root(self):
@@ -262,6 +327,63 @@ class Project:
 
     def ocrfix_command_line(self):
         return ' '.join(shlex.quote(str(c)) for c in self.ocrfix_command())
+
+    # ------------------------------------------------------------ translation
+    def translate_command(self, pages=None, dry_run=False):
+        """``translate.py`` for this project: the book's document.json (translate.py itself takes the corrected copy
+        beside it unless ``source`` is raw) -> ``translation/translations.json``.  ``pages``: e.g. '3-5' (a partial run
+        keeps the other units).  Raises ProjectError when there is no document yet."""
+        t = self.translation
+        doc = self.book_dir() / 'document.json'
+        if not doc.exists():
+            raise ProjectError('no document.json yet in %s: run the pipeline first' % self.book_dir())
+        cmd = [sys.executable, str(HERE / 'translate.py'), str(doc), '-o', str(self.translations_file),
+               '--provider', t['provider']]
+        if str(t.get('model', '')).strip():
+            cmd += ['--model', str(t['model']).strip()]
+        if t['provider'] != 'claude-code' and str(t.get('endpoint', '')).strip():
+            cmd += ['--endpoint', str(t['endpoint']).strip()]
+        g = glossary_files(t.get('glossary'), self.root)
+        if g:
+            cmd += ['--glossary'] + [str(x) for x in g]
+        if t['source'] == 'raw':
+            cmd.append('--raw')
+        cmd += ['--timeout', str(t['timeout']), '--retries', str(t['retries'])]
+        if t['provider'] == 'openai' and t.get('no_think'):
+            cmd.append('--no-think')
+        if pages and str(pages).strip():
+            cmd += ['--pages', str(pages).replace(' ', '')]
+        if dry_run:
+            cmd.append('--dry-run')
+        return cmd
+
+    def translate_command_line(self, pages=None, dry_run=False):
+        return ' '.join(shlex.quote(str(c)) for c in self.translate_command(pages, dry_run))
+
+    def translation_warnings(self):
+        """Things to know before translating, as sentences: the corrected copy is missing or older than the saved
+        edits and decisions (they would not be translated)."""
+        if self.translation.get('source') == 'raw':
+            return ['Source text "raw": the OCR text of document.json is translated, without the OCR correction and your edits.']
+        f = self.files()
+        if not f['document'].exists():
+            return []
+        if not f['corrected'].exists():
+            return ['There is no document.corrected.json: the raw OCR text would be translated. '
+                    'Run "Re-run OCR correction" first.']
+        newer = [q.name for q in (self.edits_file, self.decisions_file)
+                 if q.exists() and q.stat().st_mtime > f['corrected'].stat().st_mtime]
+        if newer:
+            return ['%s changed after document.corrected.json was written: your latest edits would not be translated. '
+                    'Run "Re-run OCR correction" first.' % ' and '.join(newer)]
+        return []
+
+    def load_translations(self):
+        """translations.json -> its ``units`` dict ({} when there is none or it cannot be read)."""
+        try:
+            return read_json(self.translations_file).get('units', {}) or {}
+        except (OSError, ValueError, AttributeError):
+            return {}
 
 
 def expected_book_dir(input_dir, output_root, name):

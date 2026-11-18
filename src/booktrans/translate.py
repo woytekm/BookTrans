@@ -397,18 +397,46 @@ def run(doc, a, call=None):
     for k in USAGE:
         USAGE[k] = 0.0 if k in ('seconds', 'reported_cost') else 0
     units = collect(doc)
-    todo = [u for u in units if u[4] == 'translate' and (not a.only or u[0] in a.only)]
+    every = [u for u in units if u[4] == 'translate']
+    todo = [u for u in every if not a.only or u[0] in a.only]
     skipped = [u[0] for u in units if u[4] != 'translate']
     log.info('translate', '%d units to translate, %d skipped (%s)' % (len(todo), len(skipped), 'excluded or under review' if skipped else '-'))
     result = {'schema': '1.0', 'target_language': 'pl', 'prompt': base, 'model': a.model, 'notes': [], 'units': {}}
+    kept = {}
+    if a.only and not a.dry_run and a.output.exists():
+        # a partial run (--only / --pages) updates the selected units and keeps the others from the previous output
+        try:
+            kept = json.loads(a.output.read_text(encoding='utf-8')).get('units', {})
+        except (OSError, ValueError):
+            kept = {}
+        kept = {k: v for k, v in kept.items() if k not in a.only}
+        if kept:
+            log.info('translate', 'partial run: %d other units kept from %s' % (len(kept), a.output))
+    order = [u[0] for u in units]
+
+    def save():
+        merged = dict(kept)
+        merged.update(result['units'])
+        out = dict(result)
+        out['units'] = {k: merged[k] for k in order if k in merged}
+        out['units'].update({k: v for k, v in merged.items() if k not in out['units']})
+        out['notes'] = ['%s: %s' % (k, '; '.join(v['flags'])) for k, v in out['units'].items() if v.get('flags')]
+        a.output.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding='utf-8')
+        return out
+
     prompts_txt = []
     prev_by_role = {}
     t0 = time.time()
-    for n, (uid, text, role, upper, status) in enumerate(todo, 1):
-        hits = matcher.find(text)
-        block = G.prompt_block(hits)
+    n = 0
+    for uid, text, role, upper, status in every:
+        # the context is the preceding unit of the whole book, also in a partial run: same prompt, same cache key
         ctx = last_sentence(prev_by_role[role]) if role == 'paragraph' and role in prev_by_role else None
         prev_by_role[role] = text
+        if a.only and uid not in a.only:
+            continue
+        n += 1
+        hits = matcher.find(text)
+        block = G.prompt_block(hits)
         prompt = build_prompt(base, rules, block, role, upper, text, ctx)
         entry = {'source': text, 'pl': '', 'glossary': [e['de'] + ' = ' + e['pl'] for e, _ in hits if e['status'] in G.USABLE],
                  'flags': []}
@@ -429,7 +457,7 @@ def run(doc, a, call=None):
                 try:
                     answer = clean(call(build_prompt(base, rules, block, role, upper, text, ctx, remark)))
                 except UsageLimit as e:
-                    a.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+                    save()
                     raise SystemExit('usage limit reached at %s (%d of %d units done this run): %s\n'
                                      'Everything translated so far is cached; run the same command again when the limit resets.'
                                      % (uid, n - 1, len(todo), e))
@@ -447,9 +475,7 @@ def run(doc, a, call=None):
             log.info('translate', '[%d/%d] %s %s: %d -> %d chars%s  (%.0fs)' % (
                 n, len(todo), uid, role, len(text), len(entry['pl']), '  FLAGS: ' + '; '.join(flags) if flags else '', time.time() - t0))
         result['units'][uid] = entry
-        if entry['flags']:
-            result['notes'].append('%s: %s' % (uid, '; '.join(entry['flags'])))
-        a.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+        save()
     if a.dry_run:
         p = a.output.with_suffix('.prompts.txt')
         p.write_text('\n'.join(prompts_txt), encoding='utf-8')
@@ -460,9 +486,33 @@ def run(doc, a, call=None):
                                   chars_in / 3.5, chars_src * 0.96 / 3.0, len(todo)))
     else:
         result['usage'] = report_usage(a)
-        a.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+        result = save()
         log.info('translate', 'wrote %s (%d units, %d with flags)' % (a.output, len(result['units']), sum(bool(u['flags']) for u in result['units'].values())))
     return result
+
+
+def parse_pages(spec):
+    """'1,3-5' -> {1, 3, 4, 5}; raises ValueError on anything else."""
+    pages = set()
+    for part in str(spec).replace(' ', '').split(','):
+        if not part:
+            continue
+        m = re.fullmatch(r'(\d+)(?:-(\d+))?', part)
+        if not m:
+            raise ValueError('page list must look like 1,3-5 (got %r)' % part)
+        lo, hi = int(m.group(1)), int(m.group(2) or m.group(1))
+        if hi < lo:
+            raise ValueError('page range %s goes backwards' % part)
+        pages.update(range(lo, hi + 1))
+    if not pages:
+        raise ValueError('empty page list')
+    return pages
+
+
+def units_on_pages(doc, pages):
+    """Unit ids with at least one source block on one of ``pages`` (a paragraph across a page break counts for both)."""
+    page_of = {b['block_id']: p['page'] for p in doc.get('pages', []) for b in p.get('blocks', [])}
+    return [u['unit_id'] for u in doc.get('units', []) if any(page_of.get(b) in pages for b in u.get('source_block_ids', []))]
 
 
 def main():
@@ -490,7 +540,8 @@ def main():
     ap.add_argument('--max-tokens', type=int, default=4096)
     ap.add_argument('--timeout', type=float, default=600, help='seconds per request')
     ap.add_argument('--retries', type=int, default=2, help='extra attempts when a check fails (default 2)')
-    ap.add_argument('--only', nargs='*', help='translate only these unit ids')
+    ap.add_argument('--only', nargs='*', help='translate only these unit ids (the other units of an existing output are kept)')
+    ap.add_argument('--pages', default=None, help='translate only the units on these pages, e.g. 1,3-5 (with --only: both sets)')
     ap.add_argument('--no-think', action='store_true', help='ask a reasoning model not to think (sends chat_template_kwargs.enable_thinking=false and reasoning_effort=none; whether the server passes them on depends on the server and model; in LM Studio the reliable switch is the model\'s "Enable Thinking" custom field)')
     ap.add_argument('--extra-body', help='JSON merged into every request body, e.g. \'{"top_p": 0.9}\'')
     ap.add_argument('--dry-run', action='store_true', help='write the prompts, do not call the model')
@@ -519,7 +570,17 @@ def main():
         log.info('translate', 'using %s (OCR-corrected; --raw uses document.json)' % corrected)
         a.document = corrected
     doc = json.loads(a.document.read_text(encoding='utf-8'))
+    if a.pages:
+        try:
+            on = units_on_pages(doc, parse_pages(a.pages))
+        except ValueError as e:
+            raise SystemExit('--pages: %s' % e)
+        if not on:
+            raise SystemExit('--pages %s: no units on these pages' % a.pages)
+        a.only = sorted(set(a.only or []) | set(on))
+        log.info('translate', '--pages %s: %d units' % (a.pages, len(on)))
     a.output = a.output or a.document.parent / 'translations.json'
+    a.output.parent.mkdir(parents=True, exist_ok=True)
     if not a.dry_run and not a.model:
         try:
             ms = list_models(a.endpoint)

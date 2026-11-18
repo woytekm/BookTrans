@@ -271,3 +271,43 @@ def test_find_claude(tmp_path, monkeypatch):
     assert T.find_claude(str(exe)) == str(exe)
     monkeypatch.setenv('CLAUDE_BIN', str(exe))
     assert T.find_claude() == str(exe)
+
+
+# ---------------------------------------------------------------- partial runs (--only / --pages)
+def _echo(prompts):
+    def call(p):                      # passes the checks: keeps digits and length, carries the glossary forms
+        prompts.append(p)
+        text = p.rsplit('<<<\n', 1)[-1].split('\n>>>')[0]
+        return text.replace('Pitschen', 'Byczyna').replace('PITSCHEN', 'BYCZYNA').replace('Kämpfer', 'impost') + ' #%d' % len(prompts)
+    return call
+
+
+def test_partial_run_keeps_the_other_units_and_uses_the_book_context(tmp_path):
+    full = []
+    T.run(_doc(), _args(tmp_path), call=_echo(full))
+    before = json.loads((tmp_path / 't.json').read_text(encoding='utf-8'))
+    assert list(before['units']) == ['u0001', 'u0002', 'u0003']
+    # re-translate only u0003 under a different model name: the other units stay in the output
+    part = []
+    res = T.run(_doc(), _args(tmp_path, only=['u0003'], model='m2'), call=_echo(part))
+    assert len(part) == 1 and 'Es hat 3 Stufen.' in part[0]           # context from u0002 although u0002 is not selected
+    assert list(res['units']) == ['u0001', 'u0002', 'u0003']          # document order, nothing dropped
+    assert res['units']['u0001'] == before['units']['u0001'] and res['units']['u0002'] == before['units']['u0002']
+    assert res['units']['u0003']['pl'] != before['units']['u0003']['pl']
+    # same model: the partial run hits the cache of the full run (identical prompt, so identical key)
+    again = []
+    T.run(_doc(), _args(tmp_path, only=['u0003']), call=_echo(again))
+    assert again == []
+
+
+def test_pages_select_units_by_their_blocks():
+    doc = {'pages': [{'page': 1, 'blocks': [{'block_id': 'a'}, {'block_id': 'b'}]},
+                     {'page': 2, 'blocks': [{'block_id': 'c'}]}, {'page': 3, 'blocks': [{'block_id': 'd'}]}],
+           'units': [{'unit_id': 'u1', 'source_block_ids': ['a']}, {'unit_id': 'u2', 'source_block_ids': ['b', 'c']},
+                     {'unit_id': 'u3', 'source_block_ids': ['d']}]}
+    assert T.parse_pages('1, 3-4') == {1, 3, 4}
+    assert T.units_on_pages(doc, {2}) == ['u2']                         # a paragraph across the page break counts
+    assert T.units_on_pages(doc, T.parse_pages('1-2')) == ['u1', 'u2']
+    for bad in ('x', '3-1', ''):
+        with pytest.raises(ValueError):
+            T.parse_pages(bad)
