@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased — captions
+
+Captions were the weakest part of the rendered book (owner's review of the 14-page test book). Changes, in the order they
+were made:
+
+- **Renderer.** One caption size for the book (`layout.caption_bases`: the median fitted size of all captions near the
+  book's median glyph height) and per page the smallest size any caption of the page needs; a caption takes room from
+  the free space around it and follows its figure (`layout.caption_geometry`: flush towards a picture it stands beside,
+  centred / flush under one, first within the picture's width); captions and headings are never hyphenated
+  (`typeset(..., hyphenate=False)`); one line kept when 90 % of the size allows it. Line drawings are composited
+  ink-only (no paper rectangles, `render.is_line_drawing`). **Final pages at 300 DPI** (`render.py --dpi`, project
+  `render.output_dpi`, *Output DPI* in the Book tab): text was drawn at the working scale (~120-135 DPI) and looked pixelated.
+- **Pipeline (stages 2 and docmodel; takes effect when stages 1-2 run again).** The figure mask stops at a caption touching
+  the picture; caption pieces on one row under one figure are joined when the gaps hold ink; every caption is read again
+  from its own enlarged strip (`--psm 7`, kept when better); junk pieces are dropped (`captions.py`). Body-size mixed-case
+  text beside a picture is no longer a caption (`stage2.caption_sized`; page 59's body was one 24-line caption).
+  Letter-spaced capitals are no longer taken for a rule (`marks.is_rule`; page 62's `ZIEGENHALS` and page 63's caption were
+  "rules"). Figure crops stop at a caption (no old caption pasted back).
+- **OCR correction window: Captions…** — the caption row enlarged, *Read again*, *Join with next*, *Apply* into the review
+  JSON (`caption_tools.py`, `gui_correction.CaptionDialog`). An emptied unit is skipped by `translate.py` and neither drawn
+  nor kept by the renderer.
+- On the test book: page 55 `Br U, MAR AL DER MKCHE` -> `45 RAUDEN OS, WESTPORTAL DER KIRCHE` (printed 43), page 62
+  `OS, HAUPTPORTAL ...` + a rule -> `49 ZIEGENHALS OS, HAUPTPORTAL DER KATHOLISCHEN KIRCHE` without the old caption showing,
+  page 52 captions one size, drawings without paper patches, sharp caption text. Page 59's caption (beside its picture, one
+  full line in German) needs two lines or 90 % size in Polish: it now stays one line at the shared size when possible.
+- Tests: 17 new.
+
 ## Unreleased — GUI: clear project data; input folder of an open project
 
 - **Input folder** shown in the header (path, TIFF count and size, or "folder not found") and at the top of *Run pipeline*; **changeable** with Project > *Change input folder…* or *Change…* in the run window. Shows what the new folder holds and warns when the project has a result from the old one (run without `--resume`, which the run window then unticks, or clear the project data). `Project.set_input_dir`, `Project.input_change_warnings`.

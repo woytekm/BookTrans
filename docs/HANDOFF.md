@@ -351,9 +351,16 @@ engine should be complete before a GUI goes on top. Agreed order (2026-11-18):
 7. ~~PDF, emphasis, tests~~ **done**: `render.py --pdf` (page by page, physical size), `<i>`/`<b>`/`<sp>` runs in translations
    (renderer side; detection in stage 2 and the prompt rule are open), render no longer keeps every full-resolution page in
    memory. 250 tests.
-8. ~~The GUI render window~~ **done** (`gui_render.py`, `render_session.py`; section 11). Next: captions (the weak point: OCR loses
-   words, `marks.py` takes a caption word for a rule, some captions sit inside the figure crop and stay German); automatic font choice
-   from `fontcheck.py`'s score; emphasis detection in stage 2 + prompt rule; vector PDF; incremental layout for long books.
+8. ~~The GUI render window~~ **done** (`gui_render.py`, `render_session.py`; section 11).
+9. ~~Captions~~ **done** (2026-11-18, branch `captions`; `CHANGELOG.md`): renderer (one size, free space, figure alignment, no
+   hyphenation, ink-only line drawings, 300 DPI output), pipeline (`captions.py`: mask stops at captions, pieces joined, strips read
+   again; `marks.is_rule`; figure crops clipped; `stage2.caption_sized`), correction window *Captions…*. Needs stages 1-2 again
+   (`booktrans.py` without `--resume`) and a re-translation of the changed units. Still open: digit confusions in caption numbers
+   (page 55 reads 45 for 43: fix by hand in *Captions…*); a translation much longer than its narrow slot (page 52's `59 POLITZ
+   SCHAFTRING` -> 4 lines at 9.7 px: shorten the translation or set the block's size / max width by hand); a stage 1 "caption"
+   region on blank margin paper (page 58) now reads `[REEL LER ENT SER` / `TEEN` (also on main's stage 2).
+   Next: automatic font choice from `fontcheck.py`'s score; emphasis detection in stage 2 + prompt rule; vector PDF; incremental
+   layout for long books; glossary reuse between projects (discussed, paused by the owner).
 
 Decided by the owner (2026-11-18): **Crimson Text Regular is the default font**, configurable in `config/fonts.json`
 (or `$BOOKTRANS_FONTS`); **adjustments are book-wide plus per block / per page** (as built). First real pipeline output

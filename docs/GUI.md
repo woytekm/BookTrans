@@ -265,6 +265,14 @@ resolution, *book.pdf*, then `render.py` as a subprocess -> `<project>/render/`;
    text.
 Stage A already has the window as a separate, per-page, reused toplevel with the page image fitted to it.
 
+**Captions…** (since 2026-11-18; `gui_correction.CaptionDialog`, logic in the toolkit-free `caption_tools.py`): captions are the
+worst-read text, and a caption may come out in pieces (several units). The dialog lists the page's caption units; for the selected
+one it shows the caption's whole row enlarged (the letters between pieces are often what the OCR missed), the OCR text and an edit
+field. *Read again* runs Tesseract on the caption strip alone (enlarged, one text line: `captions.read_strip`) and puts the result
+in the field; *Join with next* appends the next caption piece's text and empties that unit (an empty unit is not translated and
+nothing is drawn for it); *OCR text* restores; *Apply* writes the texts into the page's review JSON, which *Save* stores as usual
+(`unit_edits.json`).
+
 ## 9. Modules
 
 | File | Toolkit-free | Role |
@@ -272,6 +280,7 @@ Stage A already has the window as a separate, per-page, reused toplevel with the
 | `project.py` | yes | project folder, `project.json`, parameter and translation-setting validation, `book_dir`, the `booktrans.py`, `ocrfix.py` and `translate.py` commands, atomic JSON writes |
 | `envcheck.py` | yes | the environment check (also a terminal command) |
 | `pageindex.py` | yes | `replay`, `UnitMap`, `DocIndex`: page rows, the three JSON views, marks with their lines |
+| `caption_tools.py` | yes | the correction window's caption helper: caption units of a page, the enlarged row, read again, join, apply to the review JSON |
 | `gui_demo.py` | yes | synthetic demo project (real stage 4 units, real `ocrfix.run`) |
 | `gui.py` | no | main window, menu, page list, JSON tabs, recent projects |
 | `gui_dialogs.py` | no | new project, environment window, command dialog |
