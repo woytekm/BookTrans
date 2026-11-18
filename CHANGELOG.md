@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — docs: searchable vector PDF planned
+
+- `RENDERING.md` → *TODO: searchable vector PDF*: the agreed approach (real text drawn from the layout plan with embedded
+  fonts via reportlab, images for figures / background / kept text), the rejected alternative (invisible text layer over
+  image pages), and what to check. Not started; `HANDOFF.md` roadmap points to it.
+
 ## Unreleased — render: page position (original / centered)
 
 - `render.py --page-position original|centered`, project `render.page_position` (default `original`), *Page position* in the
