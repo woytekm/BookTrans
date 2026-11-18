@@ -426,10 +426,10 @@ def test_caption_geometry_follows_its_figure():
     beside = _cap('c', 'u1', (60, 388, 290, 398), fig='f')
     under = _cap('d', 'u2', (380, 410, 480, 418), fig='f')
     page['blocks'] = [fig, beside]
-    anchor, lo, hi, extra, grow = L.caption_geometry(page, beside)
+    anchor, lo, hi, extra, grow, _ = L.caption_geometry(page, beside)
     assert anchor == 'right' and grow == 'up' and hi < 300 and lo == 40            # flush to the picture, room above
     page['blocks'] = [fig, under]
-    anchor, lo, hi, extra, grow = L.caption_geometry(page, under)
+    anchor, lo, hi, extra, grow, _ = L.caption_geometry(page, under)
     assert anchor == 'center' and (lo, hi) == (300, 560) and grow == 'down' and extra >= 1
     assert L.caption_geometry(page, under, tight=False)[1:3] == (40, 560)
 
@@ -467,3 +467,20 @@ def test_an_emptied_caption_is_neither_drawn_nor_kept(tmp_path):
     plan = L.make_plan(doc, trans, _fonts(), {})
     assert {ln['unit'] for ln in plan['pages'][0]['lines']} == {'u1'}
     assert 'b' not in plan['pages'][0]['keep'] and plan['report']['emptied'] == ['u2']
+
+
+def test_a_caption_taking_extra_lines_closes_its_leading_and_stays_clear_of_the_text_below(tmp_path):
+    f0, f1 = _fig('f0', (40, 100, 120, 300), tmp_path), _fig('f1', (130, 100, 560, 300), tmp_path)
+    c0 = _cap('c0', 'u0', (40, 310, 120, 318), '59 POLITZ', fig='f0')
+    c1 = _cap('c1', 'u1', (130, 310, 560, 318), '58 BOSDORF PORTALKÄMPFER', fig='f1')
+    c0['typography']['line_pitch_px'] = c1['typography']['line_pitch_px'] = 14.0
+    body = _para('p', 'u2', 3, 40, 560, 362)
+    doc = _doc(tmp_path, [[f0, f1, c0, c1, body]])
+    trans = {'units': {'u0': {'pl': '59 POLICE. PIERŚCIEŃ TRZONU KOLUMNY'}, 'u1': {'pl': '58 PAKOSŁAWICE, IMPOST PORTALU'},
+                       'u2': {'pl': _pl(300)}}}
+    plan = L.make_plan(doc, trans, _fonts(), {})
+    mine = [ln for ln in plan['pages'][0]['lines'] if ln['unit'] == 'u0']
+    assert len(mine) >= 2 and not any(ln.get('overflow') for ln in mine)
+    assert max(ln['baseline'] for ln in mine) < 362 - 4                        # clear of the paragraph below
+    gaps = {round(b['baseline'] - a['baseline'], 1) for a, b in zip(mine, mine[1:])}
+    assert len(gaps) == 1 and gaps.pop() <= 14.0                               # one even leading, not wider than the original

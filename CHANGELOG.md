@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — render: caption leading
+
+- Owner's finding: page 52's longest caption touched the paragraph below (4 lines at the original 14.5 px pitch, the
+  frame held 3). A caption set smaller than its original glyphs now closes its line pitch in proportion and counts the
+  free space at that pitch; its lines go on an even grid. Page 52: all captions at 10.8 px with one leading, the long
+  one fits in 4 lines without overflow, clear of the text.
+- `layout.caption_geometry` also returns the free space in px.
+
 ## Unreleased — translation: titles of cited works
 
 - Rule in `prompts/translate_rules_pl.txt`: titles of cited books, articles, journals stay in their original language

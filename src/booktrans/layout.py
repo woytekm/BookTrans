@@ -515,9 +515,10 @@ def _content_box(page, noise=()):
 
 
 def caption_geometry(page, b, noise=(), pitch=None, tight=True):
-    """How much room a caption has: (anchor, lo, hi, extra lines, grow).  ``lo``/``hi``: the leftmost and rightmost x the
+    """How much room a caption has: (anchor, lo, hi, extra lines, grow, free px).  ``lo``/``hi``: the leftmost and rightmost x the
     text may reach (neighbours on the same rows, else the page content); ``extra``: lines that fit in the free space below
-    (``grow`` 'down') or, for a caption beside its figure and aligned with its foot, above (``grow`` 'up').
+    (``grow`` 'down') or, for a caption beside its figure and aligned with its foot, above (``grow`` 'up'); ``free``:
+    that free space in px (a gap of about a glyph height to the next block already taken off).
     ``tight``: a caption under or over its figure is kept within the figure's width (when it is not wider itself)."""
     x1, y1, x2, y2 = b['bbox']
     gh = (b.get('typography') or {}).get('glyph_height_px') or 8.0
@@ -562,7 +563,7 @@ def caption_geometry(page, b, noise=(), pitch=None, tight=True):
                      and _overlap(lo, hi, o['bbox'][0], o['bbox'][2]) > 0] or [y1 - 3 * pitch])
         free = y1 - gap - limit
     extra = int(max(0, min(3, free // pitch)))
-    return anchor, lo, hi, extra, grow
+    return anchor, lo, hi, extra, grow, max(0.0, float(free))
 
 
 def caption_bases(doc, chains, tr, fonts, ratios, settings):
@@ -626,6 +627,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     size0, s_h, s_w = calibrated_size(first, fonts, style, upper, ratios.get(style, ratios['regular']), up)
     if upper:
         size0 = float(min(max(s_w, 0.7 * s_h), 1.15 * s_h))
+    size_orig = size0                                 # the size matching the original glyphs (for the leading)
     base_track_em = None
     if caption and base:
         size0, base_track_em = base
@@ -637,7 +639,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     col = col[0] if col else None
     capacity = sum(b['line_count'] for _, b in frames)
     W0 = min(b['bbox'][2] - b['bbox'][0] for _, b in frames)
-    extra, grow, Ws_wide = 0, 'down', None
+    extra, grow, Ws_wide, free = 0, 'down', None, 0.0
     if caption and len(frames) == 1:
         def widths(lo, hi):
             fx1, _, fx2, _ = first['bbox']
@@ -645,10 +647,10 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
                                                                                                 hi - (fx1 + fx2) / 2))
             maxw = max(W0, maxw)
             return sorted({W0} | {min(maxw, W0 * k) for k in (1.1, 1.25, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0)} | {maxw})
-        anchor, lo, hi, extra, grow = caption_geometry(page, first, noise, pitch)
+        anchor, lo, hi, extra, grow, free = caption_geometry(page, first, noise, pitch)
         anchor = adj.get('anchor') or anchor
         Ws = widths(lo, hi)
-        _, lo2, hi2, _, _ = caption_geometry(page, first, noise, pitch, tight=False)
+        _, lo2, hi2, _, _, _ = caption_geometry(page, first, noise, pitch, tight=False)
         if (lo2, hi2) != (lo, hi):
             Ws_wide = widths(lo2, hi2)
     else:
@@ -673,9 +675,24 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
         Ws = sorted({W0 * min(k, mw) for k in (1.0, 1.06, 1.12, 1.2, 1.3)} | {W0 * mw})
     hyph = first['role'] not in ('caption', 'heading')
     caps = [capacity] + ([capacity + extra] if extra else [])
+    tops0 = line_tops(first)
+    roomy = caption and len(frames) == 1           # its lines may take the free space, at a leading fitting the size
+
+    def pitch_at(size):
+        """Line pitch of a caption at ``size``: the original pitch, closer in proportion when the size is smaller
+        than the original glyphs (four lines at 80 % take the room of about three)."""
+        return pitch * min(1.0, size / max(size_orig, 1e-6)) if roomy else pitch
+
+    def max_lines(size):
+        if not roomy:
+            return caps[-1]
+        span = (tops0[-1] - tops0[0] if len(tops0) > 1 else 0.0) + free
+        return int(min(capacity + 4, 1 + span // pitch_at(size)))
 
     def fit(size, track, caps=caps, Ws=Ws):
         font = fonts.get(style, size * M)
+        if caps is None:                              # the original lines plus what the free space holds at this size
+            caps = sorted({capacity, max(capacity, max_lines(size))})
         for cap in caps:
             for Wc in Ws:
                 lines, relaxed = typeset(text, font, Wc * M, 0.0, False, space_factor=word_space, track=track * M,
@@ -694,7 +711,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     tries = [(k, [capacity], Ws) for k in near] if (extra or Ws_wide) else []
     tries += [(k, [capacity], Ws_wide) for k in near] if Ws_wide else []
     ladder = (1.0,) if size_cap else (1.0, 0.98, 0.96, 0.94, 0.92, 0.9, 0.86, 0.82)   # capped: the page's size, no less
-    tries += [(k, caps, Ws_wide or Ws) for k in ladder]
+    tries += [(k, None if roomy else caps, Ws_wide or Ws) for k in ladder]
     for shrink, cps, wset in tries:
         size = size0 * shrink
         if tracking is not None:
@@ -725,8 +742,9 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
                                  fonts_for=lambda st, sz=size: fonts.get(st, sz * M), style=style, hyphenate=hyph)
         chosen = (shrink, Wc, lines, relaxed, size, 0.0)
         if emit:
-            report['warnings'].append('%s: needs %d lines, frame holds %d (overflow)' % (uid, len(lines), caps[-1]))
+            report['warnings'].append('%s: needs %d lines, frame holds %d (overflow)' % (uid, len(lines), max_lines(size)))
     shrink, Wc, lines, relaxed, size, track = chosen
+    pitch_s, room = pitch_at(size), max_lines(size)
     r = ratios.get(style, ratios['regular'])
     asc = (r['cap'] if upper else r['asc']) * size
     if emit:
@@ -735,6 +753,11 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
             x1, x2 = b['bbox'][0], b['bbox'][2]
             tops = line_tops(b)
             n_here = b['line_count'] if fi < len(frames) - 1 else len(lines) - li
+            if roomy and (n_here != len(tops) or pitch_s < pitch - 0.01):     # a new grid at the caption's leading
+                if grow == 'up':                      # beside its figure, foot aligned: the last line stays put
+                    tops = [tops[-1] - (n_here - 1 - k) * pitch_s for k in range(n_here)]
+                else:
+                    tops = [tops[0] + k * pitch_s for k in range(n_here)]
             shift = 0
             if grow == 'up' and fi == len(frames) - 1 and n_here > len(tops):
                 shift = n_here - len(tops)            # beside its figure, foot aligned: extra lines go above
@@ -749,7 +772,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
                                                             else tops[0] + kk * pitch)
                 plan_pages[pi]['lines'].append(_plan_line(line, uid, b['block_id'], first['role'], style, size, track, x,
                                                           top + asc, upper=upper,
-                                                          overflow=len(lines) > caps[-1] and k >= b['line_count']))
+                                                          overflow=len(lines) > room and k >= room))
                 li += 1
     return {'unit': uid, 'kind': first['role'], 'lines': len(lines), 'capacity': capacity,
             'size_px': round(size, 2), 'tracking_px': round(track, 2), 'tracking_em': round(track / size, 3),
