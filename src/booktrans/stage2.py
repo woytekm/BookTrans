@@ -268,24 +268,54 @@ def mark_paragraph_breaks(col, body):
     lower case when the sentence is not finished (a word lost in OCR can make a
     line look short). Every marked line gets ``paragraph_break`` and
     ``paragraph_break_reason``; the first line of the column is a break by definition.
+
+    *Stray marks* read as lines (narrower than 12 % of the widest line, at most two
+    letters or digits: ``)``, ``5``, ``Ef`` from a mark in the margin) decide nothing:
+    one among the text lines stays in the paragraph around it (``stray_mark``; stage 4
+    leaves it out of the unit text); one apart from the text (a page number below it)
+    is a region of its own (``isolated_mark``).
     """
     ls=sorted(col,key=lambda z:z['bbox'][1])
-    x1=np.array([l['bbox'][0] for l in ls],float); x2=np.array([l['bbox'][2] for l in ls],float)
+    # stray marks read as lines (')', '5', 'Ef' from a pencil or printer's mark in the margin) take no part: placed
+    # between two lines they looked like an indented first line and cut the paragraph there (page 62 of the test book)
+    w=np.array([l['bbox'][2]-l['bbox'][0] for l in ls],float)
+    stray=[w[i] < 0.12*float(np.max(w)) and sum(c.isalnum() for c in ls[i].get('text','')) <= 2 for i in range(len(ls))]
+    real=[l for l,s in zip(ls,stray) if not s] or ls
+    x1=np.array([l['bbox'][0] for l in real],float); x2=np.array([l['bbox'][2] for l in real],float)
     L=float(np.median(x1[x1<=np.percentile(x1,50)])); R=float(np.median(x2[x2>=np.percentile(x2,60)]))
     short=R-x2
     full=short[short<=6]
     sd=float(np.std(full)) if len(full)>=3 else 1.5
     short_thr=max(8.0,5.0*sd); indent_thr=max(10.0,1.2*body)
-    cy=np.array([(l['bbox'][1]+l['bbox'][3])/2 for l in ls],float)
-    pitch=float(np.median(np.diff(cy))) if len(ls)>2 else 0.0
-    ls[0]['paragraph_break']=True; ls[0]['paragraph_break_reason']='column_start'
-    for i in range(1,len(ls)):
-        prev,cur=ls[i-1],ls[i]; reason=None
-        if not _ends_with_hyphen(prev['text']) and not _continues_sentence(prev['text'], cur['text']):
-            if R-prev['bbox'][2]>short_thr: reason='short_last_line'
-            elif cur['bbox'][0]-L>indent_thr: reason='first_line_indent'
-            elif pitch>0 and (cy[i]-cy[i-1])>1.4*pitch: reason='extra_line_spacing'
-        cur['paragraph_break']=reason is not None; cur['paragraph_break_reason']=reason
+    cy=np.array([(l['bbox'][1]+l['bbox'][3])/2 for l in real],float)
+    pitch=float(np.median(np.diff(cy))) if len(real)>2 else 0.0
+    first=True; prev=None; pcy=None; after_mark=False
+    last_cy=float(cy[-1]) if len(cy) else 0.0
+    for l,s in zip(ls,stray):
+        c=(l['bbox'][1]+l['bbox'][3])/2
+        if s and real is not ls:
+            l['stray_mark']=True
+            between = pcy is not None and c <= last_cy + 0.5*max(pitch,1.0) and (pitch <= 0 or c-pcy <= 1.4*pitch)
+            if between:              # among the text lines: belongs to the paragraph around it, decides nothing
+                l['paragraph_break']=False; l['paragraph_break_reason']=None
+            else:                    # apart from the text (a page number below it): a region of its own
+                l['paragraph_break']=True; l['paragraph_break_reason']='isolated_mark'; after_mark=True
+            continue
+        if first:
+            l['paragraph_break']=True; l['paragraph_break_reason']='column_start'; first=False
+        elif after_mark:
+            l['paragraph_break']=True; l['paragraph_break_reason']='after_isolated_mark'
+        else:
+            reason=None
+            if not _ends_with_hyphen(prev['text']) and not _continues_sentence(prev['text'], l['text']):
+                if R-prev['bbox'][2]>short_thr: reason='short_last_line'
+                elif l['bbox'][0]-L>indent_thr: reason='first_line_indent'
+                elif pitch>0 and (c-pcy)>1.4*pitch: reason='extra_line_spacing'
+            l['paragraph_break']=reason is not None; l['paragraph_break_reason']=reason
+        after_mark=False
+        prev, pcy = l, c
+    if ls and not any(l['paragraph_break'] for l in ls):
+        ls[0]['paragraph_break']=True; ls[0]['paragraph_break_reason']='column_start'
     return ls
 
 

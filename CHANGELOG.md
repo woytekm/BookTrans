@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — stage 2: stray marks no longer cut paragraphs
+
+- **Cause of the split on page 62** ("Bei der im Jahre 1900" | "erfolgten Restauration ..."): a margin mark read as a line `)` at x 800, sorted between the two lines, passed the *first-line indent* test (it starts 570 px right of the column edge) and started a new paragraph; the next line, starting in lower case, then stayed with the `)`. Same at `Ef` ("erneuert | worden") and `5` ("völlig | neu eingebaut").
+- `stage2.mark_paragraph_breaks`: stray marks (narrower than 12 % of the widest line, at most 2 letters or digits) take no part in the break tests and the column's edges and pitch are measured without them; among the text lines they stay in their paragraph (`stray_mark`), apart from it (a page number below the text) they are a region of their own (`isolated_mark`).
+- Takes effect when stages 1-2 run again (`booktrans.py` without `--resume`). Without that, stage 4 (since the previous change) joins the split parts into one unit, so translation and rendering are right, but the blocks in `document.json` stay split.
+- Tests: 2 new.
+
 ## Unreleased — GUI: the render window
 
 - **Render window** (`gui_render.py`; header button *Render pages…*, Project menu, `Cmd/Ctrl+Shift+P`): page list with each page's fit and check counts; the rebuilt page beside the scan (or either alone), zoom with sharp text (drawn at the zoom on screen), drag, click a text block to select it; outlines for the selection, collisions / overflow, adjusted blocks, optionally all blocks. Tabs: **Book** (font, bold, italic, letter-spacing, size, word space, paragraph indent, page fit, background, ink, final resolution; fonts in use, ink match, base size), **Page** (the page's fit, size factor / letter-spacing change by hand, the page's checks), **Block** (how the block is set, size / letter-spacing / word space / max width / alignment for frames, keep original, the Polish text). Every change is saved at once (`project.json` -> `render`, `review/render_overrides.json`) and the book laid out again in a worker thread. Reloads after a pipeline or translation run.

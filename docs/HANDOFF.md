@@ -69,7 +69,7 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only (--pages 3,5-7: draw some pages)
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 272 tests, ~40 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 274 tests, ~40 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project; Render pages… (Cmd/Ctrl+Shift+P)
@@ -231,7 +231,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (272 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (274 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -358,7 +358,8 @@ Decided by the owner (2026-11-18): **Crimson Text Regular is the default font**,
 **Findings on the real book (2026-11-18).** Renderer fixes made: scan noise, stray marks as lines, overlapping blocks,
 even line grid, a whole page of body text classified as a caption, the ink colour (see `RENDERING.md`), a slow line
 breaker for long ragged frames (memo ignored the line number: 23 s -> 8 s for the book). **Upstream problems:** (1)-(3) are now
-repaired in **stage 4** (2026-11-18, `PIPELINE.md` 8a; rerun with `booktrans.py --resume`, which keeps stages 1-3):
+repaired in **stage 4** (and the cause of (2), a margin mark taken for an indented first line, in **stage 2**: the stray
+mark no longer takes part in paragraph detection; needs a run of stages 1-2) (2026-11-18, `PIPELINE.md` 8a; rerun with `booktrans.py --resume`, which keeps stages 1-3):
 (1) stage 2 made paragraphs of scan noise at page edges (`|`, `N`; page 62) that got units and were translated ->
 excluded as noise; (2) margin marks (`)`, `Ef`, `5`, `L`) became first lines of paragraph blocks and split
 paragraphs: page 62's "Dem als zweischiffige Halle ... neu eingebaut." was 4 units translated as fragments ("w roku
