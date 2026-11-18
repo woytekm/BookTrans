@@ -12,6 +12,10 @@ This document distinguishes the intended pipeline from the currently implemented
 6. In Stage 2, retain OCR lines with page-local bounding boxes, text, confidence and glyph-height estimates.
 7. Classify lines heuristically (body, heading, caption, footer/byline candidates).
 8. Infer paragraph boundaries per text column of the page (short last line, indent, spacing; never after a hyphen).
+   Stray marks read as lines (narrower than 12 % of the widest line, at most 2 letters or digits: `)`, `5`, `Ef` from a
+   mark in the margin) decide nothing: among the text lines they stay in the paragraph around them (`stray_mark`), apart
+   from it (a page number below) they are a region of their own (`isolated_mark`). Before 2026-11-18 such a mark between
+   two lines counted as an indented first line and cut the paragraph (page 62: "... im Jahre 1900 | erfolgten ...").
 8a. Stage 4: link paragraphs across page/spread breaks, dehyphenate, build translation units. Since 2026-11-18 it
     also repairs stage 2 region errors before linking (found on page 62 of the first real book): *noise regions*
     (fewer than 3 letters once stray marks are removed: `|`, `N`, a page or figure number; or a "paragraph" narrower

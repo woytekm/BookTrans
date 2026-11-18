@@ -53,3 +53,33 @@ def test_lower_case_line_never_starts_a_paragraph():
     assert breaks(c) == [True, False, False, False]
     c2 = col([('Eine Zeile endet hier.', 80), ('Neuer Absatz beginnt', 0)])
     assert breaks(c2) == [True, True]                 # a sentence end followed by a capital is still a break
+
+
+def _line(text, x1, x2, y, h=10):
+    return {'text': text, 'type': 'body_line', 'relative_size': 1.0, 'bbox': [x1, y, x2, y + h]}
+
+
+def test_a_margin_mark_between_lines_does_not_cut_the_paragraph():
+    # page 62 of the test book: a ')' read at the right margin between "... im Jahre 1900" and "erfolgten ..."
+    c = [_line('Nur das nördliche der beiden Portale ist alt. Bei der im Jahre 1900', 100, 600, 100),
+         _line(')', 597, 601, 106),
+         _line('erfolgten Restauration der Kirche sind die Stücke erneuert', 100, 600, 124),
+         _line('worden. Das südliche Portal ist neu eingebaut.', 100, 400, 148),
+         _line('Bei den sich nach außen erweiternden Portalgewänden wechseln', 100, 600, 172),
+         _line('die Säulen mit tiefen Hohlkehlen ab.', 100, 350, 196)]
+    ls = mark_paragraph_breaks(c, 10)
+    by_text = {l['text'][:6]: l for l in ls}
+    assert by_text[')']['stray_mark'] and not by_text[')']['paragraph_break']
+    assert not by_text['erfolg']['paragraph_break']                         # was 'first_line_indent' because of ')'
+    assert by_text['Bei de']['paragraph_break_reason'] == 'short_last_line'
+    regs = build_regions(c, 10)
+    assert [len(r['lines']) for r in regs if r['type'] == 'paragraph'] == [4, 2]
+
+
+def test_a_page_number_below_the_text_stays_its_own_region():
+    c = [_line('Erste Zeile des Absatzes mit vollem Satz und weiter', 100, 600, 100),
+         _line('Ende des Absatzes.', 100, 300, 124),
+         _line('62', 100, 118, 190)]                                         # far below: not part of the paragraph
+    regs = build_regions(c, 10)
+    texts = [[l['text'] for l in r['lines']] for r in regs if r['type'] == 'paragraph']
+    assert texts == [['Erste Zeile des Absatzes mit vollem Satz und weiter', 'Ende des Absatzes.'], ['62']]
