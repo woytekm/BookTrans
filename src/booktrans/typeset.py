@@ -226,7 +226,7 @@ def typeset(text, font, W, indent, justify, space_factor=1.0, track=0.0, widths=
         gap = space
         if justify and not last and gaps:
             gap = (width - wpieces) / gaps
-        out.append({'pieces': seg, 'gap': gap, 'hyphen': hyph, 'width': wpieces + gaps * gap,
+        out.append({'pieces': seg, 'gap': gap, 'space': space, 'hyphen': hyph, 'width': wpieces + gaps * gap,
                     'indent': indent if ln == 0 else 0.0, 'last': last})
     return out, relaxed
 

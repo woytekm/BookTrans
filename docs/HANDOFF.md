@@ -68,7 +68,7 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only (--pages 3,5-7: draw some pages)
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 235 tests, ~30 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 238 tests, ~30 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -227,7 +227,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (235 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (238 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -327,7 +327,7 @@ engine should be complete before a GUI goes on top. Agreed order (2026-11-18):
 1. ~~Split layout from drawing~~ **done**: `typeset.py` / `layout.py` (plan, `layout.json`) / `render.py` (`draw_page`).
 2. ~~Line slots~~ **done**: body text into the original line positions (column order, figure wrap).
 3. ~~Flow in step with the pages~~ **done**: per-page fit with lookahead, orphan/widow control.
-4. Checks in `report.json`: text colliding with figures or other blocks, overflow and drift per page, loose lines.
+4. ~~Checks in `report.json`~~ **done**: collision (figure, graphic, kept text, other block, page edge), overflow, drift, blank, loose/tight (`layout.check_plan`).
 5. Settings: book defaults in `project.json`, per-block overrides in `review/render_overrides.json` (keyed by block and
    a hash of the unit text, like `unit_edits`).
 6. Ink colour measured from the scan; lighter OFL Antiquas to compare (the rebuilt page is darker than the original).

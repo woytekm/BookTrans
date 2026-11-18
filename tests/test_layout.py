@@ -237,3 +237,56 @@ def test_parse_pages():
     assert R.parse_pages(None, doc) == [0, 1, 2, 3]
     assert R.parse_pages('51,53', doc) == [1, 3]
     assert R.parse_pages('50-52', doc) == [0, 1, 2]
+
+
+# ---------------------------------------------------------------- checks
+def _line(block, x, baseline, width, size=16.0, words=3, stretch=1.0, **kw):
+    d = {'unit': 'u_' + block, 'block': block, 'role': 'paragraph', 'style': 'regular', 'size': size, 'track': 0.0,
+         'x': x, 'baseline': baseline, 'width': width, 'gap': 4.0, 'hyphen': False, 'stretch': stretch,
+         'words': [['w', width / words]] * words}
+    d.update(kw)
+    return d
+
+
+def _check_doc(tmp_path, lines, keep=()):
+    fig = _fig('f', (60, 300, 540, 500), tmp_path)
+    doc = _doc(tmp_path, [[fig, {'block_id': 'k', 'kind': 'text', 'role': 'caption', 'bbox': [60, 520, 300, 534]}]])
+    plan = {'ratios': {'regular': _fonts().ratios('regular')}, 'report': {'units': []},
+            'pages': [{'page': 1, 'lines': lines, 'keep': list(keep), 'body': None}]}
+    return L.check_plan(doc, plan)
+
+
+def test_checks_find_collisions_overflow_and_loose_lines(tmp_path):
+    checks, summary = _check_doc(tmp_path, [
+        _line('a', 40, 120, 500),                                  # clean
+        _line('b', 40, 320, 500),                                  # over the figure
+        _line('c', 40, 528, 200),                                  # over kept text
+        _line('d', 40, 600, 300), _line('e', 200, 603, 300),       # two blocks on top of each other
+        _line('g', 40, 700, 500, stretch=2.3),                     # loose
+        _line('h', 40, 760, 500, overflow=True),                   # outside its frame
+    ], keep=['k'])
+    kinds = {(c['kind'], c['block'], c['with']) for c in checks}
+    assert ('collision', 'b', 'f') in kinds and ('collision', 'c', 'k') in kinds
+    assert any(c['kind'] == 'collision' and {c['block'], c['with']} == {'d', 'e'} for c in checks)
+    assert ('loose', 'g', None) in kinds and ('overflow', 'h', None) in kinds
+    assert not any(c['block'] == 'a' for c in checks)
+    assert summary['1']['collision'] == 3
+
+
+def test_a_real_plan_around_a_figure_has_no_collisions(tmp_path):
+    p1 = _para('p1', 'u1', 6, 40, 560, 100)
+    fig = _fig('f1', (60, 240, 540, 460), tmp_path)
+    p2 = _para('p2', 'u2', 8, 40, 560, 480)
+    doc = _doc(tmp_path, [[p1, fig, p2]])
+    plan = L.make_plan(doc, {'units': {'u1': {'pl': _pl(380)}, 'u2': {'pl': _pl(520)}}}, _fonts())
+    assert not [c for c in plan['report']['checks'] if c['kind'] == 'collision']
+
+
+def test_drift_is_reported(tmp_path):
+    p1 = _para('p1', 'u1', 10, 40, 560, 100)
+    p2 = _para('p2', 'u2', 10, 40, 560, 100)
+    p3 = _para('p3', 'u3', 10, 40, 560, 100)
+    doc = _doc(tmp_path, [[p1], [p2], [p3]])
+    plan = L.make_plan(doc, {'units': {'u1': {'pl': _pl(1500)}, 'u2': {'pl': _pl(300)}, 'u3': {'pl': _pl(300)}}}, _fonts())
+    drift = [c for c in plan['report']['checks'] if c['kind'] == 'drift']
+    assert drift and drift[0]['unit'] == 'u2'

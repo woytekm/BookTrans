@@ -107,6 +107,21 @@ hold its text (1.0 ... 0.9). With a fixed `--tracking` only the size varies.
 Measured on a synthetic 60-page book (paragraphs 0.90-1.08 x the original length): no paragraph off its
 page, 7 empty slots in 2300, most pages at the base size; 3.5 s for the layout.
 
+## Checks (`report.json`: `checks`, `check_summary`)
+
+`layout.check_plan(doc, plan)` looks at every planned line (ink box = ascender to descender, x to x + width):
+
+| kind | meaning |
+|---|---|
+| `collision` | a line over a figure, a graphic, kept (untranslated) text, the lines of another block (x-height band only, so ascenders and descenders of neighbours may interleave), or off the page; also a warning |
+| `overflow` | lines outside their frame (a fixed frame that could not hold its text) or after the last page |
+| `drift` | a body paragraph starts on a later page than in the original |
+| `blank` | empty body slots at the foot of a page |
+| `loose` / `tight` | a justified line with word space beyond 1.6x / below 0.8x natural |
+
+Each entry: `page`, `kind`, `unit`, `block`, `with` (the block or `page` it hits), `detail`. `check_summary`
+counts the kinds per page (the GUI will show them in its page list). The CLI prints the totals.
+
 ## Line breaking
 
 Optimum-fit dynamic programme (Knuth-Plass style) with justification: word space stretches within

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — render: checks
+
+- **`report.json` checks** (`layout.check_plan`): `collision` (a line over a figure, graphic, kept text, another block's lines, or off the page; also a warning), `overflow`, `drift` (paragraph on a later page than in the original), `blank` (empty slots at a page foot), `loose` / `tight` justified lines (word space > 1.6x / < 0.8x natural); `check_summary` per page. The CLI prints the totals.
+- Plan lines carry `stretch` (justified word space / natural).
+- Tests: 3 new (238 passed).
+
 ## Unreleased — render: layout plan, line slots, page-synchronised flow
 
 - **Rendering in two steps** (ADR-021): `layout.py` computes a **layout plan** of the whole book (every line: unit, block, style, size, letter-spacing, x, baseline, words with widths, justification gap; per page the kept and wiped blocks and the body fit), written as `layout.json`; `render.py` draws a page from it (`draw_page(doc, plan, page_index)`). `typeset.py` holds the line breaking (moved out of `render.py`, which re-exports the old names). `render()` keeps its signature.

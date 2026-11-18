@@ -375,6 +375,7 @@ def _plan_line(line, unit, block, role, style, size, track, x, baseline, upper=F
     d = {'unit': unit, 'block': block, 'role': role, 'style': style, 'size': round(size, 3), 'track': round(track, 4),
          'x': round(x + line['indent'] / M, 2), 'baseline': round(baseline, 2), 'width': round(line['width'] / M, 2),
          'gap': round(line['gap'] / M, 3), 'hyphen': bool(line['hyphen']),
+         'stretch': round(line['gap'] / line['space'], 3) if line.get('space') else 1.0,
          'words': [[t, round(w / M, 3)] for t, w in line_words(line)]}
     if upper:
         d['upper'] = True
@@ -475,6 +476,85 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
             'lines_original': capacity, 'shrink': shrink}
 
 
+# ---------------------------------------------------------------- checks
+LOOSE = 1.6                      # a justified line whose word space is stretched beyond this is "loose"
+TIGHT = 0.8                      # ... squeezed below this is "tight"
+
+
+def line_box(line, ratios, core=False):
+    """Ink box of a plan line (working px).  ``core``: only the x-height band, for line-against-line tests
+    (ascenders and descenders of neighbouring lines may interleave)."""
+    r = ratios[line['style']]
+    asc = (r['cap'] if line.get('upper') else r['asc']) * line['size']
+    x1, x2 = line['x'], line['x'] + line['width']
+    if core:
+        return (x1, line['baseline'] - 0.5 * asc, x2, line['baseline'])
+    return (x1, line['baseline'] - asc, x2, line['baseline'] + r['desc'] * line['size'])
+
+
+def _hit(a, b, tol=1.0):
+    return min(a[2], b[2]) - max(a[0], b[0]) > tol and min(a[3], b[3]) - max(a[1], b[1]) > tol
+
+
+def check_plan(doc, plan):
+    """Quality checks on a plan: ``[{page, kind, unit, block, with, detail}]`` and a count per kind per page.
+
+    Kinds: ``collision`` (a line over a figure, a graphic, kept text, a line of another block, or off the page),
+    ``overflow`` (lines outside their frame / after the last page), ``drift`` (a paragraph starts on a later page
+    than in the original), ``blank`` (empty body slots at a page foot), ``loose`` / ``tight`` (justified word space
+    beyond 1.6x / below 0.8x natural)."""
+    ratios = plan['ratios']
+    out = []
+    for pi, (page, pp) in enumerate(zip(doc['pages'], plan['pages'])):
+        no = page['page']
+        blocks = {b['block_id']: b for b in page['blocks']}
+        W = page.get('width') or 1e9
+        H = page.get('height') or 1e9
+        obstacles = [(b['block_id'], b['bbox']) for b in page['blocks'] if b['kind'] in ('figure', 'graphic')]
+        obstacles += [(bid, blocks[bid]['bbox']) for bid in pp.get('keep', []) if bid in blocks]
+        lines = pp['lines']
+        boxes = [line_box(l, ratios) for l in lines]
+        cores = [line_box(l, ratios, core=True) for l in lines]
+        seen = set()
+        for k, (ln, box) in enumerate(zip(lines, boxes)):
+            for oid, ob in obstacles:
+                if _hit(box, ob) and (ln['block'], oid) not in seen:
+                    seen.add((ln['block'], oid))
+                    out.append({'page': no, 'kind': 'collision', 'unit': ln['unit'], 'block': ln['block'], 'with': oid,
+                                'detail': 'line at y %.0f over %s' % (ln['baseline'], oid)})
+            if box[0] < -1 or box[2] > W + 1 or box[1] < -1 or box[3] > H + 1:
+                out.append({'page': no, 'kind': 'collision', 'unit': ln['unit'], 'block': ln['block'], 'with': 'page',
+                            'detail': 'line at y %.0f outside the page' % ln['baseline']})
+            for j in range(k):
+                o = lines[j]
+                if o['block'] != ln['block'] and _hit(cores[k], cores[j]) and (ln['block'], o['block']) not in seen:
+                    seen.add((ln['block'], o['block'])); seen.add((o['block'], ln['block']))
+                    out.append({'page': no, 'kind': 'collision', 'unit': ln['unit'], 'block': ln['block'], 'with': o['block'],
+                                'detail': 'lines of %s and %s overlap at y %.0f' % (ln['block'], o['block'], ln['baseline'])})
+            if ln.get('overflow'):
+                out.append({'page': no, 'kind': 'overflow', 'unit': ln['unit'], 'block': ln['block'], 'with': None,
+                            'detail': 'line at y %.0f outside its frame' % ln['baseline']})
+            if len(ln['words']) > 1 and ln.get('stretch', 1.0) > LOOSE:
+                out.append({'page': no, 'kind': 'loose', 'unit': ln['unit'], 'block': ln['block'], 'with': None,
+                            'detail': 'word space %.1fx natural at y %.0f' % (ln['stretch'], ln['baseline'])})
+            elif len(ln['words']) > 1 and ln.get('stretch', 1.0) < TIGHT:
+                out.append({'page': no, 'kind': 'tight', 'unit': ln['unit'], 'block': ln['block'], 'with': None,
+                            'detail': 'word space %.2fx natural at y %.0f' % (ln['stretch'], ln['baseline'])})
+        if pp.get('body') and pp['body']['blank']:
+            out.append({'page': no, 'kind': 'blank', 'unit': None, 'block': None, 'with': None,
+                        'detail': '%d empty body line(s) at the foot' % pp['body']['blank']})
+    for u in plan['report']['units']:
+        if u.get('kind') == 'body' and u.get('starts_on_page') != u.get('original_page'):
+            out.append({'page': u['starts_on_page'], 'kind': 'drift', 'unit': u['unit'], 'block': None, 'with': None,
+                        'detail': '%s starts on page %s, in the original on page %s' % (u['unit'], u['starts_on_page'],
+                                                                                       u['original_page'])})
+    summary = {}
+    for c in out:
+        summary.setdefault(str(c['page']), {}).setdefault(c['kind'], 0)
+        summary[str(c['page'])][c['kind']] += 1
+    return out, summary
+
+
 # ---------------------------------------------------------------- the plan
 def _inside(box, outer, tol=2):
     cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
@@ -533,6 +613,11 @@ def make_plan(doc, trans, fonts, settings=None):
             continue
         report['units'].append(_fixed_unit(doc, uid, chains[uid], tr[uid]['pl'].strip(), fonts, ratios, st, report,
                                            plan['pages']))
+    checks, summary = check_plan(doc, plan)
+    report['checks'], report['check_summary'] = checks, summary
+    for c in checks:
+        if c['kind'] == 'collision':
+            report['warnings'].append('page %s: %s' % (c['page'], c['detail']))
     for pg in plan['pages']:
         if pg['body']:
             b = pg['body']

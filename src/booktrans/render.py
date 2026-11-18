@@ -231,6 +231,10 @@ def main():
             r['page'], r['body_lines_used'], r['body_lines_capacity'], r['size_px'], r['tracking_em']))
     for w in rep['warnings']:
         log.info('render', 'WARNING ' + w)
+    kinds = {}
+    for c in rep.get('checks', []):
+        kinds[c['kind']] = kinds.get(c['kind'], 0) + 1
+    log.info('render', 'checks: %s' % (', '.join('%s %d' % kv for kv in sorted(kinds.items())) or 'none'))
     log.info('render', 'wrote %s' % ', '.join(names) + ', compare, layout.json, report.json in %s' % out)
 
 
