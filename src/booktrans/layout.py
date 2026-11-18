@@ -891,6 +891,11 @@ def make_plan(doc, trans, fonts, settings=None):
                     and not any(_inside(b['bbox'], f) for f in figs):
                 keep([(pi, b)], None)
 
+    emptied = [u for u in chains if u in tr and not str(tr[u].get('source', 'x')).strip()]
+    for u in emptied:                                # a human emptied the unit (its text joined into another): blank
+        del chains[u]
+    if emptied:
+        report['emptied'] = emptied
     for u, fr in list(chains.items()):               # a human chose to keep the original of a block: its whole unit
         if any(st['blocks'].get(b['block_id'], {}).get('keep_original') for _, b in fr):
             keep(fr, None)

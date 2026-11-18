@@ -153,12 +153,12 @@ def reading_score(text, conf):
     return float(conf) * min(1.0, letters / 6.0) - 8.0 * junk
 
 
-def reocr_line(line, page, lang, hires=None, f=1.0, ocr=None):
-    """Read a caption line's strip again (enlarged, ``--psm 7``); returns the line updated with the new reading when it
-    scores better (``reading_score``), else the line unchanged.  ``ocr``: image -> tesseract data dict (for tests)."""
-    img, s, (ox, oy) = strip_for(page, line['bbox'], hires, f)
+def read_strip(page, bbox, lang, hires=None, f=1.0, ocr=None):
+    """OCR of one caption strip (enlarged, ``--psm 7``): (text, mean confidence, words in page coordinates) or
+    ('', 0, []).  ``ocr``: image -> tesseract data dict (for tests)."""
+    img, s, (ox, oy) = strip_for(page, bbox, hires, f)
     if img is None:
-        return line
+        return '', 0.0, []
     if ocr is None:
         import pytesseract
         from pytesseract import Output
@@ -178,9 +178,16 @@ def reocr_line(line, page, lang, hires=None, f=1.0, ocr=None):
                                int(round(ox + (d['left'][i] + d['width'][i]) / s)),
                                int(round(oy + (d['top'][i] + d['height'][i]) / s))]})
     if not words:
+        return '', 0.0, []
+    return ' '.join(w['text'] for w in words), round(float(np.mean([w['conf'] for w in words])), 1), words
+
+
+def reocr_line(line, page, lang, hires=None, f=1.0, ocr=None):
+    """Read a caption line's strip again (``read_strip``); returns the line updated with the new reading when it
+    scores better (``reading_score``), else the line unchanged."""
+    text, conf, words = read_strip(page, line['bbox'], lang, hires, f, ocr)
+    if not words:
         return line
-    text = ' '.join(w['text'] for w in words)
-    conf = round(float(np.mean([w['conf'] for w in words])), 1)
     if reading_score(text, conf) <= reading_score(line['text'], line.get('confidence', 0)) + 2:
         return line
     new = dict(line, text=text, confidence=conf, words=words, word_count=len(words),

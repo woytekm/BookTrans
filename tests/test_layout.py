@@ -455,3 +455,15 @@ def test_typeset_without_hyphenation_keeps_words_whole():
     assert [text_of([l]) for l in lines] == ['KATOLICKIEGO', 'KOŚCIOŁA', 'PARAFIALNEGO']
     assert _merge_soft([{'t': 'ko', 'w': 1, 'brk': 'soft'}, {'t': 'ściół', 'w': 2, 'brk': 'space'}]) == \
         [{'t': 'kościół', 'w': 3, 'brk': 'space'}]
+
+
+def test_an_emptied_caption_is_neither_drawn_nor_kept(tmp_path):
+    fig = _fig('f0', (40, 100, 400, 300), tmp_path)
+    a = _cap('a', 'u1', (40, 310, 120, 318), fig='f0')
+    b = _cap('b', 'u2', (160, 310, 300, 318), fig='f0')
+    doc = _doc(tmp_path, [[fig, a, b]])
+    trans = {'units': {'u1': {'pl': '43 RUDY, PORTAL ZACHODNI', 'source': '43 RAUDEN OS, WESTPORTAL'},
+                       'u2': {'pl': '', 'source': ''}}}
+    plan = L.make_plan(doc, trans, _fonts(), {})
+    assert {ln['unit'] for ln in plan['pages'][0]['lines']} == {'u1'}
+    assert 'b' not in plan['pages'][0]['keep'] and plan['report']['emptied'] == ['u2']

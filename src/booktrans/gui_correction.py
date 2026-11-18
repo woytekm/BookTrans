@@ -17,6 +17,7 @@ from tkinter import messagebox, ttk
 
 from PIL import Image, ImageDraw
 
+import caption_tools
 import ocr_decisions
 import unit_edits
 from gui_widgets import (CANVAS_BG, CLASS_COLORS, CLASS_LABELS, FIND_CUR_BG, MAC, MOD, MOD_LABEL, MUTED, NOTE_FG, SEL_BG,
@@ -114,6 +115,8 @@ class CorrectionWindow(tk.Toplevel):
         am.add_command(label='all uncertain and watch words on this page', command=lambda: self.accept_page(('uncertain', 'watch')))
         self.accept_btn.configure(menu=am)
         self.accept_btn.pack(side='right', padx=(0, 10))
+        self.caption_btn = ttk.Button(bar, text='Captions…', command=self.open_captions)
+        self.caption_btn.pack(side='right', padx=(0, 10))
         zb = ttk.Frame(self)
         zb.pack(fill='x', padx=10, pady=(6, 0))
         ttk.Button(zb, text='−', width=3, command=lambda: self.zoom_by(1 / ZOOM_STEP)).pack(side='left')
@@ -604,6 +607,34 @@ class CorrectionWindow(tk.Toplevel):
         if m is not None and not self.locate(m):
             self.status.configure(text='The word could not be found in the text (it was edited).', foreground=NOTE_FG)
 
+    # ------------------------------------------------------------------ captions
+    def open_captions(self):
+        """The caption helper for this page (``CaptionDialog``)."""
+        if self._img is None or self._orig is None:
+            return
+        caps = caption_tools.caption_units(self._orig, self.app.index.page_by_no[self.page_no])
+        if not caps:
+            messagebox.showinfo('Captions', 'Page %d has no captions.' % self.page_no, parent=self)
+            return
+        CaptionDialog(self, caps)
+
+    def apply_caption_texts(self, changes):
+        """Put caption texts (unit id -> text) into the review JSON in the editor; Save stores them."""
+        try:
+            new = caption_tools.apply_to_review(self.editor.get('1.0', 'end-1c'), changes)
+        except ValueError as e:
+            messagebox.showerror('Captions', str(e), parent=self)
+            return False
+        top = self.editor.yview()[0]
+        self.editor.delete('1.0', 'end')
+        self.editor.insert('1.0', new)
+        self.editor.yview_moveto(top)
+        self.editor.edit_modified(True)
+        self._modified()
+        self.status.configure(text='%d caption text(s) changed in the review JSON: Save to keep them.' % len(changes),
+                              foreground=NOTE_FG)
+        return True
+
     def close(self):
         if not self._confirm_leave():
             return
@@ -613,4 +644,132 @@ class CorrectionWindow(tk.Toplevel):
     def destroy(self):
         self._photo = None                           # freed here, in the main thread, not by a later garbage collection
         self._img = None
+        super().destroy()
+
+
+class CaptionDialog(tk.Toplevel):
+    """Captions of one page, one at a time: the caption enlarged, its text, *Read again* (the caption strip alone,
+    enlarged, as one text line), *Join with next* (for a caption the OCR cut into pieces: the next piece's unit is
+    emptied) and *Apply* (the texts go into the page's review JSON; the window's Save keeps them)."""
+
+    def __init__(self, win, caps):
+        super().__init__(win)
+        self.win, self.caps = win, caps
+        self.texts = [c['text'] for c in caps]
+        self.i = 0
+        self._photo = None
+        self.title('Captions – page %d' % win.page_no)
+        self.geometry('820x560')
+        self.transient(win)
+        lst = ttk.Frame(self, padding=(10, 8))
+        lst.pack(fill='x')
+        self.listbox = tk.Listbox(lst, height=min(6, len(caps)), exportselection=False, font=mono_font())
+        self.listbox.pack(fill='x')
+        self.listbox.bind('<<ListboxSelect>>', lambda _e: self._select())
+        self.canvas = tk.Canvas(self, bg=CANVAS_BG, highlightthickness=0, height=160)
+        self.canvas.pack(fill='x', padx=10)
+        self.raw = ttk.Label(self, text='', foreground=MUTED, wraplength=780, justify='left', padding=(10, 6, 10, 0))
+        self.raw.pack(fill='x')
+        ttk.Label(self, text='Caption text (as printed, German):', padding=(10, 6, 10, 2)).pack(fill='x')
+        self.text = tk.Text(self, height=3, wrap='word', font=mono_font(), bg=TEXT_BG, fg=TEXT_FG,
+                            insertbackground=TEXT_FG, relief='flat', padx=6, pady=4)
+        self.text.pack(fill='x', padx=10)
+        self.text.bind('<KeyRelease>', lambda _e: self._store())
+        bb = ttk.Frame(self, padding=(10, 8))
+        bb.pack(fill='x')
+        ttk.Button(bb, text='Read again', command=self.read_again).pack(side='left')
+        self.join_btn = ttk.Button(bb, text='Join with next', command=self.join_next)
+        self.join_btn.pack(side='left', padx=6)
+        ttk.Button(bb, text='OCR text', command=self.restore).pack(side='left')
+        ttk.Button(bb, text='Close', command=self.destroy).pack(side='right')
+        ttk.Button(bb, text='Apply', command=self.apply).pack(side='right', padx=6)
+        self.status = ttk.Label(self, text='Read again: OCR of this caption alone, enlarged.  Join with next: for a '
+                                           'caption cut into pieces (the next piece is emptied and not translated).',
+                                foreground=MUTED, wraplength=780, justify='left', padding=(10, 0, 10, 8))
+        self.status.pack(fill='x')
+        self._fill_list()
+        self.listbox.selection_set(0)
+        self._select()
+
+    def _fill_list(self):
+        self.listbox.delete(0, 'end')
+        for c, t in zip(self.caps, self.texts):
+            mark = '*' if t != c['text'] else ' '
+            self.listbox.insert('end', '%s %s  %s' % (mark, c['unit_id'], t or '(empty)'))
+
+    def _select(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            return
+        self.i = sel[0]
+        c = self.caps[self.i]
+        img = self.win._img
+        box = caption_tools.row_box(c, self.caps, img.width)
+        z_img, _ = caption_tools.zoomed(img, box, width=max(200, self.canvas.winfo_width() or 780))
+        if z_img.height > 300:
+            z_img = z_img.resize((int(z_img.width * 300 / z_img.height), 300))
+        self._photo = SafePhoto(z_img, master=self.canvas)
+        self.canvas.configure(height=z_img.height)
+        self.canvas.delete('all')
+        self.canvas.create_image(0, 0, image=self._photo, anchor='nw')
+        self.raw.configure(text='OCR read: %s' % c['text_raw'])
+        self.text.delete('1.0', 'end')
+        self.text.insert('1.0', self.texts[self.i])
+        self.join_btn.configure(state='normal' if self.i < len(self.caps) - 1 else 'disabled')
+
+    def _store(self):
+        self.texts[self.i] = self.text.get('1.0', 'end-1c').strip()
+        self._refresh_row()
+
+    def _refresh_row(self):
+        c, t = self.caps[self.i], self.texts[self.i]
+        self.listbox.delete(self.i)
+        self.listbox.insert(self.i, '%s %s  %s' % ('*' if t != c['text'] else ' ', c['unit_id'], t or '(empty)'))
+        self.listbox.selection_set(self.i)
+
+    def read_again(self):
+        c = self.caps[self.i]
+        self.configure(cursor='watch'); self.update_idletasks()
+        try:
+            text, conf = caption_tools.read_again(self.win._img, c['bbox'], self.win.app.project.params.get('lang', 'deu'))
+        except Exception as e:                       # tesseract missing or failing: say so, keep the text
+            self.status.configure(text='Read again failed: %s' % e, foreground=NOTE_FG)
+            return
+        finally:
+            self.configure(cursor='')
+        if not text:
+            self.status.configure(text='Read again found no text.', foreground=NOTE_FG)
+            return
+        self.text.delete('1.0', 'end')
+        self.text.insert('1.0', text)
+        self._store()
+        self.status.configure(text='Read again (confidence %.0f): check it against the picture, then Apply.' % conf,
+                              foreground=MUTED)
+
+    def join_next(self):
+        try:
+            self.texts = caption_tools.join_texts(self.texts, self.i)
+        except ValueError as e:
+            self.status.configure(text=str(e), foreground=NOTE_FG)
+            return
+        self._fill_list()
+        self.listbox.selection_set(self.i)
+        self._select()
+        self.status.configure(text='Joined with %s (now empty): Read again often fixes the whole line.'
+                                   % self.caps[self.i + 1]['unit_id'], foreground=MUTED)
+
+    def restore(self):
+        self.texts[self.i] = self.caps[self.i]['text']
+        self._select(); self._refresh_row()
+
+    def apply(self):
+        changes = {c['unit_id']: t for c, t in zip(self.caps, self.texts) if t != c['text']}
+        if not changes:
+            self.status.configure(text='Nothing changed.', foreground=MUTED)
+            return
+        if self.win.apply_caption_texts(changes):
+            self.destroy()
+
+    def destroy(self):
+        self._photo = None
         super().destroy()

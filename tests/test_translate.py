@@ -325,3 +325,12 @@ def test_force_asks_the_model_again_for_the_selected_units(tmp_path):
     later = []
     res2 = T.run(_doc(), _args(tmp_path), call=_echo(later))                 # the new answer replaced the cached one
     assert later == [] and res2['units']['u0002']['pl'] == res['units']['u0002']['pl']
+
+
+def test_a_unit_emptied_by_a_human_is_not_sent(tmp_path):
+    doc = _doc()
+    doc['units'][2]['text'] = ''                       # joined into another caption / paragraph in the GUI
+    sent = []
+    res = T.run(doc, _args(tmp_path), call=lambda p: (sent.append(p), 'Portal w Byczynie jest prosty. Ma 3 stopnie.')[1])
+    assert res['units']['u0003'] == {'source': '', 'pl': '', 'glossary': [], 'flags': []}
+    assert len(sent) == 2
