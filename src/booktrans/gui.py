@@ -13,6 +13,7 @@ opens its OCR correction window.
 Needs tkinter and Pillow's ImageTk (``python envcheck.py`` says what is missing).
 """
 import argparse
+import os
 import gc
 import json
 import sys
@@ -31,7 +32,7 @@ except ImportError as e:
              'Check everything with:  python envcheck.py' % (e, sys.version_info[0], sys.version_info[1]))
 
 from gui_correction import CorrectionWindow          # noqa: E402
-from gui_dialogs import ClearDataDialog, CommandDialog, EnvWindow, NewProjectDialog   # noqa: E402
+from gui_dialogs import ClearDataDialog, CommandDialog, EnvWindow, NewProjectDialog, change_input_dir   # noqa: E402
 from gui_run import RunWindow, TranslateWindow                          # noqa: E402
 from gui_widgets import (MAC, MOD, MOD_LABEL, MUTED, ROW_TINT, STATUS_COLORS, TREE_FG, JsonView, apply_dark_theme, Legend, copy_to_clipboard,   # noqa: E402
                          human_bytes, reveal_in_file_manager, run_async)
@@ -101,6 +102,7 @@ class MainWindow(tk.Tk):
         p = tk.Menu(m, tearoff=False)
         m.add_cascade(label='Project', menu=p)
         p.add_command(label='Check environment…', accelerator='%s+E' % MOD_LABEL, command=self.check_env)
+        p.add_command(label='Change input folder…', command=self.change_input)
         p.add_command(label='Run pipeline…', accelerator='%s+Shift+R' % MOD_LABEL, command=self.run_pipeline)
         p.add_command(label='Re-run OCR correction…', accelerator='%s+Shift+O' % MOD_LABEL, command=self.rerun_ocrfix)
         p.add_command(label='Run translation…', accelerator='%s+Shift+T' % MOD_LABEL, command=self.run_translation)
@@ -311,7 +313,11 @@ class MainWindow(tk.Tk):
         st = p.status()
         self.name_lbl.configure(text=p.name)
         self.path_lbl.configure(text=str(p.root))
-        parts = ['Input: %d TIFF file%s (%s)' % (st['tiffs'], '' if st['tiffs'] == 1 else 's', human_bytes(st['tiff_bytes']))]
+        if os.path.isdir(p.input_dir):
+            parts = ['Input: %s  (%d TIFF file%s, %s)' % (p.input_dir, st['tiffs'], '' if st['tiffs'] == 1 else 's',
+                                                        human_bytes(st['tiff_bytes']))]
+        else:
+            parts = ['Input: %s  (folder not found: Project \u203a Change input folder\u2026)' % p.input_dir]
         if st['processed']:
             parts.append('pipeline result: %s' % ('with OCR correction' if st['corrected'] else 'without OCR correction (document.json only)'))
         else:
@@ -600,6 +606,20 @@ class MainWindow(tk.Tk):
             return
         from gui_render import RenderWindow
         self.render_window = RenderWindow(self, self.project, page=self._selected_page())
+
+    def change_input(self):
+        """Show / change the folder with the TIFF scans (saved in project.json)."""
+        if not self.project:
+            return
+        w = getattr(self, 'run_window', None)
+        if w is not None and w.winfo_exists() and w.run is not None and w.run.running:
+            messagebox.showinfo('A run is in progress', 'Wait until the running %s has finished.' % w.WHAT, parent=self)
+            return
+        if change_input_dir(self, self.project):
+            self._header()
+            if w is not None and w.winfo_exists() and hasattr(w, 'refresh_input'):
+                w.refresh_input()
+            self.status('Input folder: %s' % self.project.input_dir, 'ok')
 
     def clear_project(self):
         """Remove the results of processing (pipeline output, translation, rendered pages; optionally the translation

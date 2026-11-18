@@ -327,3 +327,29 @@ class ClearDataDialog(tk.Toplevel):
             return
         self.result = keys
         self.destroy()
+
+
+def change_input_dir(master, project):
+    """Ask for a new input folder, show what is found there and what it means for existing results, and store it.
+    -> True when the folder was changed."""
+    new = filedialog.askdirectory(parent=master, title='Input folder with the TIFF scans', initialdir=project.input_dir,
+                                  mustexist=True)
+    if not new:
+        return False
+    new = str(Path(new))
+    if new == project.input_dir:
+        return False
+    t = tiffs_in(new)
+    msg = ['New input folder:\n%s\n\n%d TIFF file%s found%s.' % (new, len(t), '' if len(t) == 1 else 's',
+                                                                ' (%s \u2026)' % ', '.join(x.name for x in t[:3]) if t else '')]
+    warnings = project.input_change_warnings(new)
+    msg += warnings
+    if not messagebox.askyesno('Change the input folder?', '\n\n'.join(msg + ['Change it?']),
+                               icon='warning' if warnings else 'question', parent=master):
+        return False
+    try:
+        project.set_input_dir(new)
+    except ProjectError as e:
+        messagebox.showerror('Input folder', str(e), parent=master)
+        return False
+    return True

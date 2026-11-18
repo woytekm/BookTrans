@@ -17,7 +17,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from gui_widgets import MUTED, STATUS_COLORS, TEXT_BG, TEXT_FG, SEL_BG, SEL_FG, mono_font
 from project import (LAYOUTS, OCRFIX_MODES, PROVIDERS, TR_SOURCES, PipelineRun, ProjectError, check_params,
-                     check_translation)
+                     check_translation, tiffs_in)
 
 
 class ProcessWindow(tk.Toplevel):
@@ -183,6 +183,16 @@ class RunWindow(ProcessWindow):
                   'scale': tk.StringVar(value=str(p['scale'])), 'ocr_scale': tk.StringVar(value=str(p['ocr_scale'])),
                   'ocrfix': tk.StringVar(value=p['ocrfix']), 'ocr_suggest': tk.BooleanVar(value=bool(p['ocr_suggest']))}
         self.resume = tk.BooleanVar(value=self.project.status()['processed'])
+        if self.mode == 'pipeline':
+            inp = ttk.Frame(f)
+            inp.pack(fill='x', pady=(0, 8))
+            ttk.Label(inp, text='Input folder').pack(side='left', padx=(0, 8))
+            self.input_lbl = ttk.Label(inp, text='')
+            self.input_lbl.pack(side='left')
+            b = ttk.Button(inp, text='Change\u2026', command=self._change_input)
+            b.pack(side='left', padx=(10, 0))
+            self.controls.append(b)
+            self.refresh_input()
         g = ttk.Frame(f)
         g.pack(fill='x')
         cells = [('OCR language', ttk.Entry(g, textvariable=self.v['lang'], width=10)),
@@ -211,6 +221,22 @@ class RunWindow(ProcessWindow):
                                 command=self._warn)
             r.pack(anchor='w', pady=(4, 0))
             self.controls.append(r)
+
+    def refresh_input(self):
+        t = tiffs_in(self.project.input_dir)
+        self.input_lbl.configure(text='%s   (%d TIFF file%s)' % (self.project.input_dir, len(t), '' if len(t) == 1 else 's'),
+                                 foreground=STATUS_COLORS['warn'] if not t else '')
+        if hasattr(self, 'warn'):
+            self._warn()
+
+    def _change_input(self):
+        from gui_dialogs import change_input_dir
+        if change_input_dir(self, self.project):
+            if self.project.status()['processed']:
+                self.resume.set(False)            # a result of the old folder must not be resumed
+            self.refresh_input()
+            if hasattr(self.master, '_header'):
+                self.master._header()
 
     def _params(self):
         v = self.v

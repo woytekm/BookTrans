@@ -280,6 +280,33 @@ class Project:
     def input_dir(self):
         return self.data['input_dir']
 
+    def input_change_warnings(self, new_dir):
+        """Sentences to show before the input folder is changed to ``new_dir`` (empty when nothing is at stake)."""
+        new = os.path.abspath(os.path.expanduser(str(new_dir)))
+        if new == self.input_dir:
+            return []
+        out = []
+        t = tiffs_in(new)
+        if not t:
+            out.append('There are no TIFF files in %s.' % new)
+        if (self.book_dir() / 'document.json').exists() or any(self.pipeline_root.glob('*/stages')):
+            out.append('The pipeline result in %s was made from %s. Run the pipeline without --resume (or use Clear project '
+                       'data first) to process the new folder: with --resume, spreads whose TIFF has the same name in both '
+                       'folders would be kept from the old one.' % (self.pipeline_root, self.input_dir))
+            if (len(t) == 1) != (len(tiffs_in(self.input_dir)) == 1):
+                out.append('The result folder name changes too (a single TIFF is processed under its own name, several '
+                           'under the project name).')
+        return out
+
+    def set_input_dir(self, new_dir):
+        """Change the input folder (must be an existing folder) and save project.json -> the TIFFs found there."""
+        new = os.path.abspath(os.path.expanduser(str(new_dir)))
+        if not os.path.isdir(new):
+            raise ProjectError('%s is not a folder' % new)
+        self.data['input_dir'] = new
+        self.save()
+        return tiffs_in(new)
+
     @property
     def params(self):
         return self.data['params']

@@ -221,6 +221,12 @@ first); and it asks about unsaved correction windows like the other runs. Live l
 "translation: N of M units, K flagged". A page run keeps the other pages' translations (translate.py merges, section 7 of
 `TRANSLATION.md`). One run window per project: pipeline, OCR correction and translation never run at the same time.
 
+**Input folder** of an existing project: shown in the header (path, TIFF count and size, or "folder not found") and at the top
+of *Run pipeline*; changed with Project > *Change input folder…* or *Change…* in the run window (`gui_dialogs.change_input_dir`,
+`Project.set_input_dir`). Before it changes it shows how many TIFFs the new folder holds and, when the project already has a
+pipeline result, that the result came from the old folder: run without `--resume` (the run window unticks it) or clear the
+project data first, since `--resume` keeps spreads by TIFF name (`Project.input_change_warnings`).
+
 **Clear project data** (`gui_dialogs.ClearDataDialog`, Project menu; `Project.data_parts` / `Project.clear_data`): removes the
 results of processing for a fresh start; `project.json` (all settings) is always kept. Ticked by default: the pipeline output
 (`pipeline/`), the translation (`translation/translations.json`) and the rendered pages (`render/`); unticked by default: the
