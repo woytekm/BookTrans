@@ -181,8 +181,39 @@ def _build_page(spec, out):
     return page, regions, tiff
 
 
-def make_demo(root, force=False):
-    """Create the demo project in ``root`` (an empty or missing folder).  -> Project."""
+DEMO_PL = ('Najstarsze dzieła, jakie do nas dotarły, należą do drugiej połowy XIII wieku, co dla obszaru górnośląskiego '
+           'oznacza epokę wczesnego gotyku. Czystych romańskich zabytków budownictwa, jakie na Dolnym Śląsku spotykamy '
+           'jeszcze często, przynajmniej w szczątkach, nie znam. Te wczesne dzieła wzniesiono z cegły, a także z kamienia '
+           'łamanego, przy użyciu ciosów i kształtek do form architektonicznych. ')
+DEMO_FIXED = {'heading': 'ŚREDNIOWIECZNE PORTALE KOŚCIELNE GÓRNEGO ŚLĄSKA', 'caption': '37 BYCZYNA',
+              'footnote_or_footer': '1) Zob. Lutsch, Spis zabytków sztuki prowincji Śląsk.'}
+
+
+def demo_translation(doc):
+    """A synthetic Polish translation of the demo units (the render window needs one): body units get Polish text of
+    about the German length, headings / captions / footnotes a fitting short text."""
+    roles = {}
+    for pg in doc['pages']:
+        for b in pg['blocks']:
+            if b.get('unit_id'):
+                roles.setdefault(b['unit_id'], b['role'])
+    out, pos = {}, 0
+    words = (DEMO_PL * 6).split()
+    for u in doc['units']:
+        role = roles.get(u['unit_id'], 'paragraph')
+        if role in DEMO_FIXED:
+            out[u['unit_id']] = {'pl': DEMO_FIXED[role], 'flags': []}
+            continue
+        n = int(len(u['text']) * 0.97); t = []
+        while len(' '.join(t)) < n:
+            t.append(words[pos % len(words)]); pos += 1
+        out[u['unit_id']] = {'pl': ' '.join(t).rstrip(',') + ('' if t[-1].endswith('.') else '.'), 'flags': []}
+    return {'schema': '1.0', 'target_language': 'pl', 'notes': 'synthetic demo translation', 'units': out}
+
+
+def make_demo(root, force=False, translate=False):
+    """Create the demo project in ``root`` (an empty or missing folder).  ``translate``: also write a synthetic
+    translation (``translation/translations.json``), so the render window has something to show.  -> Project."""
     from PIL import Image
     root = Path(root)
     if root.exists() and any(root.iterdir()):
@@ -217,6 +248,9 @@ def make_demo(root, force=False):
     doc = {'schema_version': '1.1', 'source_file': str(scans), 'pages': pages, 'units': units,
            'coordinate_system': 'pixels of each page image (synthetic demo)'}
     write_json(book / 'document.json', doc, indent=2)
+    if translate:
+        proj.translation_dir.mkdir(parents=True, exist_ok=True)
+        write_json(proj.translations_file, demo_translation(doc), indent=1)
     try:
         _correct(doc, book)
     except ImportError as e:

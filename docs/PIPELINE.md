@@ -12,7 +12,18 @@ This document distinguishes the intended pipeline from the currently implemented
 6. In Stage 2, retain OCR lines with page-local bounding boxes, text, confidence and glyph-height estimates.
 7. Classify lines heuristically (body, heading, caption, footer/byline candidates).
 8. Infer paragraph boundaries per text column of the page (short last line, indent, spacing; never after a hyphen).
-8a. Stage 4: link paragraphs across page/spread breaks, dehyphenate, build translation units.
+8a. Stage 4: link paragraphs across page/spread breaks, dehyphenate, build translation units. Since 2026-11-18 it
+    also repairs stage 2 region errors before linking (found on page 62 of the first real book): *noise regions*
+    (fewer than 3 letters once stray marks are removed: `|`, `N`, a page or figure number; or a "paragraph" narrower
+    than a quarter of the page's widest) get `translation_status: exclude`, `exclude_reason: noise` (no unit, nothing
+    translated); *stray-mark lines* (`junk_line`: narrower than 12 % of the region, at most 2 letters or digits, e.g.
+    `)`, `Ef`, `5` from margin marks) are left out of the unit text (`unit_lines`; `pageindex.replay` skips the same
+    lines, so word marks stay exact); *paragraphs split on a page* are joined: consecutive body paragraphs of one
+    column are linked when the first does not end a sentence and either the second starts with a small letter or the
+    first's last line reaches the column's right edge (in this book a paragraph ends with a short line; German nouns
+    start with a capital, so the small-letter test alone misses `mit tiefen | Hohlkehlen`). Across a page break the
+    small-letter test alone still applies (scans may skip pages). A caption of 4+ lines at body glyph height counts as
+    a body paragraph for linking (stage 2 sometimes takes the text under a plate for its caption).
 9. Serialize page/region/line information to JSON and draw a diagnostic overlay.
 10. `docmodel.py` builds `document.json` (layout, typography, reading-ordered blocks, figure crops, page marks/rules, translation units).
 11. Translation (not implemented; contract in `TRANSLATION.md`) produces a translations JSON.

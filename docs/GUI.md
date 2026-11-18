@@ -96,6 +96,8 @@ again raises it; closing the project closes them.
     translation/                      translate.py -o <project>/translation/translations.json (Run translation; outside pipeline/)
         translations.json             the translation render.py reads (+ glossary and flags per unit)
         translations.cache.json       translate.py's answer cache (a repeated run only translates what changed)
+    review/render_overrides.json      human adjustments of the rebuilt pages, per block and per page (render window)
+    render/                           render.py -o <project>/render (Render book: page PNGs, comparisons, layout, report, book.pdf)
 ```
 
 `<book>` is the project name, except when the input folder holds a single TIFF: `booktrans.py` then names the folder after the
@@ -113,7 +115,8 @@ file (`Project.book_dir` knows). The GUI shows `document.corrected.json` when it
 ```
 
 `Project.command()` turns the parameters into the exact `booktrans.py` command line (shown by Project > Pipeline command).
-Schema 1.1 (2026-11-18) adds `translation`; a 1.0 file loads with the defaults. `Project.translate_command(pages, dry_run)` turns
+Schema 1.1 (2026-11-18) adds `translation`, 1.2 (2026-11-18) adds `render` (book render settings, `project.DEFAULT_RENDER`); older
+files load with the defaults. `Project.translate_command(pages, dry_run)` turns
 the translation settings into the `translate.py` command: `<book>/document.json` (translate.py takes `document.corrected.json`
 beside it unless `source` is `raw`, which adds `--raw`), `-o translation/translations.json`, `--provider`, `--model` and
 `--endpoint` when set (no endpoint for `claude-code`), `--glossary` (paths separated by `;`, relative ones from the project
@@ -218,6 +221,26 @@ first); and it asks about unsaved correction windows like the other runs. Live l
 "translation: N of M units, K flagged". A page run keeps the other pages' translations (translate.py merges, section 7 of
 `TRANSLATION.md`). One run window per project: pipeline, OCR correction and translation never run at the same time.
 
+**Render window** (`gui_render.RenderWindow`; header button *Render pages…*, Project menu, Cmd/Ctrl+Shift+P; one per project,
+opened at the page selected in the main window; reloaded when a pipeline or translation run ends). Built on
+`render_session.RenderSession` (toolkit-free): the book's `document.json`, `translation/translations.json`, `project.json` ->
+`render` and `review/render_overrides.json`. The layout of the whole book (`layout.make_plan`) runs in the GUI process in a worker
+thread (3.7 s for the 14-page test book, the ink match included); a page is drawn at the zoom on screen (`render.draw_page(...,
+scale=)`), so text stays sharp at any zoom. Left: the page list (page, side, body lines used / slots, the page's fit with `*` when
+adjusted by hand, check counts; red rows: collision or overflow, amber: drift or empty lines). Middle: the page, *side by side*
+(original | rebuilt), *rebuilt* or *original*; zoom (buttons, Ctrl/Cmd + wheel, +/-/0/1), drag to move; outlines: the selected block
+(green), blocks with a collision or overflow (red / orange), blocks with an adjustment (blue), optionally all text blocks; a click
+selects the text block under the pointer. Right, three tabs, each saving at once and laying the book out again:
+*Book* (font, bold, italic with file choosers, blank = the configured default font; letter-spacing auto/em, size, word space,
+paragraph indent, page fit, background, ink auto/R,G,B, final resolution; Apply validates with `project.check_render`; below, the fonts
+in use, the ink match and the base size); *Page* (the page's body fit: lines, empty lines, pushed paragraphs, size and letter-spacing;
+size factor and letter-spacing change to fix the fit by hand, *Automatic* to clear; the page's checks, selecting one outlines its
+block); *Block* (the selected block: role, unit, how it is set, size, letter-spacing, lines; for fixed frames size, letter-spacing,
+word space, max width, alignment; for any translated block *keep the original*; body blocks only the latter, the note says to adjust the
+page; the Polish text). Adjustments are hash-tied (`render_overrides.py`): when the OCR text under a block changes they are not
+applied and the status line names them. *Render book…* (`gui_run.RenderRunWindow`): pages (as in the page list; blank = all),
+resolution, *book.pdf*, then `render.py` as a subprocess -> `<project>/render/`; *Output folder* opens it.
+
 **OCR correction window** (`gui_correction.py`): target design for stage C, one window per page, top to bottom:
 1. *Header*: page, side, source TIFF, counts, legend, previous/next page, "next mark".
 2. *Page image* (about two thirds of the height): fit / zoom / pan; marks as translucent boxes in the four colours with a thin outline
@@ -241,11 +264,15 @@ Stage A already has the window as a separate, per-page, reused toplevel with the
 | `gui_dialogs.py` | no | new project, environment window, command dialog |
 | `gui_correction.py` | no | the OCR correction window: page image with marks (editor in stage C); `compose_marks` needs only PIL |
 | `unit_edits.py` | no | the edit store: hash-tied edits, `apply_edits`, `validate_review` (also used by `ocrfix.py run --edits`) |
-| `gui_run.py` | no | `ProcessWindow` (Start/Stop, live log); `RunWindow`: Run pipeline, mode `ocrfix`: Re-run OCR correction (stage 5 only); `TranslateWindow`: Run translation |
+| `gui_run.py` | no | `ProcessWindow` (Start/Stop, live log); `RunWindow`: Run pipeline, mode `ocrfix`: Re-run OCR correction (stage 5 only); `TranslateWindow`: Run translation; `RenderRunWindow`: Render book |
+| `render_session.py` | yes | the render preview: load, lay out, draw a page at any scale, block under a point, adjustments, book settings |
+| `gui_render.py` | no | the render window (page list, page view, Book / Page / Block tabs) |
 | `gui_widgets.py` | no | colours, `JsonView` (read-only JSON with colouring and search), `run_async`, helpers |
 
-Tests: `test_project.py` (30), `test_envcheck.py` (14), `test_pageindex.py` (21), `test_gui_demo.py` (6), `test_gui_smoke.py` (41; needs
-`tkinter` and a display, skipped otherwise, windows are kept withdrawn).
+Tests: `test_project.py` (32), `test_envcheck.py` (14), `test_pageindex.py` (22), `test_gui_demo.py` (6), `test_render_session.py` (5),
+`test_gui_smoke.py` (41) and `test_gui_render.py` (6; both need `tkinter` and a display, skipped otherwise, windows are kept withdrawn).
+`gui.py --demo DIR` writes a synthetic translation too (`gui_demo.make_demo(..., translate=True)`), so the render window can be tried
+without a real book.
 
 ## 10. Stages
 
@@ -256,7 +283,8 @@ Tests: `test_project.py` (30), `test_envcheck.py` (14), `test_pageindex.py` (21)
 | **C** | the correction window: image with marks (**done**), prev/next page (**done**), JSON editor with validation and save to `review/unit_edits.json` (**done**), click a mark to find the word (**done**), find box in the editor (**done**), accept / replace / accept everywhere for a flag and accept-all on a page (**done**, `ocr_decisions.py`); open: mark list, next/previous mark, accept a candidate with one key, page status (todo / reviewed) | mostly done |
 | **D** | `unit_edits.apply_edits` in `ocrfix.py run --edits` (**done**; staleness by hash; `booktrans.py --edits`, passed by the GUI); open: accept-a-candidate writes a `resolution` into `ocr_review.json`, the **Re-run OCR correction** button (**done** 2026-11-17: header button, Project menu, Cmd/Ctrl+Shift+O; the run window in mode `ocrfix` runs `project.ocrfix_command()` = `ocrfix.py run <book>/document.json [--aggressive] [--no-suggest] --edits … --decisions …`, seconds instead of a stage-4-onwards run; asks first when a correction window has unsaved changes) | partly done |
 | **E** | run the pipeline from the GUI (**done** 2026-11-17: `gui_run.RunWindow`, `project.PipelineRun`; parameters edited in the window and saved to `project.json`, live log, Stop, `--resume`, reloads the result when done); open: progress per stage, backup of `ocr_review.json` before a destructive run | partly done |
-| **F** | run the translation from the GUI (**done** 2026-11-18: translation settings in `project.json`, `TranslateWindow`, pages and dry run per run, stale-correction warning, summary in the header); open: translation review (German and Polish side by side, flags), render from the GUI, export, anything the first real use shows is missing | started |
+| **F** | run the translation from the GUI (**done** 2026-11-18: translation settings in `project.json`, `TranslateWindow`, pages and dry run per run, stale-correction warning, summary in the header); open: translation review (German and Polish side by side, flags), anything the first real use shows is missing | started |
+| **G** | render from the GUI (**done** 2026-11-18: render window with the rebuilt page beside the scan, checks, book settings, page and block adjustments, Render book with PDF; ADR-022); open: editing the translation of a block from the render window, a preview of one block's alternatives, keyboard shortcuts for the tabs | done |
 
 Acceptance for stage B: on a project with words, every mark of the demo lands on the box of its word; on one without, the GUI
 says the positions are estimated. For stage C: an edit made in the window is in `unit_edits.json`, in `document.corrected.json`,

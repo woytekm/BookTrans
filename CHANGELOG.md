@@ -1,5 +1,82 @@
 # Changelog
 
+## Unreleased — GUI: the render window
+
+- **Render window** (`gui_render.py`; header button *Render pages…*, Project menu, `Cmd/Ctrl+Shift+P`): page list with each page's fit and check counts; the rebuilt page beside the scan (or either alone), zoom with sharp text (drawn at the zoom on screen), drag, click a text block to select it; outlines for the selection, collisions / overflow, adjusted blocks, optionally all blocks. Tabs: **Book** (font, bold, italic, letter-spacing, size, word space, paragraph indent, page fit, background, ink, final resolution; fonts in use, ink match, base size), **Page** (the page's fit, size factor / letter-spacing change by hand, the page's checks), **Block** (how the block is set, size / letter-spacing / word space / max width / alignment for frames, keep original, the Polish text). Every change is saved at once (`project.json` -> `render`, `review/render_overrides.json`) and the book laid out again in a worker thread. Reloads after a pipeline or translation run.
+- **Render book…** (`gui_run.RenderRunWindow`): pages, resolution, PDF -> `<project>/render/`; *Output folder*.
+- `render_session.py` (toolkit-free): load, lay out, draw a page at any scale, block under a point, adjustments, settings.
+- `render.draw_page(..., scale=)`: draw a page at any scale. `render.py --pages` with no matching page is an error (pages are the document's numbers). `Project.render_command(..., pdf=True)`.
+- `gui.py --demo` writes a synthetic translation (`gui_demo.make_demo(translate=True)`).
+- `ADR-022`: the preview runs in the GUI process, the full render is a subprocess.
+- Tests: 11 new (`test_render_session.py`, `test_gui_render.py`; 272 passed).
+
+## Unreleased — stage 4: repair of stage 2 region errors (page 62)
+
+- **Noise regions** (`|`, `N`, page and figure numbers, strips at the page edge) are excluded from translation (`exclude_reason: noise`).
+- **Stray-mark lines** (`)`, `Ef`, `5` from margin marks) are left out of the unit text; `pageindex.replay` skips the same lines (word marks stay exact).
+- **Paragraphs split on a page are joined**: consecutive body paragraphs of one column, when the first does not end a sentence and the second starts with a small letter or the first's last line is full. Across pages the small-letter rule stays (scans may skip pages).
+- A **caption of 4+ lines at body size** counts as a body paragraph for linking.
+- On the 14-page test book: page 62's paragraph translated in four fragments is one unit again, the page 62 -> 63 link goes to the right paragraph (the translation no longer repeats "Podczas gdy"), 74 -> 56 units. Rerun: `booktrans.py --resume` (keeps stages 1-3), then translate the changed units.
+- Tests: 5 new (261 passed).
+
+## Unreleased — render: fixes from the first real book
+
+- Rendered the owner's 14-page test book (Claude translation). Fixes:
+  - **Scan noise read as text** (`|`, `N`, page or figure numbers as paragraphs) is never typeset: dropped outside the text column, kept as pixels inside; a unit joined to such a block starts at its real text.
+  - **Stray marks read as lines** (`)`, `Ef`, `5`) get no slot; the line pitch is measured from the real lines.
+  - **Overlapping blocks** give one slot per line; each run of slots is put on **one even line grid**.
+  - A **caption / footnote of 4+ lines at body size** is set as body text (`reclassified`); paragraph blocks narrower than 30 % of the column are fixed frames.
+  - **Ink**: `typecolour.match_ink` matches the scan's darkness (hue from the median ink colour, shade solved from a coverage mask); the "darkest pixels" rule gave near-black because the scanner clips stroke cores. `fontcheck.py` now sets candidates in black (darkness >= 1 needed).
+  - **Speed**: the line breaker's memo ignores the line number for uniform widths (a 21-line ragged frame took 20 s); the 14-page book renders in 8 s.
+- `typecolour.py`: darkness, scan metrics, block setting, ink matching (shared by `render.py` and `fontcheck.py`).
+- Tests: 5 new (256 passed).
+
+## Unreleased — render: configurable default font
+
+- **Default font in `config/fonts.json`** (Crimson Text Regular / SemiBold / Italic, as before); `BOOKTRANS_FONTS` points to another file. Used by `render.py`, `booktrans.py`, projects without `render.font`, and as `fontcheck.py`'s reference. `envcheck.py` checks the configured default instead of a fixed list of Crimson Text files.
+- Tests: 1 new (251 passed).
+
+## Unreleased — render: PDF, emphasis runs, memory
+
+- **`render.py --pdf [NAME]`** (`render(pdf=, pdf_dpi=)`): the drawn pages as one PDF, written page by page (JPEG), page size from the pixels at 120 DPI x the drawing scale (the book's physical size for the 600 DPI scans) or `--pdf-dpi`.
+- **Emphasis inside a paragraph**: translations may use `<i>`, `<b>`, `<sp>` (letter-spaced Sperrsatz, +0.16 em), also inside a word; measured per run, carried across pages with their tags, drawn in the run's font; headings in capitals keep the tags. Plan words in another style carry `{style, track, join}`. Not yet produced by stage 2 / the translation prompt.
+- `render()` no longer holds every original and rebuilt page in memory (a whole book at full resolution would not fit): per-page comparisons are written as each page is drawn, `compare.png` from small copies.
+- Tests: 4 new (250 passed).
+
+## Unreleased — render: ink and fonts; fontcheck.py
+
+- **`--ink auto`** (default; project `render.ink`): the text colour is measured from the scan (darkest tenth of the ink pixels in the text blocks), stored in `report.json` and `layout.json`.
+- **Font families**: without `--bold-font` / `--italic-font` the siblings of `--font` are used, else the regular font (before, any `--font` was mixed with Crimson Text's bold and italic). **Variable fonts**: `path@weight`.
+- **Crimson Pro** bundled (Light, LightItalic, Regular, Italic, SemiBold; static instances, SIL OFL, `fonts/OFL-CrimsonPro.txt`).
+- **`fontcheck.py`**: specimen sheets (scan vs each candidate setting the original text in the original line boxes) and per-font width / x-height / darkness / tracking with a score, to choose the font on the real scans.
+- Font ratios include the x-height and are cached; the font cache is bounded.
+- Tests: 2 new (246 passed).
+
+## Unreleased — render: settings and human adjustments
+
+- **Render settings in `project.json`** (schema 1.2; older files load with the defaults): `render` = background, resolution, fonts, tracking, size scale, word space, paragraph indent, page fit, ink; `project.check_render`; `Project.render_command(pages, resolution)` → `<project>/render/` (outside `pipeline/`), with `review/render_overrides.json` when it exists.
+- **Adjustments** (`render_overrides.py`, `render.py --overrides FILE`): per block `size_scale`, `tracking_em`, `word_space`, `anchor`, `max_width`, `keep_original`; per page `size_factor`, `track_delta_em` (replace the automatic body fit). Tied to a hash of the OCR text: stale entries are not applied and are named. `report.json`: `adjusted` per fixed frame, `kept_by_hand`.
+- Tests: 6 new (244 passed).
+
+## Unreleased — render: checks
+
+- **`report.json` checks** (`layout.check_plan`): `collision` (a line over a figure, graphic, kept text, another block's lines, or off the page; also a warning), `overflow`, `drift` (paragraph on a later page than in the original), `blank` (empty slots at a page foot), `loose` / `tight` justified lines (word space > 1.6x / < 0.8x natural); `check_summary` per page. The CLI prints the totals.
+- Plan lines carry `stretch` (justified word space / natural).
+- Tests: 3 new (238 passed).
+
+## Unreleased — render: layout plan, line slots, page-synchronised flow
+
+- **Rendering in two steps** (ADR-021): `layout.py` computes a **layout plan** of the whole book (every line: unit, block, style, size, letter-spacing, x, baseline, words with widths, justification gap; per page the kept and wiped blocks and the body fit), written as `layout.json`; `render.py` draws a page from it (`draw_page(doc, plan, page_index)`). `typeset.py` holds the line breaking (moved out of `render.py`, which re-exports the old names). `render()` keeps its signature.
+- `render.py --pages 3,5-7`: draw only these pages (the layout still covers the book). `--no-page-fit`: one body size for the book (shrink only).
+- **Body text through line slots**: every original body line is a slot (regularised top, column edges, narrowed by a figure beside it); the Polish lines go into the slots in column order. Fixes: a figure between two paragraphs was overprinted by the second paragraph; a text label inside a figure (a text block without a unit) moved the top of the body; two-column pages and text beside a picture now work; an untranslated body paragraph's slots were reused by the flow and overprinted.
+- **Flow kept in step with the pages**: a paragraph never starts before its original page; size and letter-spacing are fitted per page (cost of delay, empty slots, orphan/widow, carried lines, change from the previous page; one page of lookahead). Orphans and widows are avoided. Warnings: paragraphs pushed to a later page, empty slots at a page foot, overflow after the last page.
+- Text blocks without a unit outside figures keep their original pixels (on a paper background they vanished).
+- Paper colour estimated from the page when `layout.paper_color_rgb` is missing.
+- Speed: piece widths are measured once per text at a reference size and scaled; a 60-page synthetic book lays out in 3.5 s.
+- `report.json`: body units have `original_page`; pages have `blank`, `size_px`, `tracking_em`, `delayed`.
+- Tests: 12 new in `test_layout.py` (235 passed).
+- Docs: `RENDERING.md` rewritten; `DECISIONS.md` ADR-021; `HANDOFF.md`.
+
 ## Unreleased — translate: --force
 
 - **`translate.py --force`**: ignores cached answers for the selected units (`--only` / `--pages`; otherwise the whole book) and asks the model again; the new answer replaces the cached one. For a translation you do not like: without it a repeated run returns the same cached answer.

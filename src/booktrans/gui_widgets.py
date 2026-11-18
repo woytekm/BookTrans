@@ -32,6 +32,10 @@ TREE_BG, TREE_FG, TREE_SEL_BG, TREE_SEL_FG = FIELD, FG, SEL_BG, SEL_FG     # lis
 TEXT_BG, TEXT_FG = FIELD, FG
 NOTE_FG = '#f0b040'                                                        # remarks such as "positions estimated"
 FIND_BG, FIND_CUR_BG = '#6b5a12', '#a35d10'                                # search matches in a JSON view
+# render window: outlines over the page image
+CHECK_COLORS = {'collision': '#ff4d4d', 'overflow': '#ff8c1a', 'drift': '#c792ea', 'blank': '#6cb6ff',
+                'loose': '#e6c229', 'tight': '#e6c229'}
+BLOCK_OUTLINE, SELECT_OUTLINE, ADJUSTED_OUTLINE = '#5a6f8a', '#33d17a', '#2fa8d6'
 
 JSON_TOKEN = re.compile(r'(?P<key>"(?:[^"\\]|\\.)*"(?=\s*:))|(?P<str>"(?:[^"\\]|\\.)*")'
                         r'|(?P<num>-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(?P<lit>\btrue\b|\bfalse\b|\bnull\b)')

@@ -104,6 +104,7 @@ class MainWindow(tk.Tk):
         p.add_command(label='Run pipeline…', accelerator='%s+Shift+R' % MOD_LABEL, command=self.run_pipeline)
         p.add_command(label='Re-run OCR correction…', accelerator='%s+Shift+O' % MOD_LABEL, command=self.rerun_ocrfix)
         p.add_command(label='Run translation…', accelerator='%s+Shift+T' % MOD_LABEL, command=self.run_translation)
+        p.add_command(label='Render pages…', accelerator='%s+Shift+P' % MOD_LABEL, command=self.open_render)
         p.add_command(label='Pipeline command…', command=self.show_command)
         p.add_command(label='Reload from disk', accelerator='%s+R' % MOD_LABEL, command=self.reload)
         p.add_command(label='Show project folder', command=lambda: self.project and reveal_in_file_manager(self.project.root))
@@ -116,6 +117,7 @@ class MainWindow(tk.Tk):
         self.bind_all('<%s-R>' % MOD, lambda _e: self.run_pipeline())
         self.bind_all('<%s-O>' % MOD, lambda _e: self.rerun_ocrfix())
         self.bind_all('<%s-T>' % MOD, lambda _e: self.run_translation())
+        self.bind_all('<%s-P>' % MOD, lambda _e: self.open_render())
         for key, fn in (('n', self.new_project), ('o', self.open_dialog), ('e', self.check_env), ('r', self.reload),
                         ('f', lambda: (self.find_entry.focus_set(), self.find_entry.selection_range(0, 'end')))):
             self.bind_all('<%s-%s>' % (MOD, key), lambda _e, fn=fn: fn())
@@ -140,6 +142,8 @@ class MainWindow(tk.Tk):
         self.ocrfix_btn.pack(side='left', padx=(6, 0))
         self.translate_btn = ttk.Button(btns, text='Run translation\u2026', command=self.run_translation)
         self.translate_btn.pack(side='left', padx=(6, 0))
+        self.render_btn = ttk.Button(btns, text='Render pages\u2026', command=self.open_render)
+        self.render_btn.pack(side='left', padx=(6, 0))
         self.info_lbl.pack(anchor='w', pady=(4, 0))
         left.bind('<Configure>', lambda e: self.info_lbl.configure(wraplength=max(300, e.width - 10)))
         Legend(head, short=True).pack(side='right', anchor='ne')
@@ -223,6 +227,7 @@ class MainWindow(tk.Tk):
         self.run_btn.configure(state=on)
         self.ocrfix_btn.configure(state=on)
         self.translate_btn.configure(state=on)
+        self.render_btn.configure(state=on)
 
     def _recent(self):
         try:
@@ -446,6 +451,13 @@ class MainWindow(tk.Tk):
                 w.run.stop()                       # a run belongs to the project that is being closed
             w.destroy()
         self.run_window = None
+        w = getattr(self, 'render_window', None)
+        if w is not None and w.winfo_exists():
+            rw = getattr(w, 'run_window', None)
+            if rw is not None and rw.winfo_exists() and rw.run is not None:
+                rw.run.stop()
+            w.destroy()
+        self.render_window = None
 
     # ------------------------------------------------------------------ the list
     def _fill_tree(self, rows, keep=None):
@@ -570,6 +582,21 @@ class MainWindow(tk.Tk):
     def _pipeline_done(self):
         self.reload()
         self._header()
+        w = getattr(self, 'render_window', None)
+        if w is not None and w.winfo_exists():
+            w.reload()                       # a new document or translation: lay the book out again
+
+    def open_render(self):
+        """The render window (one per project): rebuilt pages, layout checks, book settings and adjustments."""
+        if not self.project:
+            return
+        w = getattr(self, 'render_window', None)
+        if w is not None and w.winfo_exists():
+            w.deiconify()
+            w.lift()
+            return
+        from gui_render import RenderWindow
+        self.render_window = RenderWindow(self, self.project, page=self._selected_page())
 
     def show_command(self):
         if self.project:
@@ -601,7 +628,7 @@ def main(argv=None):
         d = Path(a.demo)
         if a.force or not (d / 'project.json').exists():
             from gui_demo import make_demo
-            make_demo(d, force=a.force)
+            make_demo(d, force=a.force, translate=True)
         path = d
     MainWindow(path).mainloop()
 

@@ -181,7 +181,7 @@ def main():
     ap.add_argument('--ocr-suggest', action='store_true', help='OCR correction: also ask Hunspell for suggestions (slow, 3-8 s per hopeless word)')
     ap.add_argument('--translations', type=Path, help='translations JSON ({"units": {unit_id: {"pl": text}}}); if given, the pages are also rebuilt into <out>/<name>/render/')
     ap.add_argument('--background', choices=['paper', 'scan'], default='paper', help='for --translations: clean paper canvas or the scan with text wiped')
-    ap.add_argument('--font', type=Path, help='regular serif TTF with Polish letters (default: bundled Crimson Text)')
+    ap.add_argument('--font', type=Path, help='regular serif TTF with Polish letters, or path@weight for a variable font (default: config/fonts.json, Crimson Text)')
     ap.add_argument('--bold-font', type=Path)
     ap.add_argument('--italic-font', type=Path)
     ap.add_argument('--tracking', default='auto', help="letter-spacing for --translations: 'auto' fits it to the original line widths; a number in em fixes it; 0 = none")

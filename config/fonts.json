@@ -1,0 +1,6 @@
+{
+  "_comment": "Default font of the rebuilt pages (render.py, booktrans.py, the GUI when a project names no font). Paths are relative to the repository, or absolute (~ allowed); 'path@300' is a variable font at weight 300. bold and italic may be omitted: then siblings of the regular file are used (X-Regular.ttf -> X-SemiBold.ttf, X-Italic.ttf), else the regular font. Another file can be used with the environment variable BOOKTRANS_FONTS=/path/to/fonts.json. --font / the project's render.font override this.",
+  "regular": "fonts/CrimsonText-Regular.ttf",
+  "bold": "fonts/CrimsonText-SemiBold.ttf",
+  "italic": "fonts/CrimsonText-Italic.ttf"
+}
