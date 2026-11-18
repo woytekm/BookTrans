@@ -16,6 +16,7 @@ from pytesseract import Output
 
 from imgutil import crop_for_ocr, load_pages, load_full_pages, paper_color
 from illustrations import mask_box
+import captions
 import log
 
 
@@ -112,6 +113,15 @@ def ocr_lines(page, bbox, lang, context=10, scale=2.0, hires=None, f=1.0):
 # Caption lines are smaller than body text, but an accent (Ä, Ü) in a small-caps
 # caption makes OCR report a taller line, so allow a little headroom.
 CAPTION_MAX_REL = 1.15
+# ... but a mixed-case line of body size next to a picture is running text (the body of a page that starts under a
+# figure used to become one long "caption"): it must be clearly smaller than the body.
+CAPTION_MIXED_REL = 0.88
+
+
+def caption_sized(ln, body):
+    """Small enough for a caption: capitals up to ``CAPTION_MAX_REL`` x body, other text below ``CAPTION_MIXED_REL``."""
+    h=ln['glyph_height']
+    return h<body*CAPTION_MIXED_REL or (ln.get('uppercase_ratio',0)>.6 and h<body*CAPTION_MAX_REL)
 
 
 def is_near(box, fig, gap):
@@ -134,7 +144,7 @@ def absorb_caption_continuations(lines, body):
         changed=False
         for ln in lines:
             if ln['type']!='body_line' and ln['type']!='heading_line': continue
-            if ln['glyph_height']>=body*CAPTION_MAX_REL: continue
+            if not caption_sized(ln,body): continue
             x1,y1,x2,y2=ln['bbox']
             for cp in lines:
                 if cp['type']!='caption_line': continue
@@ -179,7 +189,7 @@ def classify_lines(lines, images, page_h):
         elif ln['uppercase_ratio']>.72 and len(txt)<90 and h>=body*.92:
             typ='heading_line'; reason='predominantly uppercase'; conf=.84
         for im in images:
-            if h<body*CAPTION_MAX_REL and is_near(ln['bbox'],im['bbox'],max(26,body*2.2)):
+            if caption_sized(ln,body) and is_near(ln['bbox'],im['bbox'],max(26,body*2.2)):
                 typ='caption_line'; reason='beside/below an illustration and smaller than body'; conf=.76; break
         ln.update({'type':typ,'classification_reason':reason,'classification_confidence':conf,
                    'relative_size':round(h/max(body,1),2),'style':'unknown'})
@@ -368,9 +378,11 @@ def main():
         ocr_page=page.copy(); paper=paper_color(page)
         ocr_full=fullpage.copy() if fullpage is not None else None
         paper_full=paper_color(fullpage) if fullpage is not None else None
+        text_boxes=[r['bbox'] for r in todo]
         for r in p['regions']:
             if 'image' in r['type'] or 'drawing' in r['type']:
-                x1,y1,x2,y2=mask_box(r); ocr_page[max(0,y1):y2,max(0,x1):x2]=paper
+                # the mask stops at a caption set against the picture (it used to cover the caption's tops)
+                x1,y1,x2,y2=captions.clip_mask(mask_box(r),text_boxes); ocr_page[max(0,y1):y2,max(0,x1):x2]=paper
                 if fullpage is not None:
                     X1,Y1,X2,Y2=[int(round(v*f)) for v in (x1,y1,x2,y2)]; ocr_full[max(0,Y1):Y2,max(0,X1):X2]=paper_full
         for r in p['regions']:
@@ -386,6 +398,20 @@ def main():
         if n_raw!=len(all_lines): log.info('stage2','  removed %d duplicate lines' % (n_raw-len(all_lines)))
         all_lines.sort(key=lambda z:(z['bbox'][1],z['bbox'][0]))
         lines,body=classify_lines(all_lines,image_boxes,page.shape[0])
+        figs=[im['bbox'] for im in image_boxes]
+        n0=len(lines); lines=captions.drop_junk_in_figures(lines,figs)
+        if n0!=len(lines): log.info('stage2','  dropped %d low-confidence line(s) inside figures' % (n0-len(lines)))
+        n0=sum(l['type']=='caption_line' for l in lines); lines=captions.join_caption_rows(lines,figs,page)
+        n1=sum(l['type']=='caption_line' for l in lines)
+        if n0!=n1: log.info('stage2','  joined caption pieces: %d -> %d caption lines' % (n0,n1))
+        for i,ln in enumerate(lines):
+            if ln['type']=='caption_line':
+                lines[i]=captions.reocr_line(ln,ocr_page,a.lang,hires=ocr_full,f=f)
+                if lines[i] is not ln: log.info('stage2','  caption re-read: %r (%.0f) -> %r (%.0f)' % (ln['text'],ln['confidence'],lines[i]['text'],lines[i]['confidence']))
+        junk=[l for l in lines if l['type']=='caption_line' and captions.is_junk_caption(l)]
+        if junk:
+            log.info('stage2','  dropped %d junk caption piece(s): %s' % (len(junk),', '.join(repr(l['text']) for l in junk)))
+            lines=[l for l in lines if l not in junk]
         kinds={}
         for ln in lines: kinds[ln['type']]=kinds.get(ln['type'],0)+1
         log.info('stage2','  %d lines (%s), body glyph height %.1f px' % (len(lines),', '.join('%d %s' % (v,k.replace('_line','')) for k,v in sorted(kinds.items())),body))

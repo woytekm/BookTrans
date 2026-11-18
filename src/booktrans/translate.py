@@ -435,6 +435,10 @@ def run(doc, a, call=None):
         if a.only and uid not in a.only:
             continue
         n += 1
+        if not text.strip():                            # emptied by a human (joined into another unit): nothing to translate
+            result['units'][uid] = {'source': '', 'pl': '', 'glossary': [], 'flags': []}
+            log.info('translate', '[%d/%d] %s empty (joined into another unit by a human): skipped' % (n, len(todo), uid))
+            continue
         hits = matcher.find(text)
         block = G.prompt_block(hits)
         prompt = build_prompt(base, rules, block, role, upper, text, ctx)

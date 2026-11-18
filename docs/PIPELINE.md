@@ -10,7 +10,19 @@ This document distinguishes the intended pipeline from the currently implemented
 4. Propose large image/drawing regions using threshold contours and simple size/density/overlap heuristics.
 5. Run Tesseract on text crops.
 6. In Stage 2, retain OCR lines with page-local bounding boxes, text, confidence and glyph-height estimates.
-7. Classify lines heuristically (body, heading, caption, footer/byline candidates).
+7. Classify lines heuristically (body, heading, caption, footer/byline candidates). A line next to a picture is a
+   caption only when it is clearly smaller than the body (`stage2.caption_sized`: below 0.88x, or capitals up to 1.15x);
+   before 2026-11-18 the body text of a page that starts under a plate became one 24-line "caption" (page 59).
+7a. **Captions** (`captions.py`, since 2026-11-18). The paper mask painted over each figure before OCR stops at a
+    caption set right against the picture (`clip_mask`; it used to cover the caption's tops - page 55 read as
+    `Br U, MAR AL DER MKCHE`). Low-confidence lines inside a figure are dropped. Caption pieces on one row under one
+    figure are joined into one line when the gaps between them hold ink (letters the OCR dropped) - captions side by side
+    under different figures, or with blank paper between them, stay apart. Every caption line is then read again from
+    its own strip (enlarged so the glyphs are ~32 px, replicated border, `--psm 7`); the new reading is kept when it
+    scores better (confidence, less for few letters and junk characters; the first reading stays in `ocr_first`).
+    Short pieces that still make no sense are dropped. On the test book this repaired page 55 (`45 RAUDEN OS,
+    WESTPORTAL DER KIRCHE`; the printed number is 43 - a 3/5 confusion left to the correction window), page 62
+    (`49 ZIEGENHALS OS, HAUPTPORTAL ...`, whose first word had been taken for a rule) and several letters elsewhere.
 8. Infer paragraph boundaries per text column of the page (short last line, indent, spacing; never after a hyphen).
    Stray marks read as lines (narrower than 12 % of the widest line, at most 2 letters or digits: `)`, `5`, `Ef` from a
    mark in the margin) decide nothing: among the text lines they stay in the paragraph around them (`stray_mark`), apart
@@ -30,6 +42,9 @@ This document distinguishes the intended pipeline from the currently implemented
     a body paragraph for linking (stage 2 sometimes takes the text under a plate for its caption).
 9. Serialize page/region/line information to JSON and draw a diagnostic overlay.
 10. `docmodel.py` builds `document.json` (layout, typography, reading-ordered blocks, figure crops, page marks/rules, translation units).
+    Figure crops stop at a caption touching the picture (`captions.clip_mask`), so no old caption is pasted back.
+    A rule (`marks.is_rule`) must be a hairline: 70 % of its ink in 4 rows, running through 85 % of its length;
+    faint, letter-spaced capitals (`ZIEGENHALS`) passed the morphological test and were kept as a "rule" crop.
 11. Translation (not implemented; contract in `TRANSLATION.md`) produces a translations JSON.
 12. `render.py` rebuilds each page (see `RENDERING.md`).
 

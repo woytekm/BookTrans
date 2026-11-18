@@ -82,6 +82,44 @@ def wipe(arr, box, S):
 
 
 
+DEFAULT_OUTPUT_DPI = 300.0       # final pages: sharp text at print resolution even from the working images
+
+
+def output_scale(page, resolution='auto', output_dpi=None):
+    """Output pixels per working pixel of a final page: 1 for ``resolution`` 'work'; else ``output_dpi`` (default
+    ``DEFAULT_OUTPUT_DPI``) / ``WORK_DPI`` - text is drawn at that size and the scan / figures are resampled to it
+    (from the full-resolution scan when there is one)."""
+    if resolution == 'work':
+        return 1.0
+    return float(output_dpi or DEFAULT_OUTPUT_DPI) / WORK_DPI
+
+
+def is_line_drawing(arr, paper=None):
+    """True when a figure crop (H x W x 3 array) is mostly paper (``paper``: the page's paper colour, default the crop's
+    bright end) with dark strokes (a line drawing, a plan): it is then printed ink-only like the page furniture instead of pasting its own paper tone onto the page."""
+    a = np.asarray(arr, dtype=np.float32)
+    if a.size == 0:
+        return False
+    own = np.percentile(a.reshape(-1, 3), 90, axis=0)
+    paper = own if paper is None else np.asarray(paper, dtype=np.float32)
+    if np.mean(own) < 0.8 * np.mean(paper):          # the crop's bright end is not paper: a dark picture
+        return False
+    dark = np.clip(1.0 - a.mean(axis=2) / max(float(np.mean(paper)), 1.0), 0.0, 1.0)
+    light = float((dark < 0.12).mean())             # paper
+    mid = float(((dark >= 0.12) & (dark < 0.45)).mean())   # half-tones: a photograph has many
+    return light > 0.8 and mid < 0.12
+
+
+def _ink_only(canvas, img, pos):
+    """Multiply ``img``'s ink (its darkness against its own paper) onto the canvas at ``pos``."""
+    arr = np.asarray(img).astype(np.float32)
+    paper_c = np.percentile(arr.reshape(-1, 3), 90, axis=0)
+    dark = np.clip(1.0 - arr / np.maximum(paper_c, 1.0), 0.0, 1.0)
+    ratio = 1.0 - np.clip((dark - 0.06) / 0.94, 0.0, 1.0)      # drop paper noise, keep the ink
+    region = np.asarray(canvas.crop((pos[0], pos[1], pos[0] + img.width, pos[1] + img.height))).astype(np.float32)
+    canvas.paste(Image.fromarray((region * ratio[:region.shape[0], :region.shape[1]]).astype(np.uint8)), pos)
+
+
 def _page_images(doc, page, background, resolution, scale=None):
     """(canvas, original, S): S = output pixels per working pixel.  ``scale``: draw at exactly that S (a preview at
     the zoom on screen; the full-resolution scan is used as the source when S is above 1 and there is one)."""
@@ -108,10 +146,12 @@ def _page_images(doc, page, background, resolution, scale=None):
     return canvas, orig, S
 
 
-def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolution='auto', scale=None):
+def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolution='auto', scale=None, output_dpi=None):
     """Page ``pi`` (index into ``doc['pages']``) drawn from the layout plan: (rebuilt image, original image).
     ``ink``: default the plan's (``render`` stores the measured one) or ``INK``.  ``scale``: output pixels per working
-    pixel (a preview at any zoom); default the page's own resolution (``resolution``)."""
+    pixel (a preview at any zoom); default ``output_scale(page, resolution, output_dpi)``."""
+    if not scale:
+        scale = output_scale(doc['pages'][pi], resolution, output_dpi)
     ink = tuple(ink or plan.get('ink') or INK)
     fonts = fonts or Fonts(plan['fonts']['regular'], plan['fonts']['bold'], plan['fonts']['italic'])
     base = Path(doc.get('_dir', '.'))
@@ -130,14 +170,9 @@ def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolutio
             if img.size != size:
                 img = img.resize(size, Image.LANCZOS)
             pos = (int(round(x1 * S)), int(round(y1 * S)))
-            if b['kind'] == 'graphic':
-                # page numbers, rules: keep only the ink, not the scan's paper tone
-                arr = np.asarray(img).astype(np.float32)
-                paper_c = np.percentile(arr.reshape(-1, 3), 90, axis=0)
-                dark = np.clip(1.0 - arr / np.maximum(paper_c, 1.0), 0.0, 1.0)
-                ratio = 1.0 - np.clip((dark - 0.06) / 0.94, 0.0, 1.0)      # drop paper noise, keep the ink
-                region = np.asarray(canvas.crop((pos[0], pos[1], pos[0] + img.width, pos[1] + img.height))).astype(np.float32)
-                canvas.paste(Image.fromarray((region * ratio).astype(np.uint8)), pos)
+            if b['kind'] == 'graphic' or is_line_drawing(np.asarray(img), page['layout'].get('paper_color_rgb')):
+                # page numbers, rules, line drawings: keep only the ink, not the scan's paper tone
+                _ink_only(canvas, img, pos)
             else:
                 canvas.paste(img, pos)
     for bid in pp.get('keep', []):                  # untranslated text: the original pixels
@@ -260,7 +295,8 @@ def parse_pages(spec, doc):
 
 
 def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolution='auto', para_indent_em=None,
-           tracking=None, size_scale=1.0, word_space=1.0, pages=None, settings=None, pdf=None, pdf_dpi=None):
+           tracking=None, size_scale=1.0, word_space=1.0, pages=None, settings=None, pdf=None, pdf_dpi=None,
+           output_dpi=None):
     """Lay out the whole book, draw the pages ``pages`` (indexes; default all) into ``out_dir``.
 
     ``tracking``: None = fit the letter-spacing so the translation fills the original line widths; a number =
@@ -268,7 +304,8 @@ def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolutio
     the natural word space.  ``ink``: (R, G, B) or 'auto' (``typecolour.match_ink``: the scan's ink hue at the shade
     where the rebuilt text is as dark as the scan).  ``settings``
     (a dict, see ``layout.DEFAULTS``) overrides these.  ``pdf``: a file name in ``out_dir`` for the drawn pages as one
-    PDF, at ``pdf_dpi`` (default: ``WORK_DPI`` x the drawing scale).
+    PDF, at ``pdf_dpi`` (default: the output resolution).  ``output_dpi``: resolution of the drawn pages (default
+    ``DEFAULT_OUTPUT_DPI``; ignored for ``resolution`` 'work').
     Returns (file names, report)."""
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     st = {'tracking': tracking, 'size_scale': size_scale, 'word_space': word_space, 'paragraph_indent_em': para_indent_em}
@@ -286,12 +323,11 @@ def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolutio
     pdf_w = PdfWriter(out_dir / pdf) if pdf else None
     for pi in idx:
         page = doc['pages'][pi]
-        canvas, orig = draw_page(doc, plan, pi, fonts, background, ink, resolution)
+        canvas, orig = draw_page(doc, plan, pi, fonts, background, ink, resolution, output_dpi=output_dpi)
         name = 'page_%03d_%s.png' % (page['page'], page.get('side', ''))
         canvas.save(out_dir / name); names.append(name)
         if pdf_w:
-            S = float(page.get('scale') or 1.0) if (page.get('image_full') and resolution != 'work') else 1.0
-            pdf_w.add(canvas, pdf_dpi or WORK_DPI * S)
+            pdf_w.add(canvas, pdf_dpi or WORK_DPI * output_scale(page, resolution, output_dpi))
         if many:                                      # a whole book: one comparison per page, written at once
             compare_strip([orig, canvas]).save(out_dir / ('compare_page_%03d.png' % page['page']))
         else:                                         # keep small copies only (full-resolution pages are large)
@@ -319,7 +355,9 @@ def main():
     ap.add_argument('--background', choices=['paper', 'scan'], default='paper',
                     help='paper: clean canvas (default); scan: the scanned page with text blocks wiped')
     ap.add_argument('--resolution', choices=['auto', 'work'], default='auto',
-                    help='auto: full resolution when the scan has it; work: analysis scale')
+                    help='auto: pages at --dpi (from the full-resolution scan when there is one); work: analysis scale')
+    ap.add_argument('--dpi', type=float, default=None,
+                    help='resolution of the drawn pages (default %g; text is drawn at this size)' % DEFAULT_OUTPUT_DPI)
     ap.add_argument('--tracking', default='auto',
                     help="letter-spacing: 'auto' (default) fits it per block so the translation fills the original "
                          "line widths; a number in em (e.g. 0.05) fixes it; 0 = none")
@@ -332,7 +370,7 @@ def main():
     ap.add_argument('--overrides', type=Path,
                     help="human adjustments of blocks and pages (a project's review/render_overrides.json, see render_overrides.py)")
     ap.add_argument('--pdf', nargs='?', const='book.pdf', help='also write the drawn pages as one PDF (default name book.pdf)')
-    ap.add_argument('--pdf-dpi', type=float, help='PDF resolution (default %g x the drawing scale: the physical size of the 600 DPI scans)' % WORK_DPI)
+    ap.add_argument('--pdf-dpi', type=float, help='PDF resolution (default: the page resolution, so the PDF has the physical size of the scans)')
     ap.add_argument('--no-page-fit', action='store_true',
                     help='one body size for the whole book (shrunk only when a page cannot hold its text)')
     a = ap.parse_args()
@@ -357,7 +395,7 @@ def main():
         log.info('render', 'overrides: %d block(s), %d page(s) adjusted by hand' % (len(settings['blocks']), len(settings['pages'])))
     names, rep = render(doc, trans, out, Fonts(a.font, a.bold_font, a.italic_font), a.background, ink, a.resolution, a.paragraph_indent,
                         None if a.tracking == 'auto' else float(a.tracking), a.size_scale, a.word_space,
-                        pages=pages, settings=settings, pdf=a.pdf, pdf_dpi=a.pdf_dpi)
+                        pages=pages, settings=settings, pdf=a.pdf, pdf_dpi=a.pdf_dpi, output_dpi=a.dpi)
     for s in stale:
         log.info('render', 'WARNING stale override (not applied): ' + s)
     for r in rep['units']:

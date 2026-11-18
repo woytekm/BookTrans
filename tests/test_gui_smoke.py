@@ -828,3 +828,26 @@ def test_a_broken_decisions_file_is_reported_not_ignored(edit_app):
     a.project.decisions_file.write_text('{broken')
     a.reload()
     pump(a, lambda: 'Cannot load' in a.status_lbl.cget('text'))
+
+
+def test_caption_dialog_rereads_and_applies_into_the_review_json(app, monkeypatch):
+    import caption_tools
+    import gui_correction
+    page = next(r['page'] for r in app.rows
+                if any(u.get('role') == 'caption' for u in app.index.page_review(r['page'])['units']))
+    app.tree.selection_set(str(page))
+    app.open_correction()
+    w = app.windows[page]
+    w.update()
+    monkeypatch.setattr(caption_tools, 'read_again', lambda img, box, lang, ocr=None: ('37 PITSCHEN OS', 91.0))
+    w.open_captions()
+    dlg = [c for c in w.winfo_children() if isinstance(c, gui_correction.CaptionDialog)][0]
+    dlg.update()
+    assert dlg.listbox.size() >= 1 and dlg._photo is not None
+    dlg.read_again()
+    assert dlg.text.get('1.0', 'end-1c') == '37 PITSCHEN OS'
+    uid = dlg.caps[0]['unit_id']
+    dlg.apply()
+    assert w.dirty
+    units = {u['unit_id']: u for u in json.loads(w.editor.get('1.0', 'end-1c'))['units']}
+    assert units[uid]['text'] == '37 PITSCHEN OS'

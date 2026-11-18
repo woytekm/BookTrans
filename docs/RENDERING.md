@@ -51,11 +51,20 @@ hyphenated word joined). `report.json` is `plan.report`.
    tone via dilate + blur, gain-matched to the surrounding tone), so shading and the gutter gradient survive.
 2. **Figures and furniture.** Figures are pasted from `figures/` at their place. Graphics (page numbers,
    rules, printer's mark) are composited by multiplying the crop normalised by its own paper colour (noise
-   threshold 0.06), so no grey patch is left.
+   threshold 0.06), so no grey patch is left. **Line drawings** (a figure crop that is over 80 % paper with few
+   half-tones, `render.is_line_drawing`, measured against the page's paper colour) are composited the same way
+   since 2026-11-18: before, each drawing pasted its own paper tone as a visible rectangle.
 3. **Kept text.** Untranslated units, and text blocks without a unit that are not inside a figure (a figure
    crop already carries its labels), keep their original pixels. Before 2026-11-18 a text block without a unit
    vanished on a paper background.
 4. **Lines** from the plan.
+
+**Output resolution** (since 2026-11-18). Final pages are drawn at `--dpi` (default 300, `render.DEFAULT_OUTPUT_DPI`;
+the project's `render.output_dpi`, *Output DPI* in the render window's Book tab): the scale is `dpi / WORK_DPI`, the
+text is drawn at that size and the scan / figures are resampled to it, from the full-resolution scan when the document
+has one. Before, a document without full-resolution pages was drawn at its working scale (~120-135 DPI), so small text
+(captions) looked pixelated. `--resolution work` still draws at the working scale (quick); previews in the GUI draw at
+the zoom on screen.
 
 ## Body text: line slots
 
@@ -204,7 +213,23 @@ Automatic fitting (`--tracking auto`, default):
 Headings, captions, bylines and footnotes are set inside their original block: anchored left, right or
 centre as the original, uppercase blocks letter-spaced, baselines on the block's (regularised) line tops.
 Candidate widths up to 1.3x the frame width are allowed, but never into a neighbouring block on the same rows
-and never beyond the column; reduce tracking then size (down to 0.82) until every line fits.
+and never beyond the column; reduce tracking then size (down to 0.82) until every line fits. Headings and captions
+are never hyphenated (`typeset(..., hyphenate=False)`).
+
+### Captions (since 2026-11-18)
+
+- **One size.** `caption_bases`: all captions whose glyph height is within 0.7-1.6x the book's median caption form one
+  group (OCR heights scatter with accents and fragments); each gets the group's median fitted size and letter-spacing.
+  Captions of one page then all share the smallest size any of them needs (a dry run first; a capped caption does not
+  shrink below the page's size, it takes extra lines instead).
+- **Room.** `caption_geometry`: the caption's figure (`figure_ids`, else the nearest figure above / beside), its
+  alignment to it (beside: flush towards the picture; under: centred when centred on it, flush right / left when
+  flush), how far it may reach (neighbours on the same rows, the page content; under a figure first only the
+  picture's width) and how many extra lines fit in the free space below (or above, for a caption beside its picture
+  and level with its foot).
+- **Order of tries**: the original number of lines at the base size down to 90 % (first within the picture's width,
+  then the content width), then the extra lines, then the usual shrink ladder.
+- An emptied unit (a human joined its text into another caption) is neither drawn nor kept (`report.emptied`).
 
 Manual control: `--tracking EM` fixes letter-spacing (`0` reproduces the pre-fitting look and the old
 15 % size clamp), `--size-scale` multiplies the size, `--word-space` multiplies the natural word space.
@@ -279,8 +304,9 @@ the detection).
 ## PDF
 
 `--pdf [NAME]` (default `book.pdf`) writes the drawn pages as one PDF, page by page (JPEG, quality 90; nothing kept in
-memory). Page size = pixels / DPI; the default DPI is 120 x the drawing scale (`WORK_DPI`: the working images of the
-600 DPI originals are at about 120 DPI), so the PDF has the book's physical size; `--pdf-dpi` overrides it. A vector PDF
+memory). Page size = pixels / DPI; the default DPI is the output resolution (`--dpi`; the drawing scale x `WORK_DPI`, the
+working images of the 600 DPI originals being at about 120 DPI), so the PDF has the book's physical size;
+`--pdf-dpi` overrides it. A vector PDF
 (real, selectable text over the figures) is possible from the plan later (needs a PDF library such as reportlab).
 
 ## Not done

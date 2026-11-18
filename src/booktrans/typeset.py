@@ -394,18 +394,32 @@ def break_lines(pieces, widths, space, hyph_w, justify, rmin=RMIN, rmax=RMAX, un
     return lines
 
 
+def _merge_soft(pieces):
+    """Pieces with the hyphenation points removed (a word is one piece again): for text that is never hyphenated."""
+    out = []
+    for p in pieces:
+        if out and out[-1]['brk'] == 'soft':
+            q = out[-1]
+            out[-1] = dict(q, t=q['t'] + p['t'], w=q['w'] + p['w'], brk=p['brk'])
+        else:
+            out.append(dict(p))
+    return out
+
+
 def typeset(text, font, W, indent, justify, space_factor=1.0, track=0.0, widths=None, fonts_for=None, style='regular',
-            uniform=None):
+            uniform=None, hyphenate=True):
     """Lines for ``text``; each line is a dict with pieces, gap, hyphen flag and justification.
 
     ``widths``: optional callable ``line_no -> width`` (line slots of different widths, e.g. beside a
     figure); the first-line ``indent`` is subtracted from it.  Without it every line is ``W`` wide.
     ``fonts_for(style)`` (fonts at the measuring size) enables ``<i>``/``<b>``/``<sp>`` runs in ``text``; without it
-    tags are dropped."""
+    tags are dropped.  ``hyphenate=False``: no word is split (captions, headings)."""
     if has_tags(text) and fonts_for is not None:
         pieces = styled_pieces(text, fonts_for, style, track, SP_EM * font.size)
     else:
         pieces = pieces_of(strip_tags(text), font, track)
+    if not hyphenate:                                 # captions and headings: words are never split
+        pieces = _merge_soft(pieces)
     space = font.getlength(' ') * space_factor + track
     hyph_w = font.getlength('-')
     base_widths = widths

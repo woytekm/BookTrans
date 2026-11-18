@@ -199,7 +199,7 @@ class RenderWindow(tk.Toplevel):
         r = self.project.render_settings
         self.bv = {k: tk.StringVar(value=str(r.get(k, ''))) for k in
                    ('font', 'bold_font', 'italic_font', 'tracking', 'size_scale', 'word_space', 'paragraph_indent',
-                    'background', 'ink', 'resolution')}
+                    'background', 'ink', 'resolution', 'output_dpi')}
         self.bv_fit = tk.BooleanVar(value=bool(r.get('page_fit', True)))
         f.columnconfigure(1, weight=1)
         row = 0
@@ -230,6 +230,8 @@ class RenderWindow(tk.Toplevel):
         self._row(f, row, 'Ink', ttk.Entry(f, textvariable=self.bv['ink'], width=12), 'auto or R,G,B'); row += 1
         self._row(f, row, 'Final resolution', ttk.Combobox(f, textvariable=self.bv['resolution'], values=RESOLUTIONS,
                                                            state='readonly', width=8), 'Render book'); row += 1
+        self._row(f, row, 'Output DPI', ttk.Entry(f, textvariable=self.bv['output_dpi'], width=10),
+                  'final pages and PDF; 300'); row += 1
         bb = ttk.Frame(f)
         bb.grid(row=row, column=0, columnspan=3, sticky='w', pady=(10, 4)); row += 1
         self.book_apply = ttk.Button(bb, text='Apply', command=self.apply_book)
@@ -737,7 +739,7 @@ class RenderWindow(tk.Toplevel):
         v['page_fit'] = self.bv_fit.get()
         v['tracking'] = v['tracking'] or 'auto'
         v['ink'] = v['ink'] or 'auto'
-        for k in ('size_scale', 'word_space'):            # numbers in project.json, not strings
+        for k in ('size_scale', 'word_space', 'output_dpi'):   # numbers in project.json, not strings
             try:
                 v[k] = float(v[k].replace(',', '.'))
             except ValueError:

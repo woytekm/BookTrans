@@ -58,6 +58,20 @@ real login**. The two samples were translated by hand in a chat session (`exampl
   afterwards.
 - Every meaningful change updates `CHANGELOG.md` and the relevant document here, adds or adjusts tests
   and is committed with a clear message.
+- **General code, not tuned to one book** (owner, 2026-11-18). The goal is a tool for scanned books in general, not
+  for the current test book. Every fix must be stated in terms that carry to other books: distances as multiples of
+  the glyph height or line pitch (not pixels), Unicode letter classes (not `A-ZÄÖÜß`), layout cues (size, position,
+  alignment) rather than this book's style (e.g. "captions are capitals"), and source-language settings from the
+  project rather than German assumptions. When a heuristic can only be checked on this book, say so in the code
+  comment and in `CHANGELOG.md`. Known book-specific spots to generalise (found in the caption work): (1)
+  `stage2.caption_sized` lets body-size lines be captions only when mostly capitals; (2) `captions.LETTER` and the
+  letter regexes in stage 2 list German letters only; (3) fixed pixel thresholds in `captions.py`
+  (`clip_mask` 14, `figure_of` 45/12/10, `caption_tools.row_box` 400) and `layout.caption_geometry` (8, 40, 60);
+  (4) caption pieces are joined only above/below a figure; (5) one caption size per book is the tested case.
+- **Test material from other books is needed** (owner, 2026-11-18: he will prepare it; not available yet). A small set
+  of pages from two or three other books (different layouts, caption styles, languages, page formats), kept as
+  regression cases so every change is checked against all of them, not only against the 14-page test book. Until it
+  exists, treat results on the test book as one data point.
 
 ## 3. Quick start
 
@@ -351,9 +365,16 @@ engine should be complete before a GUI goes on top. Agreed order (2026-11-18):
 7. ~~PDF, emphasis, tests~~ **done**: `render.py --pdf` (page by page, physical size), `<i>`/`<b>`/`<sp>` runs in translations
    (renderer side; detection in stage 2 and the prompt rule are open), render no longer keeps every full-resolution page in
    memory. 250 tests.
-8. ~~The GUI render window~~ **done** (`gui_render.py`, `render_session.py`; section 11). Next: captions (the weak point: OCR loses
-   words, `marks.py` takes a caption word for a rule, some captions sit inside the figure crop and stay German); automatic font choice
-   from `fontcheck.py`'s score; emphasis detection in stage 2 + prompt rule; vector PDF; incremental layout for long books.
+8. ~~The GUI render window~~ **done** (`gui_render.py`, `render_session.py`; section 11).
+9. ~~Captions~~ **done** (2026-11-18, branch `captions`; `CHANGELOG.md`): renderer (one size, free space, figure alignment, no
+   hyphenation, ink-only line drawings, 300 DPI output), pipeline (`captions.py`: mask stops at captions, pieces joined, strips read
+   again; `marks.is_rule`; figure crops clipped; `stage2.caption_sized`), correction window *Captions…*. Needs stages 1-2 again
+   (`booktrans.py` without `--resume`) and a re-translation of the changed units. Still open: digit confusions in caption numbers
+   (page 55 reads 45 for 43: fix by hand in *Captions…*); a translation much longer than its narrow slot (page 52's `59 POLITZ
+   SCHAFTRING` -> 4 lines at 9.7 px: shorten the translation or set the block's size / max width by hand); a stage 1 "caption"
+   region on blank margin paper (page 58) now reads `[REEL LER ENT SER` / `TEEN` (also on main's stage 2).
+   Next: automatic font choice from `fontcheck.py`'s score; emphasis detection in stage 2 + prompt rule; vector PDF; incremental
+   layout for long books; glossary reuse between projects (discussed, paused by the owner).
 
 Decided by the owner (2026-11-18): **Crimson Text Regular is the default font**, configurable in `config/fonts.json`
 (or `$BOOKTRANS_FONTS`); **adjustments are book-wide plus per block / per page** (as built). First real pipeline output

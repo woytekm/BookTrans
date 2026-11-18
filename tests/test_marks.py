@@ -16,3 +16,23 @@ def test_rule_and_page_number_found_but_not_text_or_page_edge():
     assert roles == ['page_mark', 'rule']
     rule = next(m for m in found if m['role'] == 'rule')
     assert rule['bbox'][0] <= 61 and rule['bbox'][2] >= 439
+
+
+def test_letter_spaced_capitals_are_not_a_rule():
+    """'Z I E G E N H A L S' in faint, letter-spaced capitals closes into a long thin bar; it is not a hairline."""
+    img = np.full((600, 500, 3), 225, np.uint8)
+    for k in range(14):                              # 14 capitals, 8 px tall, 4 px gaps
+        x = 80 + k * 14
+        img[300:308, x:x + 2] = 200; img[300:302, x:x + 10] = 200; img[306:308, x:x + 10] = 200
+    found = find_marks(img, [], [60, 100, 440, 480], [{'left': 60, 'right': 440}])
+    assert not [m for m in found if m['role'] == 'rule']
+
+
+def test_is_rule_band_and_coverage():
+    from marks import is_rule
+    m = np.zeros((12, 200), np.uint8)
+    m[5:8, :] = 1
+    assert is_rule(m)
+    m2 = np.zeros((12, 200), np.uint8)
+    m2[2:10, ::7] = 1                                 # strokes over the glyph height with gaps
+    assert not is_rule(m2)
