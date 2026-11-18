@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -350,6 +351,64 @@ class Project:
         return {'tiffs': len(t), 'tiff_bytes': sum(p.stat().st_size for p in t if p.exists()),
                 'processed': f['document'].exists(), 'corrected': f['corrected'].exists(),
                 'review': f['review'].exists(), 'book_dir': self.book_dir()}
+
+    # ------------------------------------------------------------ clearing the project's data
+    def data_parts(self):
+        """What *Clear project data* can remove, in processing order: ``[{key, label, paths, bytes, default, note}]``
+        (only parts that exist).  ``project.json`` (the settings) is never among them."""
+        def size(p):
+            p = Path(p)
+            if p.is_symlink() or p.is_file():
+                return p.lstat().st_size
+            return sum(q.lstat().st_size for q in p.rglob('*') if q.is_file() or q.is_symlink()) if p.is_dir() else 0
+        cache = self.translations_file.with_name('translations.cache.json')
+        review = [self.edits_file, self.decisions_file, self.overrides_file]
+        cand = [
+            ('pipeline', 'Pipeline output (OCR, layout, document.json, corrected copy, figures, stages)',
+             [p for p in sorted(self.pipeline_root.iterdir())] if self.pipeline_root.is_dir() else [], True, ''),
+            ('translation', 'Translation (translations.json)',
+             [p for p in self.translation_dir.iterdir() if p != cache] if self.translation_dir.is_dir() else [], True, ''),
+            ('cache', 'Translation cache (answers already paid for / counted against limits)',
+             [cache] if cache.exists() else [], False, 'kept, a new translation only sends what changed'),
+            ('render', 'Rendered pages (render/: page images, PDF, report)', [self.render_dir] if self.render_dir.exists() else [],
+             True, ''),
+            ('review', 'Your review work (unit edits, OCR decisions, render adjustments)', [p for p in review if p.exists()],
+             False, 'kept, it is tied to the OCR text and applies again after a new run'),
+        ]
+        out = []
+        for k, label, paths, d, note in cand:
+            if not paths:
+                continue
+            if any(Path(p).is_symlink() for p in paths):
+                note = (note + '; ' if note else '') + 'a linked folder: only the link is removed, not the files it points to'
+            out.append({'key': k, 'label': label, 'paths': paths, 'bytes': sum(size(p) for p in paths), 'default': d,
+                        'note': note})
+        return out
+
+    def clear_data(self, keys):
+        """Remove the parts ``keys`` (see ``data_parts``) -> the removed paths.  Only paths inside the project folder are
+        touched; a symbolic link is removed, not what it points to; ``project.json`` is never removed."""
+        root = self.root.resolve()
+        removed = []
+        for part in self.data_parts():
+            if part['key'] not in keys:
+                continue
+            for p in part['paths']:
+                p = Path(p)
+                parent = p.parent.resolve()
+                if parent != root and root not in parent.parents:
+                    raise ProjectError('refusing to remove %s: outside the project folder' % p)
+                if p.resolve() == self.file.resolve():
+                    continue
+                if p.is_symlink() or p.is_file():
+                    p.unlink()
+                elif p.is_dir():
+                    shutil.rmtree(str(p))
+                removed.append(p)
+        if 'pipeline' in keys:
+            self.pipeline_root.mkdir(parents=True, exist_ok=True)
+        self.review_dir.mkdir(parents=True, exist_ok=True)
+        return removed
 
     # ------------------------------------------------------------ data
     def load_document(self):

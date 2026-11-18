@@ -69,7 +69,7 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only (--pages 3,5-7: draw some pages)
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 274 tests, ~40 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 276 tests, ~40 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project; Render pages… (Cmd/Ctrl+Shift+P)
@@ -231,7 +231,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (274 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (276 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -302,6 +302,9 @@ zoom, click a block to select it; tabs *Book* (fonts, letter-spacing, size, word
 (the page's fit, its checks) and *Block* (frame adjustments, keep original, the Polish text); every change saved at once and the book
 laid out again; *Render book…* runs `render.py` (pages, resolution, PDF) -> `<project>/render/`. Tried on the owner's 14-page book
 (layout 3.7 s). `gui.py --demo` writes a synthetic translation so the window works on the demo.
+
+**Also 2026-11-18: Clear project data** (Project menu): pipeline output, translation and rendered pages removed for a fresh start;
+optionally the translation cache and the review work; settings kept (`GUI.md` section 8).
 
 **Next** (`GUI.md` sections 6, 8, 10), suggested order:
 1. ~~A "re-run OCR correction" button~~ **done 2026-11-17** (*Re-run OCR correction…* next to *Run pipeline…*, Cmd/Ctrl+Shift+O: stage 5

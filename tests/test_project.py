@@ -291,3 +291,34 @@ def test_render_command_maps_the_settings(tmp_path, scans):
     assert '--no-page-fit' in c and c[c.index('--paragraph-indent') + 1] == '1' and c[c.index('--background') + 1] == 'scan'
     assert c[c.index('--overrides') + 1] == str(p.overrides_file) and c[c.index('--pages') + 1] == '3,5-6'
     assert c[c.index('--resolution') + 1] == 'work'
+
+
+# ---------------------------------------------------------------- clear project data
+def test_clear_data_removes_results_keeps_settings_and_chosen_parts(tmp_path, scans):
+    p = PR.Project.create(tmp_path / 'p', 'mybook', scans)
+    _with_doc(p)
+    (p.book_dir() / 'stages').mkdir()
+    (p.book_dir() / 'stages' / 'x.json').write_text('{}', encoding='utf-8')
+    p.translations_file.parent.mkdir(parents=True)
+    p.translations_file.write_text('{"units": {}}', encoding='utf-8')
+    cache = p.translations_file.with_name('translations.cache.json')
+    cache.write_text('{}', encoding='utf-8')
+    p.render_dir.mkdir()
+    (p.render_dir / 'page_001_L.png').write_bytes(b'x' * 10)
+    p.edits_file.write_text('{"units": {}}', encoding='utf-8')
+    outside = tmp_path / 'elsewhere'
+    outside.mkdir()
+    (outside / 'keep.txt').write_text('mine', encoding='utf-8')
+    (p.pipeline_root / 'linked').symlink_to(outside, target_is_directory=True)     # a linked result folder
+    parts = {x['key']: x for x in p.data_parts()}
+    assert set(parts) == {'pipeline', 'translation', 'cache', 'render', 'review'}
+    assert parts['pipeline']['default'] and not parts['cache']['default'] and not parts['review']['default']
+    assert parts['render']['bytes'] == 10
+    removed = p.clear_data([k for k, x in parts.items() if x['default']])
+    assert not p.book_dir().exists() and not p.translations_file.exists() and not p.render_dir.exists()
+    assert cache.exists() and p.edits_file.exists() and p.file.exists() and p.pipeline_root.is_dir()
+    assert not (p.pipeline_root / 'linked').exists() and (outside / 'keep.txt').exists()   # the link, not its target
+    assert len(removed) == 4
+    assert PR.Project.load(p.root).name == 'mybook'                                    # settings intact
+    p.clear_data(['cache', 'review'])
+    assert not cache.exists() and not p.edits_file.exists() and p.data_parts() == []

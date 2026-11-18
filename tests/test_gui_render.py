@@ -161,3 +161,26 @@ def test_render_book_runs_render_py(win, monkeypatch):
     pump(app, lambda: 'finished' in rw.state.cget('text'))
     c = seen['cmd']
     assert c[1].endswith('render.py') and c[c.index('--pages') + 1] == '2' and '--pdf' in c
+
+
+def test_clear_project_data_closes_windows_and_starts_afresh(win, monkeypatch):
+    app, w = win
+    import gui_dialogs
+    d = gui_dialogs.ClearDataDialog(app, app.project)
+    d.withdraw()
+    assert set(d.vars) >= {'pipeline', 'translation'} and d.vars['pipeline'].get() and 'review' not in d.chosen()
+    assert 'starts from the scans' in d.warn.cget('text')
+    d.vars['cache'] = d.vars.get('cache') or __import__('tkinter').BooleanVar(value=False)
+    d._clear()
+    assert d.result == [k for k in d.vars if d.vars[k].get()]
+
+    class Fake:                                       # the dialog, answered: the default parts
+        def __init__(self, master, project):
+            self.result = [p['key'] for p in project.data_parts() if p['default']]
+    monkeypatch.setattr(gui, 'ClearDataDialog', Fake)
+    monkeypatch.setattr(app, 'wait_window', lambda _w: None)
+    app.clear_project()
+    pump(app, lambda: not app.rows and 'Cleared' in app.status_lbl.cget('text'))
+    assert not app.project.book_dir().exists() and not app.project.translations_file.exists()
+    assert app.project.file.exists() and app.render_window is None and not w.winfo_exists()
+    assert 'Run pipeline starts afresh' in app.status_lbl.cget('text')

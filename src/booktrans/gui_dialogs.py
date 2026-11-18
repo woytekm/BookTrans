@@ -1,7 +1,7 @@
-"""Dialogs of the main window: new project, environment check, pipeline command."""
+"""Dialogs of the main window: new project, environment check, pipeline command, clear project data."""
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import envcheck
 from gui_widgets import MUTED, STATUS_COLORS, copy_to_clipboard, human_bytes, mono_font, run_async
@@ -263,3 +263,67 @@ class CommandDialog(tk.Toplevel):
                                      'Files in %s are not touched.' % (b, self.project.review_dir))
         else:
             self.warn.configure(text='')
+
+
+class ClearDataDialog(tk.Toplevel):
+    """Clear project data: choose what to remove (``Project.data_parts``); the settings are always kept.
+    ``result`` is the list of chosen keys after *Clear*, None after Cancel."""
+
+    def __init__(self, master, project):
+        super().__init__(master)
+        self.title('Clear project data')
+        self.transient(master)
+        self.project = project
+        self.result = None
+        self.parts = project.data_parts()
+        f = ttk.Frame(self, padding=14)
+        f.pack(fill='both', expand=True)
+        ttk.Label(f, text='Remove the results of processing, for a fresh start. The project settings (input folder, pipeline, '
+                          'translation and render settings in project.json) are kept.', wraplength=620, justify='left').pack(anchor='w')
+        self.vars = {}
+        box = ttk.Frame(f)
+        box.pack(fill='x', pady=(10, 6))
+        if not self.parts:
+            ttk.Label(box, text='There is nothing to remove: the project has no results yet.', foreground=MUTED).pack(anchor='w')
+        for i, p in enumerate(self.parts):
+            v = tk.BooleanVar(value=p['default'])
+            self.vars[p['key']] = v
+            ttk.Checkbutton(box, text='%s   (%s)' % (p['label'], human_bytes(p['bytes'])), variable=v,
+                            command=self._update).grid(row=2 * i, column=0, sticky='w', pady=(4, 0))
+            if p['note']:
+                note = p['note'] if p['default'] else 'unticked: ' + p['note']
+                ttk.Label(box, text=note, foreground=MUTED, wraplength=580, justify='left').grid(
+                    row=2 * i + 1, column=0, sticky='w', padx=(26, 0))
+        self.warn = ttk.Label(f, text='', foreground=STATUS_COLORS['warn'], wraplength=620, justify='left')
+        self.warn.pack(anchor='w', pady=(6, 6))
+        bar = ttk.Frame(f)
+        bar.pack(fill='x', side='bottom')
+        ttk.Button(bar, text='Cancel', command=self.destroy).pack(side='right')
+        self.clear_btn = ttk.Button(bar, text='Clear', command=self._clear)
+        self.clear_btn.pack(side='right', padx=8)
+        self._update()
+        self.bind('<Escape>', lambda _e: self.destroy())
+
+    def chosen(self):
+        return [k for k, v in self.vars.items() if v.get()]
+
+    def _update(self):
+        keys = self.chosen()
+        notes = []
+        if 'pipeline' in keys:
+            notes.append('The next Run pipeline starts from the scans (OCR included).')
+        if 'review' in keys:
+            notes.append('Your corrections and decisions of the review are deleted; this cannot be undone.')
+        if 'cache' in keys:
+            notes.append('Every unit will be sent to the translation engine again.')
+        self.warn.configure(text=' '.join(notes))
+        self.clear_btn.configure(state='normal' if keys else 'disabled')
+
+    def _clear(self):
+        keys = self.chosen()
+        if 'review' in keys and not messagebox.askyesno(
+                'Delete your review work?', 'Unit edits, OCR decisions and render adjustments will be deleted for good.\n\n'
+                                            'Delete them?', icon='warning', parent=self):
+            return
+        self.result = keys
+        self.destroy()

@@ -221,6 +221,13 @@ first); and it asks about unsaved correction windows like the other runs. Live l
 "translation: N of M units, K flagged". A page run keeps the other pages' translations (translate.py merges, section 7 of
 `TRANSLATION.md`). One run window per project: pipeline, OCR correction and translation never run at the same time.
 
+**Clear project data** (`gui_dialogs.ClearDataDialog`, Project menu; `Project.data_parts` / `Project.clear_data`): removes the
+results of processing for a fresh start; `project.json` (all settings) is always kept. Ticked by default: the pipeline output
+(`pipeline/`), the translation (`translation/translations.json`) and the rendered pages (`render/`); unticked by default: the
+translation cache (a new translation then only sends what changed) and the review work in `review/` (unit edits, OCR decisions,
+render adjustments; tied to the OCR text, so they apply again after a new run; deleting them asks again). Sizes are shown; a linked
+folder loses only the link. Not while a run is going; correction and render windows are closed first (unsaved edits are asked about).
+
 **Render window** (`gui_render.RenderWindow`; header button *Render pages…*, Project menu, Cmd/Ctrl+Shift+P; one per project,
 opened at the page selected in the main window; reloaded when a pipeline or translation run ends). Built on
 `render_session.RenderSession` (toolkit-free): the book's `document.json`, `translation/translations.json`, `project.json` ->
