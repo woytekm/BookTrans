@@ -363,8 +363,8 @@ def test_translation_window_saves_settings_and_runs(app, monkeypatch):
     seen = {}
     real = app.project.translate_command
 
-    def fake(pages=None, dry_run=False):
-        seen['cmd'] = real(pages, dry_run)
+    def fake(pages=None, dry_run=False, force=False):
+        seen['cmd'] = real(pages, dry_run, force)
         out = app.project.translations_file
         code = ('import json, pathlib; p = pathlib.Path(%r); p.parent.mkdir(parents=True, exist_ok=True); '
                 'p.write_text(json.dumps({"units": {"u0001": {"pl": "Tekst", "flags": []}, '
@@ -390,6 +390,28 @@ def test_translation_window_saves_settings_and_runs(app, monkeypatch):
     app.project.translations_file.unlink()
     app.project.data['translation'] = dict(__import__('project').DEFAULT_TRANSLATION)
     app.project.save()
+
+
+def test_translation_window_force_asks_for_the_whole_book(app, monkeypatch):
+    import sys
+    import tkinter.messagebox as mb
+    app.run_translation()
+    w = app.run_window
+    w.v['force'].set(True)
+    asked = []
+    monkeypatch.setattr(mb, 'askyesno', lambda *a, **k: (asked.append(a[0]), False)[1])
+    w.start()                                                        # no pages: the whole book -> asked, declined
+    assert asked == ['Re-translate the whole book?'] and w.run is None
+    seen = {}
+    monkeypatch.setattr(app.project, 'translate_command',
+                        lambda pages=None, dry_run=False, force=False: (seen.update(pages=pages, force=force),
+                                                                        [sys.executable, '-c', 'pass'])[1])
+    monkeypatch.setattr(app.project, 'translation_warnings', lambda: [])
+    asked.clear()
+    w.v['pages'].set('2')
+    w.start()                                                        # with pages: no question
+    assert asked == [] and seen == {'pages': '2', 'force': True}
+    w.stop()
 
 
 def test_translation_window_warns_about_a_stale_corrected_copy(app, monkeypatch):

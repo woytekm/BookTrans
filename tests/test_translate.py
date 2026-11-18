@@ -311,3 +311,17 @@ def test_pages_select_units_by_their_blocks():
     for bad in ('x', '3-1', ''):
         with pytest.raises(ValueError):
             T.parse_pages(bad)
+
+
+def test_force_asks_the_model_again_for_the_selected_units(tmp_path):
+    first = []
+    T.run(_doc(), _args(tmp_path), call=_echo(first))
+    old = json.loads((tmp_path / 't.json').read_text(encoding='utf-8'))['units']
+    again = []
+    res = T.run(_doc(), _args(tmp_path, only=['u0002'], force=True), call=_echo(again))
+    assert len(again) == 1 and 'Das Portal in Pitschen' in again[0]           # only the selected unit, despite the cache
+    assert res['units']['u0002']['pl'] != old['u0002']['pl']
+    assert res['units']['u0001'] == old['u0001'] and res['units']['u0003'] == old['u0003']
+    later = []
+    res2 = T.run(_doc(), _args(tmp_path), call=_echo(later))                 # the new answer replaced the cached one
+    assert later == [] and res2['units']['u0002']['pl'] == res['units']['u0002']['pl']

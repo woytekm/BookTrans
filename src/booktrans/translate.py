@@ -19,7 +19,7 @@ For every unit with ``translation_status: translate``:
    per unit for review).
 
 Answers are cached in ``<output>.cache.json`` (key: model, prompts, glossary list, context, text), so an
-interrupted or repeated run only translates what changed.  ``--dry-run`` writes the prompts to
+interrupted or repeated run only translates what changed; ``--force`` asks the model again for the selected units.  ``--dry-run`` writes the prompts to
 ``<output>.prompts.txt`` without calling the model.  Standard library only.
 """
 import argparse
@@ -447,12 +447,13 @@ def run(doc, a, call=None):
             prompts_txt.append('===== %s (%s) =====\n%s\n' % (uid, role, prompt))
             continue
         key = key_of(a.model, base, rules, block, role, upper, text, ctx)
-        if key in cache and cache[key].get('pl', '').strip():           # an empty answer is never reused
+        if key in cache and cache[key].get('pl', '').strip() and not getattr(a, 'force', False):   # an empty answer is never reused
             entry['pl'] = cache[key]['pl']; entry['flags'] += cache[key].get('flags', [])
             log.info('translate', '[%d/%d] %s cached' % (n, len(todo), uid))
         else:
             remark, flags = None, []
-            log.info('translate', '[%d/%d] %s %s: sending %d chars (waiting for the model ...)' % (n, len(todo), uid, role, len(text)))
+            log.info('translate', '[%d/%d] %s %s: sending %d chars%s (waiting for the model ...)' % (
+                n, len(todo), uid, role, len(text), ', cached answer ignored (--force)' if key in cache and getattr(a, 'force', False) else ''))
             for attempt in range(a.retries + 1):
                 try:
                     answer = clean(call(build_prompt(base, rules, block, role, upper, text, ctx, remark)))
@@ -541,6 +542,9 @@ def main():
     ap.add_argument('--timeout', type=float, default=600, help='seconds per request')
     ap.add_argument('--retries', type=int, default=2, help='extra attempts when a check fails (default 2)')
     ap.add_argument('--only', nargs='*', help='translate only these unit ids (the other units of an existing output are kept)')
+    ap.add_argument('--force', action='store_true',
+                    help='ignore cached answers: send the selected units (--only / --pages; else the whole book) to the model again; '
+                         'the new answer replaces the cached one')
     ap.add_argument('--pages', default=None, help='translate only the units on these pages, e.g. 1,3-5 (with --only: both sets)')
     ap.add_argument('--no-think', action='store_true', help='ask a reasoning model not to think (sends chat_template_kwargs.enable_thinking=false and reasoning_effort=none; whether the server passes them on depends on the server and model; in LM Studio the reliable switch is the model\'s "Enable Thinking" custom field)')
     ap.add_argument('--extra-body', help='JSON merged into every request body, e.g. \'{"top_p": 0.9}\'')

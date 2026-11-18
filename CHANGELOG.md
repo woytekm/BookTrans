@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — translate: --force
+
+- **`translate.py --force`**: ignores cached answers for the selected units (`--only` / `--pages`; otherwise the whole book) and asks the model again; the new answer replaces the cached one. For a translation you do not like: without it a repeated run returns the same cached answer.
+- GUI, *Run translation*: per-run checkbox *re-translate* (`--force`); with no pages given it asks first, since the whole book would be sent again. `Project.translate_command(..., force=True)`.
+- Tests: 223 passed (was 221).
+
 ## Unreleased — gui: translation settings and Run translation
 
 - **Run translation…** (button next to *Re-run OCR correction…*, Project menu, `Cmd/Ctrl+Shift+T`; `gui_run.TranslateWindow`): runs `translate.py` on the book with the project's translation settings -> `<project>/translation/translations.json` (outside `pipeline/`, so a full pipeline run cannot delete it; the answer cache is `translations.cache.json` beside it). Per run, not saved: pages (`3`, `1,4-6`, blank = whole book) and dry run. Live log, Stop; the header then shows "translation: N of M units, K flagged".

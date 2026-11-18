@@ -60,7 +60,7 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 221 tests, ~25 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 223 tests, ~25 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -206,7 +206,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (221 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (223 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -257,6 +257,7 @@ corrected/raw; timeout; retries; no-think) and runs `translate.py` -> `<project>
 book or some pages (`--pages`, new), with a dry-run option. It warns when `document.corrected.json` is missing or older than the
 saved edits/decisions. `translate.py` fixes found on the way: a partial run (`--only`/`--pages`) now keeps the other units in the
 output and uses the whole book's context (same cache keys as a full run), and the output folder is created.
+Also: `--force` (GUI: *re-translate* checkbox) asks the model again for the selected pages, ignoring the cache.
 
 **Also 2026-11-17 (late): Re-run OCR correction** (header button, Project menu, Cmd/Ctrl+Shift+O): runs only `ocrfix.py` with the saved
 edits and decisions, so a Save reaches `document.corrected.json` (the file `translate.py` reads) in seconds. And `--resume` now works for a
