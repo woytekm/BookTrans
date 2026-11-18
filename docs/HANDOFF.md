@@ -58,6 +58,20 @@ real login**. The two samples were translated by hand in a chat session (`exampl
   afterwards.
 - Every meaningful change updates `CHANGELOG.md` and the relevant document here, adds or adjusts tests
   and is committed with a clear message.
+- **General code, not tuned to one book** (owner, 2026-11-18). The goal is a tool for scanned books in general, not
+  for the current test book. Every fix must be stated in terms that carry to other books: distances as multiples of
+  the glyph height or line pitch (not pixels), Unicode letter classes (not `A-ZÄÖÜß`), layout cues (size, position,
+  alignment) rather than this book's style (e.g. "captions are capitals"), and source-language settings from the
+  project rather than German assumptions. When a heuristic can only be checked on this book, say so in the code
+  comment and in `CHANGELOG.md`. Known book-specific spots to generalise (found in the caption work): (1)
+  `stage2.caption_sized` lets body-size lines be captions only when mostly capitals; (2) `captions.LETTER` and the
+  letter regexes in stage 2 list German letters only; (3) fixed pixel thresholds in `captions.py`
+  (`clip_mask` 14, `figure_of` 45/12/10, `caption_tools.row_box` 400) and `layout.caption_geometry` (8, 40, 60);
+  (4) caption pieces are joined only above/below a figure; (5) one caption size per book is the tested case.
+- **Test material from other books is needed** (owner, 2026-11-18: he will prepare it; not available yet). A small set
+  of pages from two or three other books (different layouts, caption styles, languages, page formats), kept as
+  regression cases so every change is checked against all of them, not only against the 14-page test book. Until it
+  exists, treat results on the test book as one data point.
 
 ## 3. Quick start
 
