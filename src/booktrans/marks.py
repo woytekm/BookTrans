@@ -18,6 +18,23 @@ from deskew import ink_mask
 PAD = 3
 
 
+def is_rule(mask):
+    """A candidate rule's raw ink (``mask``: a strip around it, nonzero = ink) is a rule when the ink lies in a thin band
+    (a hairline: 70 % of it in 4 rows) that runs nearly unbroken (85 % of the columns).  Letter-spaced capitals pass
+    the morphological test - after closing they look like a long faint bar - but their ink spreads over the glyph
+    height and leaves gaps between the letters."""
+    m = np.asarray(mask) > 0
+    if m.size == 0 or not m.any():
+        return False
+    rows = m.sum(axis=1).astype(float)
+    k = min(4, len(rows))
+    band = np.convolve(rows, np.ones(k), 'valid')
+    j = int(np.argmax(band))
+    if band[j] < 0.7 * rows.sum():
+        return False
+    return float(m[j:j + k].any(axis=0).mean()) >= 0.85
+
+
 def find_marks(rgb, boxes, content_area, columns, pad_boxes=4):
     """Return ``[{'role': 'rule'|'page_mark', 'bbox': [x1,y1,x2,y2]}]``."""
     if not columns or content_area is None:
@@ -49,7 +66,8 @@ def find_marks(rgb, boxes, content_area, columns, pad_boxes=4):
     rule_boxes = []
     for i in range(1, n):
         x, y, ww, hh, a = st[i]
-        if ww >= 60 and hh <= 8 and ww >= 12 * hh and top - 60 <= y <= bottom + 60:     # not the book's edge
+        if ww >= 60 and hh <= 8 and ww >= 12 * hh and top - 60 <= y <= bottom + 60 \
+                and is_rule(faint[max(0, y - 4):y + hh + 4, x:x + ww]):      # not the book's edge, not letters
             rule_boxes.append([int(x), int(y), int(x + ww), int(y + hh)])
             out.append({'role': 'rule', 'bbox': [int(x) - 1, int(y) - 2, int(x + ww) + 1, int(y + hh) + 2]})
     for x1, y1, x2, y2 in rule_boxes:

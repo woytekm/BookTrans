@@ -514,10 +514,11 @@ def _content_box(page, noise=()):
     return (min(b[0] for b in bs), max(b[2] for b in bs))
 
 
-def caption_geometry(page, b, noise=(), pitch=None):
+def caption_geometry(page, b, noise=(), pitch=None, tight=True):
     """How much room a caption has: (anchor, lo, hi, extra lines, grow).  ``lo``/``hi``: the leftmost and rightmost x the
     text may reach (neighbours on the same rows, else the page content); ``extra``: lines that fit in the free space below
-    (``grow`` 'down') or, for a caption beside its figure and aligned with its foot, above (``grow`` 'up')."""
+    (``grow`` 'down') or, for a caption beside its figure and aligned with its foot, above (``grow`` 'up').
+    ``tight``: a caption under or over its figure is kept within the figure's width (when it is not wider itself)."""
     x1, y1, x2, y2 = b['bbox']
     gh = (b.get('typography') or {}).get('glyph_height_px') or 8.0
     pitch = pitch or (b.get('typography') or {}).get('line_pitch_px') or 1.6 * gh
@@ -538,6 +539,8 @@ def caption_geometry(page, b, noise=(), pitch=None):
             anchor = 'left'
     box = _content_box(page, noise) or (x1, x2)
     lo, hi = min(box[0], x1), max(box[1], x2)
+    if tight and fig is not None and not beside:      # under / over its picture: no wider than the picture
+        lo, hi = max(lo, min(x1, fig['bbox'][0])), min(hi, max(x2, fig['bbox'][2]))
     for o in page['blocks']:
         if o is b or o['block_id'] in noise or o['kind'] not in ('text', 'figure'):
             continue
@@ -634,15 +637,20 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     col = col[0] if col else None
     capacity = sum(b['line_count'] for _, b in frames)
     W0 = min(b['bbox'][2] - b['bbox'][0] for _, b in frames)
-    extra, grow = 0, 'down'
+    extra, grow, Ws_wide = 0, 'down', None
     if caption and len(frames) == 1:
+        def widths(lo, hi):
+            fx1, _, fx2, _ = first['bbox']
+            maxw = hi - fx1 if anchor == 'left' else (fx2 - lo if anchor == 'right' else 2 * min((fx1 + fx2) / 2 - lo,
+                                                                                                hi - (fx1 + fx2) / 2))
+            maxw = max(W0, maxw)
+            return sorted({W0} | {min(maxw, W0 * k) for k in (1.1, 1.25, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0)} | {maxw})
         anchor, lo, hi, extra, grow = caption_geometry(page, first, noise, pitch)
         anchor = adj.get('anchor') or anchor
-        fx1, _, fx2, _ = first['bbox']
-        maxw = hi - fx1 if anchor == 'left' else (fx2 - lo if anchor == 'right' else 2 * min((fx1 + fx2) / 2 - lo,
-                                                                                            hi - (fx1 + fx2) / 2))
-        maxw = max(W0, maxw)
-        Ws = sorted({W0} | {min(maxw, W0 * k) for k in (1.1, 1.25, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0)} | {maxw})
+        Ws = widths(lo, hi)
+        _, lo2, hi2, _, _ = caption_geometry(page, first, noise, pitch, tight=False)
+        if (lo2, hi2) != (lo, hi):
+            Ws_wide = widths(lo2, hi2)
     else:
         anchor = adj.get('anchor') or anchor_of(first, col)
         Ws = [W0]
@@ -666,7 +674,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     hyph = first['role'] not in ('caption', 'heading')
     caps = [capacity] + ([capacity + extra] if extra else [])
 
-    def fit(size, track, caps=caps):
+    def fit(size, track, caps=caps, Ws=Ws):
         font = fonts.get(style, size * M)
         for cap in caps:
             for Wc in Ws:
@@ -679,9 +687,14 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     chosen = None
     # a caption keeps its original line count if a slightly smaller size (down to 90 %) allows it, before it takes
     # extra lines from the free space
-    tries = [(k, [capacity]) for k in (1.0, 0.97, 0.94, 0.92, 0.9)] if extra else []
-    tries += [(k, caps) for k in (1.0, 0.98, 0.96, 0.94, 0.92, 0.9, 0.86, 0.82)]
-    for shrink, cps in tries:
+    # (a caption under its picture first keeps to the picture's width, then may reach over the page's content width)
+    near = (1.0, 0.97, 0.94, 0.92, 0.9)
+    if size_cap and base and size_cap < base[0] * size_scale - 0.05:
+        near = (1.0,)                                 # already at the page's shared (smaller) size: no further shrink
+    tries = [(k, [capacity], Ws) for k in near] if (extra or Ws_wide) else []
+    tries += [(k, [capacity], Ws_wide) for k in near] if Ws_wide else []
+    tries += [(k, caps, Ws_wide or Ws) for k in (1.0, 0.98, 0.96, 0.94, 0.92, 0.9, 0.86, 0.82)]
+    for shrink, cps, wset in tries:
         size = size0 * shrink
         if tracking is not None:
             track0 = tracking * size
@@ -698,14 +711,14 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
                     gaps.append(((ln['bbox'][2] - ln['bbox'][0]) - font.getlength(ln['text'].strip()) / M) / (n - 1))
             track0 = float(min(max(np.median(gaps) if gaps else 0.0, 0.0), 0.25 * size))
         for tf in ((1.0, 0.5, 0.0) if track0 > 0 else (1.0,)):
-            res = fit(size, track0 * tf, cps)
+            res = fit(size, track0 * tf, cps, wset)
             if res:
                 chosen = (shrink, res[0], res[1], res[2], size, track0 * tf)
                 break
         if chosen:
             break
     if not chosen:
-        shrink, Wc = 0.82, Ws[-1]; size = size0 * shrink
+        shrink, Wc = 0.82, (Ws_wide or Ws)[-1]; size = size0 * shrink
         font = fonts.get(style, size * M)
         lines, relaxed = typeset(text, font, Wc * M, 0.0, False, space_factor=word_space, track=0.0,
                                  fonts_for=lambda st, sz=size: fonts.get(st, sz * M), style=style, hyphenate=hyph)

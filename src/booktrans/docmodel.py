@@ -25,6 +25,7 @@ from PIL import Image
 
 import log
 from marks import find_marks
+from captions import clip_mask
 
 from imgutil import paper_color
 
@@ -127,6 +128,9 @@ def build_page(page, image_rel, page_img, fig_dir, unit_of, full_img=None, full_
         x1, y1, x2, y2 = ill['bbox']
         x1, y1 = max(0, x1 - FIG_PAD), max(0, y1 - FIG_PAD)
         x2, y2 = min(w, x2 + FIG_PAD), min(h, y2 + FIG_PAD)
+        # a caption set right against the picture: the crop stops above it (else the old caption's tops are pasted
+        # back over the translation)
+        x1, y1, x2, y2 = clip_mask([x1, y1, x2, y2], [r['bbox'] for r in regions if r['type'] != 'illustration'])
         fn = '%s_fig_%02d.png' % (stem, k)
         # Cut from the full-resolution page when there is one (boxes are working-scale).
         log.debug('docmodel', 'cropping figure %s from %s' % (ill['object_id'], 'full-resolution page' if full_img is not None else 'page'))

@@ -410,3 +410,48 @@ def test_a_long_body_size_caption_is_set_as_body_text(tmp_path):
     assert plan['report']['reclassified'] == ['c']
     lines = plan['pages'][0]['lines']
     assert lines[0]['role'] == 'paragraph' and all(abs(l['width'] - 520) < 1.0 for l in lines[:-1])   # justified
+
+
+# ---------------------------------------------------------------- captions (2026-11-18)
+def _cap(bid, unit, box, text='40 BOSDORF OS PORTALSOCKEL', gh=8.0, fig=None):
+    x1, y1, x2, y2 = box
+    return {'block_id': bid, 'kind': 'text', 'role': 'caption', 'unit_id': unit, 'line_count': 1, 'bbox': list(box),
+            'text': text, 'figure_ids': [fig] if fig else [], 'lines': [{'bbox': list(box), 'text': text, 'glyph_height_px': gh}],
+            'typography': {'glyph_height_px': gh, 'line_pitch_px': None, 'alignment': 'left', 'uppercase_ratio': 1.0}}
+
+
+def test_caption_geometry_follows_its_figure():
+    page = {'layout': {'columns': [{'left': 40, 'right': 560}]}, 'blocks': []}
+    fig = {'block_id': 'f', 'kind': 'figure', 'bbox': [300, 100, 560, 400]}
+    beside = _cap('c', 'u1', (60, 388, 290, 398), fig='f')
+    under = _cap('d', 'u2', (380, 410, 480, 418), fig='f')
+    page['blocks'] = [fig, beside]
+    anchor, lo, hi, extra, grow = L.caption_geometry(page, beside)
+    assert anchor == 'right' and grow == 'up' and hi < 300 and lo == 40            # flush to the picture, room above
+    page['blocks'] = [fig, under]
+    anchor, lo, hi, extra, grow = L.caption_geometry(page, under)
+    assert anchor == 'center' and (lo, hi) == (300, 560) and grow == 'down' and extra >= 1
+    assert L.caption_geometry(page, under, tight=False)[1:3] == (40, 560)
+
+
+def test_captions_share_one_size_and_are_not_hyphenated(tmp_path):
+    figs = [_fig('f%d' % k, (40 + 180 * k, 100, 200 + 180 * k, 300), tmp_path) for k in range(3)]
+    caps = [_cap('c%d' % k, 'u%d' % k, (40 + 180 * k, 310, 190 + 180 * k, 318), gh=8.0 + k, fig='f%d' % k) for k in range(3)]
+    doc = _doc(tmp_path, [figs + caps])
+    trans = {'units': {'u0': {'pl': '40 PAKOSŁAWICE COKÓŁ'}, 'u1': {'pl': '41 BARTULTOVICE COKÓŁ PORTALU'},
+                       'u2': {'pl': '57 KORFANTÓW IMPOST PORTALU ZACHODNIEGO KATOLICKIEGO KOŚCIOŁA'}}}
+    plan = L.make_plan(doc, trans, _fonts(), {})
+    sizes = {ln['size'] for ln in plan['pages'][0]['lines']}
+    assert len(sizes) == 1                                                       # one size for the page's captions
+    words = [w for ln in plan['pages'][0]['lines'] for w, _ in ln['words']]
+    assert not any(w.endswith('-') for w in words)                               # captions are never hyphenated
+
+
+def test_typeset_without_hyphenation_keeps_words_whole():
+    from typeset import _merge_soft
+    f = _fonts().get('regular', 40)
+    lines, _ = typeset('KATOLICKIEGO KOŚCIOŁA PARAFIALNEGO', f, f.getlength('KATOLICKIEGO KOŚC') + 2, 0.0, False,
+                       hyphenate=False)
+    assert [text_of([l]) for l in lines] == ['KATOLICKIEGO', 'KOŚCIOŁA', 'PARAFIALNEGO']
+    assert _merge_soft([{'t': 'ko', 'w': 1, 'brk': 'soft'}, {'t': 'ściół', 'w': 2, 'brk': 'space'}]) == \
+        [{'t': 'kościół', 'w': 3, 'brk': 'space'}]
