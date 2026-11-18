@@ -194,3 +194,9 @@ def test_demo_marks_carry_exact_boxes_around_the_token(tmp_path):
                 assert ln['bbox'][0] <= x1 < x2 <= ln['bbox'][2] and ln['bbox'][1] <= y1 < y2 <= ln['bbox'][3]
                 seen += 1
     assert seen >= 5
+
+
+def test_replay_skips_stray_mark_lines_but_keeps_line_numbers():
+    text, spans = P.replay([('b1', ['Bei der im Jahre 1900']), ('b2', [None, 'erfolgten Restauration'])])
+    assert text == 'Bei der im Jahre 1900 erfolgten Restauration'
+    assert [(s.block, s.line) for s in spans] == [('b1', 0), ('b2', 1)]           # line 0 of b2 was the mark

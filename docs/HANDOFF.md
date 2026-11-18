@@ -68,7 +68,7 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only (--pages 3,5-7: draw some pages)
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 256 tests, ~35 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 261 tests, ~35 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -229,7 +229,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (256 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (261 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -348,11 +348,15 @@ Decided by the owner (2026-11-18): **Crimson Text Regular is the default font**,
 
 **Findings on the real book (2026-11-18).** Renderer fixes made: scan noise, stray marks as lines, overlapping blocks,
 even line grid, a whole page of body text classified as a caption, the ink colour (see `RENDERING.md`), a slow line
-breaker for long ragged frames (memo ignored the line number: 23 s -> 8 s for the book). **Upstream problems** (not
-renderer work): (1) stage 2 makes paragraphs of scan noise at page edges (`|`, `N`; page 62) and they get units and
-are translated; (2) margin marks (`)`, `Ef`, `5`, `L`) become first lines of paragraph blocks, and stage 4 then splits
-a sentence into two units ("im Jahre 1900 | erfolgten Restauration", u0050/u0052) and keeps `)` in the text
-(`) przeprowadzonej`); (3) page 59's body text is one 21-line *caption* (u0042); (4) the caption of plate 40 lost
+breaker for long ragged frames (memo ignored the line number: 23 s -> 8 s for the book). **Upstream problems:** (1)-(3) are now
+repaired in **stage 4** (2026-11-18, `PIPELINE.md` 8a; rerun with `booktrans.py --resume`, which keeps stages 1-3):
+(1) stage 2 made paragraphs of scan noise at page edges (`|`, `N`; page 62) that got units and were translated ->
+excluded as noise; (2) margin marks (`)`, `Ef`, `5`, `L`) became first lines of paragraph blocks and split
+paragraphs: page 62's "Dem als zweischiffige Halle ... neu eingebaut." was 4 units translated as fragments ("w roku
+1900" / ") przeprowadzonej ..."), and the noise strip at the page edge took the cross-page link, so "... Während" /
+"hier die Gewändepfosten" became two units and the translation repeated "Podczas gdy" -> marks left out, split
+paragraphs joined, links correct (the 14-page test book: 74 units -> 56); (3) page 59's body text is one 21-line
+*caption* (u0042): stage 4 links into it, the renderer sets it as body text (stage 2 itself still misclassifies); (4) the caption of plate 40 lost
 "ZIEGENHALS" in OCR, the model then read "OS" (Oberschlesien) as Oels and translated "Oleśnica" (should be Głuchołazy):
 the glossary should know "OS" = Oberschlesien and captions need a check that the place name was read.
 **Not yet run on the real sample pages** (`0001.tif`, `0002.tif` are not in the repository): render both and compare

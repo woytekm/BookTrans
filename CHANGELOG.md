@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — stage 4: repair of stage 2 region errors (page 62)
+
+- **Noise regions** (`|`, `N`, page and figure numbers, strips at the page edge) are excluded from translation (`exclude_reason: noise`).
+- **Stray-mark lines** (`)`, `Ef`, `5` from margin marks) are left out of the unit text; `pageindex.replay` skips the same lines (word marks stay exact).
+- **Paragraphs split on a page are joined**: consecutive body paragraphs of one column, when the first does not end a sentence and the second starts with a small letter or the first's last line is full. Across pages the small-letter rule stays (scans may skip pages).
+- A **caption of 4+ lines at body size** counts as a body paragraph for linking.
+- On the 14-page test book: page 62's paragraph translated in four fragments is one unit again, the page 62 -> 63 link goes to the right paragraph (the translation no longer repeats "Podczas gdy"), 74 -> 56 units. Rerun: `booktrans.py --resume` (keeps stages 1-3), then translate the changed units.
+- Tests: 5 new (261 passed).
+
 ## Unreleased — render: fixes from the first real book
 
 - Rendered the owner's 14-page test book (Claude translation). Fixes:

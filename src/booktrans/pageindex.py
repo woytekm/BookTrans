@@ -25,7 +25,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from stage4 import ends_hyphen, join_pair   # noqa: E402  (same code that built the unit text)
+from stage4 import ends_hyphen, join_pair, junk_line   # noqa: E402  (same code that built the unit text)
 import ocr_decisions                       # noqa: E402
 
 # [start, end) of a line's stripped text in the unit text; lead = characters stripped from the line start.
@@ -64,13 +64,16 @@ def _join(a, aspans, b, bspans):
 
 
 def replay(parts):
-    """``parts``: ``[(block_id, [raw line text, ...]), ...]`` in unit order -> (unit text, [Span]).
+    """``parts``: ``[(block_id, [raw line text or None, ...]), ...]`` in unit order -> (unit text, [Span]); None is a
+    line left out of the unit text (a stray mark), its index is kept so spans name the right line.
 
     Mirrors ``stage4.dehyphenate`` (lines inside a block) and ``stage4.build_units`` (blocks of one unit)."""
     full, fspans = '', []
     for k, (bid, lines) in enumerate(parts):
         text, spans = '', []
         for i, raw in enumerate(lines):
+            if raw is None:                   # a stray mark left out of the unit text (stage4.junk_line)
+                continue
             t = raw.strip()
             ls = [Span(bid, i, 0, len(t), len(raw) - len(raw.lstrip()))]
             if not text:
@@ -183,7 +186,9 @@ class DocIndex:
             if ent is None:
                 missing = True
                 break
-            parts.append((bid, [ln['text'] for ln in ent[1].get('lines', [])]))
+            blk = ent[1]
+            w = (blk['bbox'][2] - blk['bbox'][0]) if blk.get('bbox') else 0
+            parts.append((bid, [None if junk_line(ln, w) else ln['text'] for ln in blk.get('lines', [])]))
         if missing:
             m = UnitMap(uid, '', [], False)
         else:
