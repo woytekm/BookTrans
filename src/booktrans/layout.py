@@ -121,17 +121,70 @@ def fit_track(blocks, font, scale, size, max_em=FIT_MAX_EM):
     return float(min(max(np.median(gaps), 0.0), max_em * size))
 
 
-def line_tops(block):
-    """Top y of every original line of a block, regularised to the block's line pitch (OCR line boxes
-    jitter by a pixel or two with the letters in them); a line clearly off the grid keeps its own top."""
-    tops = [float(l['bbox'][1]) for l in block.get('lines') or []]
-    pitch = block['typography'].get('line_pitch_px')
+def line_tops(block, pitch=None, lines=None):
+    """Top y of every original line of a block (or of ``lines``, a subset), regularised to the line pitch (OCR line
+    boxes jitter by a pixel or two with the letters in them); a line clearly off the grid keeps its own top.
+    ``pitch``: default the block's measured pitch."""
+    lines = block.get('lines') or [] if lines is None else lines
+    tops = [float(l['bbox'][1]) for l in lines]
+    pitch = pitch or block['typography'].get('line_pitch_px')
     if not tops:
         return [float(block['bbox'][1])]
     if len(tops) < 2 or not pitch:
         return tops
     off = float(np.median([t - k * pitch for k, t in enumerate(tops)]))
     return [off + k * pitch if abs(off + k * pitch - t) <= 0.35 * pitch else t for k, t in enumerate(tops)]
+
+
+def _alnum(text):
+    return sum(ch.isalnum() for ch in text or '')
+
+
+def _junk_line(line, col_width):
+    """A line that is a stray mark, not text: very short and almost no letters."""
+    return (line['bbox'][2] - line['bbox'][0]) < 0.12 * col_width and _alnum(line.get('text')) <= 2
+
+
+def is_noise(block):
+    """A text block that is scan noise or a lone mark (``|``, ``N``, a page edge, a figure number): almost no
+    letters, or narrower than a few glyphs with hardly any.  It is not typeset; see ``make_plan``."""
+    t = block.get('text') or ' '.join(l.get('text', '') for l in block.get('lines') or [])
+    n = _alnum(t)
+    gh = (block.get('typography') or {}).get('glyph_height_px') or 12.0
+    return n < 2 or (block['bbox'][2] - block['bbox'][0] < 2.5 * gh and n < 4)
+
+
+def _even_grid(slots, pitch):
+    """Put each run of slots of a column on one even line grid: a run ends at a gap of more than 1.6 lines (a figure,
+    a heading); within a run, top = a + b * line number, fitted by least squares to the measured tops.  Small gaps
+    between the original paragraph blocks would otherwise appear in the middle of the new paragraphs."""
+    out, run = [], []
+
+    def flush():
+        if len(run) >= 3:
+            ks = np.array([round((s_['top'] - run[0]['top']) / pitch) for s_ in run], float)
+            ts = np.array([s_['top'] for s_ in run], float)
+            if len(set(ks)) >= 2:
+                b, a = np.polyfit(ks, ts, 1)
+                if abs(b - pitch) <= 0.15 * pitch:
+                    for s_, k in zip(run, ks):
+                        s_['top'] = float(a + b * k)
+        out.extend(run)
+
+    for s_ in slots:
+        if run and (s_['col'] != run[-1]['col'] or s_['top'] - run[-1]['top'] > 1.6 * pitch):
+            flush(); run = []
+        run.append(dict(s_))
+    flush()
+    return out
+
+
+def looks_like_body(block):
+    """A block classified as caption / footnote / byline that is body text: four lines or more at body size
+    (stage 2 sometimes takes a whole page of text under a plate for its caption)."""
+    t = block.get('typography') or {}
+    return block.get('role') in ('caption', 'footnote_or_footer', 'author_byline_candidate') \
+        and block.get('line_count', 0) >= 4 and (t.get('relative_size') or 0) >= 0.9
 
 
 def _overlap(a1, a2, b1, b2):
@@ -175,20 +228,38 @@ class _Flow:
         self.chains, self.ratios, self.report = chains, ratios, report
         self.slots = {}                     # page index -> [slot]
         rank = {}
-        body_set = set(body_units)
+        body_ids = {b['block_id'] for u in body_units for _, b in chains[u]}     # noise blocks are not in chains
         for pi, page in enumerate(doc['pages']):
-            bl = [b for b in page['blocks'] if b['kind'] == 'text' and b.get('unit_id') in body_set]
+            bl = [b for b in page['blocks'] if b['block_id'] in body_ids]
             if not bl:
                 continue
             cols, ci = columns_of(bl, page['layout'].get('columns') or [])
             bl.sort(key=lambda b: (ci[b['block_id']], b['bbox'][1]))
             obstacles = [o for o in page['blocks'] if o not in bl and o['kind'] in ('figure', 'graphic', 'text')]
             slots = []
+            # the line pitch from the real lines (the measured pitch of a block is wrong when stray marks were read
+            # as lines): median distance between consecutive real lines of a block, over the page
+            reals, diffs = {}, []
+            for b in bl:
+                L, R = cols[ci[b['block_id']]]
+                reals[b['block_id']] = [ln for ln in b.get('lines') or [] if not _junk_line(ln, R - L)]  # no slot for ')'
+                tops = [ln['bbox'][1] for ln in reals[b['block_id']]]
+                diffs += [d for d in np.diff(tops) if 5 < d < 80]
+            pp = [b['typography'].get('line_pitch_px') for b in bl if b['typography'].get('line_pitch_px')]
+            page_pitch = float(np.median(diffs)) if diffs else (float(np.median(pp)) if pp else 22.0)
             for k, b in enumerate(bl):
                 rank[b['block_id']] = (pi, k)
-                pitch = b['typography'].get('line_pitch_px') or 22.0
                 L, R = cols[ci[b['block_id']]]
-                for top in line_tops(b):
+                real = reals[b['block_id']]
+                own = [d for d in np.diff([ln['bbox'][1] for ln in real]) if 5 < d < 80]
+                pitch = float(np.median(own)) if own else page_pitch
+                if abs(pitch - page_pitch) > 0.15 * page_pitch:
+                    pitch = page_pitch
+                if not real and not b.get('lines'):
+                    real = None
+                elif not real:
+                    continue
+                for top in line_tops(b, pitch, real):
                     x1, x2 = L, R
                     band = (top + 0.15 * pitch, top + 0.75 * pitch)
                     gap = max(6.0, 0.5 * pitch)
@@ -200,7 +271,18 @@ class _Flow:
                             else:
                                 x2 = min(x2, ox1 - gap)
                     if x2 - x1 >= 0.25 * (R - L):
-                        slots.append({'block': b['block_id'], 'top': top, 'x1': x1, 'x2': x2, 'pitch': pitch})
+                        slots.append({'block': b['block_id'], 'top': top, 'x1': x1, 'x2': x2, 'pitch': pitch,
+                                      'col': ci[b['block_id']]})
+            # overlapping blocks (an OCR region read twice) give two slots for one line: keep one per line
+            slots.sort(key=lambda s_: (s_['col'], s_['top']))
+            kept = []
+            for sl in slots:
+                if kept and kept[-1]['col'] == sl['col'] and sl['top'] - kept[-1]['top'] < 0.5 * sl['pitch']:
+                    if sl['x2'] - sl['x1'] > kept[-1]['x2'] - kept[-1]['x1']:
+                        kept[-1] = sl
+                    continue
+                kept.append(sl)
+            slots = _even_grid(kept, page_pitch)
             if slots:
                 self.slots[pi] = slots
         self.order = sorted(self.slots)
@@ -246,7 +328,8 @@ class _Flow:
             font = self.fonts.get('regular', size * M)
             wf = lambda ln: (widths[ln] if ln < len(widths) else widths[-1]) * M
             self._cache[key] = typeset(text, font, None, indent * M, True, space_factor=self.settings['word_space'],
-                                       track=track * M, widths=wf, fonts_for=lambda st: self.fonts.get(st, size * M))
+                                       track=track * M, widths=wf, fonts_for=lambda st: self.fonts.get(st, size * M),
+                                       uniform=len(widths) == 1)
         return self._cache[key]
 
     def simulate(self, pi, cand, carry, pending, prev=None):
@@ -598,10 +681,25 @@ def make_plan(doc, trans, fonts, settings=None):
                       for pi, p in enumerate(doc['pages'])],
             'report': report}
 
+    # scan noise read as text: dropped outside the text column (page edges), kept as pixels inside it (a figure
+    # number, a page number); never typeset, never part of a unit's flow
+    noise = set()
+    for pi, page in enumerate(doc['pages']):
+        cols = page['layout'].get('columns') or []
+        for b in page['blocks']:
+            if b['kind'] == 'text' and is_noise(b):
+                noise.add(b['block_id'])
+                outside = cols and (b['bbox'][2] < cols[0]['left'] - 20 or b['bbox'][0] > cols[-1]['right'] + 20)
+                if outside:
+                    plan['pages'][pi].setdefault('dropped', []).append(b['block_id'])
+                else:
+                    plan['pages'][pi]['keep'].append(b['block_id'])
+    report['noise_blocks'] = len(noise)
+
     chains = {}                                   # unit -> [(page index, block)] in document order
     for pi, page in enumerate(doc['pages']):
         for b in page['blocks']:
-            if b['kind'] == 'text' and b.get('unit_id'):
+            if b['kind'] == 'text' and b.get('unit_id') and b['block_id'] not in noise:
                 chains.setdefault(b['unit_id'], []).append((pi, b))
 
     for pi, page in enumerate(doc['pages']):        # translated text blocks: wiped on a scan background
@@ -618,7 +716,8 @@ def make_plan(doc, trans, fonts, settings=None):
     for pi, page in enumerate(doc['pages']):
         figs = [b['crop_bbox'] for b in page['blocks'] if b['kind'] == 'figure']
         for b in page['blocks']:
-            if b['kind'] == 'text' and not b.get('unit_id') and not any(_inside(b['bbox'], f) for f in figs):
+            if b['kind'] == 'text' and not b.get('unit_id') and b['block_id'] not in noise \
+                    and not any(_inside(b['bbox'], f) for f in figs):
                 keep([(pi, b)], None)
 
     for u, fr in list(chains.items()):               # a human chose to keep the original of a block: its whole unit
@@ -626,7 +725,17 @@ def make_plan(doc, trans, fonts, settings=None):
             keep(fr, None)
             report.setdefault('kept_by_hand', []).append(u)
             del chains[u]
-    body_units = [u for u, fr in chains.items() if all(b['role'] == 'paragraph' for _, b in fr)]
+    def body_like(pi, b):                         # a paragraph in the text column, not a narrow note beside it
+        cols = doc['pages'][pi]['layout'].get('columns') or []
+        if b['role'] != 'paragraph' and not looks_like_body(b):
+            return False
+        if not cols:
+            return True
+        cw = max(c['right'] - c['left'] for c in cols)
+        return b['bbox'][2] - b['bbox'][0] >= 0.3 * cw or b.get('line_count', 1) <= 1 and \
+            _overlap(b['bbox'][0], b['bbox'][2], cols[0]['left'], cols[-1]['right']) > 0
+    body_units = [u for u, fr in chains.items() if all(body_like(pi, b) for pi, b in fr)]
+    report['reclassified'] = sorted(b['block_id'] for u in body_units for _, b in chains[u] if b['role'] != 'paragraph')
     fixed_units = [u for u in chains if u not in body_units]
     for u in list(body_units):
         if u not in tr:

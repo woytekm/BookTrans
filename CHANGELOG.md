@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — render: fixes from the first real book
+
+- Rendered the owner's 14-page test book (Claude translation). Fixes:
+  - **Scan noise read as text** (`|`, `N`, page or figure numbers as paragraphs) is never typeset: dropped outside the text column, kept as pixels inside; a unit joined to such a block starts at its real text.
+  - **Stray marks read as lines** (`)`, `Ef`, `5`) get no slot; the line pitch is measured from the real lines.
+  - **Overlapping blocks** give one slot per line; each run of slots is put on **one even line grid**.
+  - A **caption / footnote of 4+ lines at body size** is set as body text (`reclassified`); paragraph blocks narrower than 30 % of the column are fixed frames.
+  - **Ink**: `typecolour.match_ink` matches the scan's darkness (hue from the median ink colour, shade solved from a coverage mask); the "darkest pixels" rule gave near-black because the scanner clips stroke cores. `fontcheck.py` now sets candidates in black (darkness >= 1 needed).
+  - **Speed**: the line breaker's memo ignores the line number for uniform widths (a 21-line ragged frame took 20 s); the 14-page book renders in 8 s.
+- `typecolour.py`: darkness, scan metrics, block setting, ink matching (shared by `render.py` and `fontcheck.py`).
+- Tests: 5 new (256 passed).
+
 ## Unreleased — render: configurable default font
 
 - **Default font in `config/fonts.json`** (Crimson Text Regular / SemiBold / Italic, as before); `BOOKTRANS_FONTS` points to another file. Used by `render.py`, `booktrans.py`, projects without `render.font`, and as `fontcheck.py`'s reference. `envcheck.py` checks the configured default instead of a fixed list of Crimson Text files.

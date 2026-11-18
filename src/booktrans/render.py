@@ -138,10 +138,10 @@ def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolutio
 
 
 def measure_ink(doc, max_pages=12):
-    """The colour of the printed text, from the scan: inside the text blocks of up to ``max_pages`` pages, the pixels
-    clearly darker than the paper (below 0.6 x its brightness), and of those the darkest tenth (the cores of the
-    strokes; the edges are mixed with paper at this resolution, in the original and in the rebuilt page alike).
-    Returns (R, G, B) or None when there is no text."""
+    """The hue of the printed text, from the scan: inside the text blocks of up to ``max_pages`` pages, the median
+    colour of the pixels clearly darker than the paper (below 0.6 x its brightness).  Scanners clip the stroke cores
+    to black, so the median (edges and cores) is the colour the eye sees.  (R, G, B) or None when there is no text.
+    ``render`` with ``ink='auto'`` uses ``typecolour.match_ink`` instead, which also matches the darkness."""
     base = Path(doc.get('_dir', '.'))
     pages = [p for p in doc['pages'] if any(b['kind'] == 'text' for b in p['blocks'])]
     if not pages:
@@ -161,16 +161,12 @@ def measure_ink(doc, max_pages=12):
             if len(reg) < 50:
                 continue
             lum = reg.mean(axis=1)
-            paper = np.percentile(lum, 90)
-            dark = reg[lum < 0.6 * paper]
+            dark = reg[lum < 0.6 * np.percentile(lum, 90)]
             if len(dark):
                 samples.append(dark)
     if not samples:
         return None
-    dark = np.concatenate(samples)
-    lum = dark.mean(axis=1)
-    core = dark[lum <= np.percentile(lum, 10)]
-    return tuple(int(round(v)) for v in np.median(core, axis=0))
+    return tuple(int(round(v)) for v in np.median(np.concatenate(samples), axis=0))
 
 
 WORK_DPI = 120.0                 # resolution of the working page images (the 600 DPI originals at scale ~5)
@@ -254,7 +250,8 @@ def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolutio
 
     ``tracking``: None = fit the letter-spacing so the translation fills the original line widths; a number =
     fixed letter-spacing in em (0 = none).  ``size_scale`` and ``word_space`` multiply the chosen font size and
-    the natural word space.  ``ink``: (R, G, B) or 'auto' (measured from the scan, ``measure_ink``).  ``settings``
+    the natural word space.  ``ink``: (R, G, B) or 'auto' (``typecolour.match_ink``: the scan's ink hue at the shade
+    where the rebuilt text is as dark as the scan).  ``settings``
     (a dict, see ``layout.DEFAULTS``) overrides these.  ``pdf``: a file name in ``out_dir`` for the drawn pages as one
     PDF, at ``pdf_dpi`` (default: ``WORK_DPI`` x the drawing scale).
     Returns (file names, report)."""
@@ -264,7 +261,9 @@ def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolutio
     plan = make_plan(doc, trans, fonts, st)
     report = plan['report']
     if ink is None or ink == 'auto':
-        ink = measure_ink(doc) or INK
+        from typecolour import match_ink
+        ink, report['ink_match'] = match_ink(doc, fonts)
+        ink = ink or measure_ink(doc) or INK
     report['ink'] = plan['ink'] = list(ink)
     idx = list(range(len(doc['pages']))) if pages is None else list(pages)
     names, tiles = [], []
@@ -311,7 +310,7 @@ def main():
                          "line widths; a number in em (e.g. 0.05) fixes it; 0 = none")
     ap.add_argument('--size-scale', type=float, default=1.0, help='multiply the chosen font size (default 1.0)')
     ap.add_argument('--word-space', type=float, default=1.0, help='multiply the natural word space (default 1.0)')
-    ap.add_argument('--ink', default='auto', help="text colour R,G,B, or 'auto' (default): measured from the scan")
+    ap.add_argument('--ink', default='auto', help="text colour R,G,B, or 'auto' (default): the scan's ink, shaded so the text is as dark as on the scan")
     ap.add_argument('--paragraph-indent', type=float, default=None,
                     help='first-line indent in em (default: as in the original page, normally none)')
     ap.add_argument('--pages', help='draw only these pages (printed numbers, e.g. 3,5-7); the layout still covers the book')

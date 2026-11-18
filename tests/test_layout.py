@@ -350,3 +350,63 @@ def test_pdf_has_one_page_per_drawn_page_at_the_physical_size(tmp_path):
     assert len(r.pages) == 2 and float(r.pages[0].mediabox.width) == 360.0
     R.render(doc, trans, tmp_path / 'o2', _fonts(), pages=[1], pdf='p.pdf', pdf_dpi=300)
     assert len(pypdf.PdfReader(str(tmp_path / 'o2' / 'p.pdf')).pages) == 1
+
+
+# ---------------------------------------------------------------- robustness (found on the first real book, 2026-11-18)
+def _noise(bid, unit, box, text='|'):
+    return {'block_id': bid, 'kind': 'text', 'role': 'paragraph', 'unit_id': unit, 'line_count': 1, 'bbox': list(box),
+            'text': text, 'lines': [{'bbox': list(box), 'text': text}],
+            'typography': {'glyph_height_px': GH, 'line_pitch_px': None, 'alignment': 'left'}}
+
+
+def test_scan_noise_is_not_typeset_and_does_not_steal_a_paragraph(tmp_path):
+    p1 = _para('p1', 'u1', 8, 40, 560, 100)
+    edge = _noise('n1', 'u2', (585, 300, 588, 360))                    # '|' at the page edge, outside the column
+    num = _noise('n2', 'u3', (300, 700, 318, 714), '62')               # a page number read as a paragraph
+    junk_head = _noise('n3', 'u4', (586, 500, 589, 540), '| x |')     # noise that stage 4 joined to the next page's paragraph
+    p2 = _para('p2', 'u4', 8, 40, 560, 100)
+    doc = _doc(tmp_path, [[p1, edge, num, junk_head], [p2]])
+    trans = {'units': {'u1': {'pl': _pl(500)}, 'u2': {'pl': '|'}, 'u3': {'pl': '62'}, 'u4': {'pl': _pl(500)}}}
+    plan = L.make_plan(doc, trans, _fonts())
+    pg = plan['pages'][0]
+    assert set(pg['dropped']) == {'n1', 'n3'} and 'n2' in pg['keep']
+    assert {l['unit'] for l in pg['lines']} == {'u1'}
+    assert all(l['x'] + l['width'] <= 560.5 for p in plan['pages'] for l in p['lines'])
+    assert {u['unit']: u for u in plan['report']['units']}['u4']['original_page'] == 2   # starts where its real text is
+
+
+def test_stray_marks_read_as_lines_get_no_slot_and_keep_the_pitch(tmp_path):
+    a = _para('a', 'u1', 4, 40, 560, 100)
+    b = _para('b', 'u2', 4, 40, 560, 100 + 4 * PITCH + 2)
+    b['lines'].insert(1, {'bbox': [556, 100 + 4 * PITCH + 12, 559, 100 + 4 * PITCH + 20], 'text': '5'})   # a margin mark
+    b['line_count'] = 5
+    b['typography']['line_pitch_px'] = 11.0                             # what such a mark does to the measured pitch
+    doc = _doc(tmp_path, [[a, b]])
+    plan = L.make_plan(doc, {'units': {'u1': {'pl': _pl(330)}, 'u2': {'pl': _pl(330)}}}, _fonts())
+    assert plan['pages'][0]['body']['slots'] == 8
+    base = sorted(l['baseline'] for l in plan['pages'][0]['lines'])
+    gaps = np.diff(base)
+    assert gaps.min() > 0.85 * PITCH and gaps.max() < 1.25 * PITCH
+
+
+def test_even_line_grid_across_paragraph_blocks(tmp_path):
+    a = _para('a', 'u1', 5, 40, 560, 100)
+    b = _para('b', 'u2', 5, 40, 560, 100 + 5 * PITCH + 4)               # the original has 4 px more between blocks
+    doc = _doc(tmp_path, [[a, b]])
+    plan = L.make_plan(doc, {'units': {'u1': {'pl': _pl(420)}, 'u2': {'pl': _pl(260)}}}, _fonts())
+    base = sorted(l['baseline'] for l in plan['pages'][0]['lines'])
+    gaps = np.diff(base)
+    assert gaps.max() - gaps.min() < 1.0                                # one grid: no bump inside the new paragraphs
+
+
+def test_a_long_body_size_caption_is_set_as_body_text(tmp_path):
+    fig = _fig('f', (100, 40, 500, 200), tmp_path)
+    cap = _para('c', 'u1', 12, 40, 560, 240)
+    cap['role'] = 'caption'
+    cap['typography'].update(relative_size=1.0, alignment='left')
+    doc = _doc(tmp_path, [[fig, cap]], cols=())
+    doc['pages'][0]['layout']['columns'] = []
+    plan = L.make_plan(doc, {'units': {'u1': {'pl': _pl(800)}}}, _fonts())
+    assert plan['report']['reclassified'] == ['c']
+    lines = plan['pages'][0]['lines']
+    assert lines[0]['role'] == 'paragraph' and all(abs(l['width'] - 520) < 1.0 for l in lines[:-1])   # justified

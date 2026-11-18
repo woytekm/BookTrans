@@ -7,7 +7,7 @@
 
 For a few body paragraphs of the book (the ``--blocks`` largest, spread over the pages), every candidate sets the
 paragraph's *original German text* into its *original line boxes*, with the same automatic size and letter-spacing
-fit the renderer uses, in the ink colour of the scan.  So original and candidate can be compared line by line, and
+fit the renderer uses, in black.  So original and candidate can be compared line by line, and
 measured:
 
 * ``width``     the size that reproduces the original line widths over the size that reproduces the scan's
@@ -15,10 +15,12 @@ measured:
                 is narrower than the original (the renderer adds letter-spacing or a larger size), below 1 wider.
 * ``x_height``  the font's x-height / ascender height over the scan's (both measured from the ink profile of every
                 line).  Above 1 the font's small letters are larger than the original's.
-* ``darkness``  mean ink coverage of the rebuilt paragraph over the scan's (stroke weight; noise floor removed).
-                Above 1 the page looks darker than the original.
+* ``darkness``  mean ink coverage of the paragraph set in *black* over the scan's (stroke weight; noise floor
+                removed).  Must be at least 1: ``render.py --ink auto`` then lightens the ink until the page is as
+                dark as the scan; below 1 the font is too thin even in black; far above 1 its strokes are heavier
+                than the original's and the lightened ink looks grey.
 * ``tracking``  the letter-spacing the fit chose, in em.
-* ``score``     3 |ln width| + 3 |ln x_height| + 2 |ln darkness|; lower is better.
+* ``score``     3 |ln width| + 3 |ln x_height| + (2 below 1, 0.7 above) |ln darkness|; lower is better.
 
 Writes ``specimen_<block>.png`` (original on top, then each candidate, 2x) and ``fontcheck.json``; prints a table.
 The default font (``config/fonts.json``) and the bundled fonts (Crimson Text; Crimson Pro Light and Regular) are always
@@ -37,103 +39,16 @@ from PIL import Image, ImageDraw
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import log  # noqa: E402
-from typeset import Fonts, pieces_of  # noqa: E402
+from typeset import Fonts  # noqa: E402
 import layout as L  # noqa: E402
-from render import measure_ink, parse_pages, INK  # noqa: E402
-
-ZOOM = 2
-NOISE = 0.08            # darkness below this fraction of the paper is paper texture, not ink
-
-
-def darkness(arr, paper=None):
-    """Mean ink coverage of an RGB array: (paper - luminance) / paper, below NOISE counted as 0."""
-    lum = arr.astype(np.float32).mean(axis=2)
-    paper = paper if paper is not None else np.percentile(lum, 90)
-    d = np.clip((paper - lum) / max(paper, 1.0), 0.0, 1.0)
-    return float(np.mean(np.where(d < NOISE, 0.0, d)))
-
-
-def scan_metrics(img, block):
-    """(x-height, ascender height) of the scan's letters in px, median over the block's lines, measured from the ink:
-    the x-band is where a line's row profile is at least half its maximum; the baseline is the band's lower edge, the
-    ascender height the distance from the line's top to the baseline.  Independent of the OCR glyph height."""
-    arr = np.asarray(img.convert('L')).astype(np.float32)
-    xs, ascs = [], []
-    for ln in block['lines']:
-        x1, y1, x2, y2 = [int(round(v)) for v in ln['bbox']]
-        if x2 - x1 < 20 or y2 - y1 < 4:
-            continue
-        t = max(0, y1 - 2)
-        crop = arr[t:y2 + 2, max(0, x1):x2]
-        paper = np.percentile(crop, 90)
-        dens = np.clip((paper - crop) / max(paper, 1.0), 0, 1)
-        prof = dens.mean(axis=1)
-        if prof.max() <= 0:
-            continue
-        rows = np.where(prof >= 0.5 * prof.max())[0]
-        ink_rows = np.where(dens.max(axis=1) >= 0.35)[0]            # any clear ink in the row (ascenders are sparse)
-        ink_rows = ink_rows[ink_rows <= rows[-1]] if len(ink_rows) else rows
-        base = t + rows[-1] + 1
-        xs.append(rows[-1] - rows[0] + 1)
-        ascs.append(base - (t + ink_rows[0]))
-    if not xs:
-        return None, None
-    return float(np.median(xs)), float(np.median(ascs))
-
-
-def set_block(block, fonts, size, track, ink, paper, S, origin):
-    """The block's original text set into its original line boxes at scale S; returns the image of the block's box."""
-    x0, y0, x1b, y1b = origin
-    img = Image.new('RGB', (int(round((x1b - x0) * S)), int(round((y1b - y0) * S))), tuple(paper))
-    draw = ImageDraw.Draw(img)
-    font = fonts.get('regular', size * S)
-    asc = fonts.ratios('regular')['asc'] * size
-    tops = L.line_tops(block)
-    justified = block['typography'].get('alignment') == 'justified'
-    n = len(block['lines'])
-    for k, ln in enumerate(block['lines']):
-        text = ln['text'].strip()
-        if not text:
-            continue
-        words = text.split()
-        widths = [sum(p['w'] for p in pieces_of(w, font, track * S)) for w in words]
-        space = font.getlength(' ') + track * S
-        target = (ln['bbox'][2] - ln['bbox'][0]) * S
-        gap = space
-        if justified and k < n - 1 and len(words) > 1:
-            gap = (target - sum(widths)) / (len(words) - 1)
-        cx = (ln['bbox'][0] - x0) * S
-        base = (tops[k] + asc - y0) * S
-        for w, ww in zip(words, widths):
-            if track > 0:
-                for i, ch in enumerate(w):
-                    draw.text((cx + font.getlength(w[:i]) + track * S * i, base), ch, font=font, fill=ink, anchor='ls')
-            else:
-                draw.text((cx, base), w, font=font, fill=ink, anchor='ls')
-            cx += ww + gap
-    return img
-
-
-def sample_blocks(doc, pages, count):
-    cand = []
-    for pi in pages:
-        for b in doc['pages'][pi]['blocks']:
-            if b['kind'] == 'text' and b.get('role') == 'paragraph' and len(b.get('lines') or []) >= 3 \
-                    and b['typography'].get('glyph_height_px'):
-                cand.append((pi, b))
-    if len(cand) <= count:
-        return cand
-    big = sorted(cand, key=lambda c: -len(c[1]['lines']))[:count * 3]
-    big.sort(key=lambda c: (c[0], c[1]['bbox'][1]))                   # spread over the book
-    step = len(big) / count
-    return [big[int(i * step)] for i in range(count)]
-
+from render import parse_pages  # noqa: E402
+from typecolour import ZOOM, darkness, scan_metrics, set_block, sample_blocks  # noqa: E402,F401
 
 def check(doc, candidates, pages=None, count=6, out_dir=None):
     """-> {'blocks': [...], 'fonts': {name: {width, x_height, darkness, tracking, score}}}; writes specimens."""
     base = Path(doc.get('_dir', '.'))
     pages = list(range(len(doc['pages']))) if pages is None else pages
-    ink = measure_ink(doc) or INK
+    ink = (0, 0, 0)            # every candidate in black: how dark it can get (render --ink auto lightens the ink)
     blocks = sample_blocks(doc, pages, count)
     if out_dir:
         Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -183,8 +98,9 @@ def check(doc, candidates, pages=None, count=6, out_dir=None):
     summary = {}
     for name, v in per.items():
         med = {k: (float(np.median(x)) if x else None) for k, x in v.items()}
-        score = sum(w * abs(math.log(med[k])) for k, w in (('width', 3), ('x_height', 3), ('darkness', 2))
-                    if med[k] and med[k] > 0)
+        score = sum(w * abs(math.log(med[k])) for k, w in (('width', 3), ('x_height', 3)) if med[k] and med[k] > 0)
+        if med['darkness'] and med['darkness'] > 0:      # too light cannot be fixed by the ink, too heavy looks grey
+            score += (2.0 if med['darkness'] < 1 else 0.7) * abs(math.log(med['darkness']))
         summary[name] = dict({k: (round(x, 3) if x is not None else None) for k, x in med.items()}, score=round(score, 3))
     result = {'ink': list(ink), 'blocks': rows, 'fonts': summary,
               'ranking': sorted(summary, key=lambda n: summary[n]['score'])}

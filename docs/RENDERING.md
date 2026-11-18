@@ -74,6 +74,23 @@ line: a figure between two paragraphs was overprinted, and a text label inside a
 
 Untranslated body paragraphs keep their pixels and their slots are not used.
 
+**Robustness against OCR region errors** (found on the first real book, 14 pages, 2026-11-18):
+
+- *Scan noise read as text* (`layout.is_noise`: fewer than 2 letters, or narrower than 2.5 glyphs with fewer than 4):
+  `|` and `N` at the page edges, a page number or figure number read as a paragraph. Never typeset and never part of a
+  unit's flow; outside the text column it is dropped (plan `dropped`), inside it its pixels are kept. A unit that stage 4
+  joined to such a block (noise at the foot of a page + the real paragraph on the next) starts at its real text.
+- *Stray marks read as lines* (`_junk_line`: shorter than 12 % of the column, at most 2 letters; e.g. `)`, `Ef`, `5`
+  from margin marks) get no slot, and the line pitch is measured from the real lines (median distance between
+  consecutive real lines; a block's pitch more than 15 % off the page's is replaced), since such marks halve the
+  measured pitch.
+- *Overlapping blocks* (an OCR region read twice): one slot per line (slots closer than half a line are merged).
+- *Even grid:* each run of slots in a column (up to a gap of 1.6 lines) is put on one line grid fitted to the measured
+  tops, so the small gaps between the original paragraph blocks do not show up inside the new paragraphs.
+- *Body text classified as a caption* (`looks_like_body`: a caption, footnote or byline of 4 lines or more at body size,
+  e.g. a whole page under a plate) is set as body text (report `reclassified`).
+- A paragraph block narrower than 30 % of the text column (a note beside it) is a fixed frame, not body text.
+
 ## Body text: flow kept in step with the pages
 
 Before, size and letter-spacing were chosen once for the book and the text flowed freely: in a book, a few
@@ -107,7 +124,9 @@ Now a paragraph **never starts before the page it started on in the original**, 
 hold its text (1.0 ... 0.9). With a fixed `--tracking` only the size varies.
 
 Measured on a synthetic 60-page book (paragraphs 0.90-1.08 x the original length): no paragraph off its
-page, 7 empty slots in 2300, most pages at the base size; 3.5 s for the layout.
+page, 7 empty slots in 2300, most pages at the base size; 3.5 s for the layout. On the first real book (14 pages,
+74 units, Claude translation): every page at the base size except the broken page 62 (0.97), letter-spacing within
++-0.02 em, 4 empty slots, one paragraph pushed (page 62, where stage 2 lost lines); 8 s for layout, ink and drawing.
 
 ## Settings and human adjustments
 
@@ -190,10 +209,15 @@ the default is bundled Crimson Text.
 
 ## Ink and fonts
 
-**Ink** (`--ink auto`, default; project `render.ink` = `auto`): `render.measure_ink` takes, inside the text blocks of up to
-12 pages, the pixels darker than 0.6 x the paper and of those the darkest tenth (stroke cores), median colour. The
-measured colour is in `report.json` (`ink`) and in `layout.json`, so `draw_page` from a saved plan uses it. Before it
-was a fixed (34, 30, 26), darker and colder than the brownish print.
+**Ink** (`--ink auto`, default; project `render.ink` = `auto`; `typecolour.match_ink`): the *hue* is the median
+colour of the scan's ink pixels (darker than 0.6 x paper) in a few large body paragraphs; the *shade* (between black
+and that hue) is the one at which those paragraphs, set in the chosen font with the renderer's fit, are exactly as
+dark as on the scan (mean ink coverage, noise floor 0.08; solved from one coverage mask per paragraph). So a lighter
+font gets a darker ink and a heavier one a lighter ink. The scanner clips stroke cores to black, so "the darkest
+pixels" is not the ink colour (that first attempt gave 13,2,2). `report.json`: `ink`, `ink_match` (`darkness_scan`,
+`darkness_set`, `hue`, `k`; a `note` when the font is too light even in black). On the first real book with Crimson
+Text: hue (107, 90, 78), shade 0.12 -> ink (13, 11, 10): Crimson Text needs nearly black to carry as much ink as the
+print. The ink is also stored in `layout.json`, so `draw_page` from a saved plan uses it.
 
 **Default font** (owner's decision 2026-11-18: Crimson Text Regular, configurable): named in **`config/fonts.json`**
 (`regular`, optional `bold`, `italic`; paths relative to the repository, absolute or `~`; `path@weight` for a variable
@@ -217,16 +241,16 @@ python fontcheck.py output/book/document.json [-o DIR] [--pages 50-53] [--blocks
 ```
 
 For a few large body paragraphs it sets the *original German text* into the *original line boxes* with the
-renderer's own size and letter-spacing fit, in the scan's ink, next to the scan (`specimen_<block>.png`, 2x), and
+renderer's own size and letter-spacing fit, in black, next to the scan (`specimen_<block>.png`, 2x), and
 measures per candidate (`fontcheck.json`, table on stderr):
 
 | metric | meaning (1.0 = like the scan) |
 |---|---|
 | `width` | size that reproduces the original line widths / size that reproduces the scan's ascender height; > 1: the font is narrower (gets letter-spacing or a larger size) |
 | `x_height` | font x-height / ascender over the scan's (both scan values measured from the ink profile of each line, not from the OCR glyph height) |
-| `darkness` | mean ink coverage of the set paragraph / the scan's (noise floor 0.08); > 1: darker page |
+| `darkness` | mean ink coverage of the paragraph set in *black* / the scan's (noise floor 0.08); must be >= 1 (`--ink auto` then lightens the ink); < 1: too thin even in black; far above 1: heavier strokes, greyish when lightened |
 | `tracking` | the fitted letter-spacing in em |
-| `score` | 3 abs(ln width) + 3 abs(ln x_height) + 2 abs(ln darkness); lower is better |
+| `score` | 3 abs(ln width) + 3 abs(ln x_height) + (2 below 1, 0.7 above) abs(ln darkness); lower is better |
 
 Checked on synthetic scans set in a known font: that font ranks first with width, x-height and darkness within a
 few percent of 1. The original book's face is a light, wide, low-contrast Antiqua with a large x-height and a `ch`

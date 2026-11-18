@@ -321,8 +321,9 @@ def styled_pieces(text, fonts_for, base_style, track=0.0, sp_track=0.0):
     return out
 
 
-def break_lines(pieces, widths, space, hyph_w, justify, rmin=RMIN, rmax=RMAX):
-    """Optimum-fit line breaking. ``widths(line_no)`` gives each line's width.
+def break_lines(pieces, widths, space, hyph_w, justify, rmin=RMIN, rmax=RMAX, uniform=False):
+    """Optimum-fit line breaking. ``widths(line_no)`` gives each line's width; ``uniform``: every line after the
+    first has the same width (the memo then ignores the line number, which keeps long ragged texts fast).
 
     Returns a list of (first_piece, last_piece) or None if impossible.
     """
@@ -339,7 +340,7 @@ def break_lines(pieces, widths, space, hyph_w, justify, rmin=RMIN, rmax=RMAX):
         if a >= n:
             return 0.0, None
         W = widths(ln)
-        k = (a, ln)
+        k = (a, min(ln, 1) if uniform else ln)
         if k in memo:
             return memo[k]
         best = (INF, None)
@@ -393,7 +394,8 @@ def break_lines(pieces, widths, space, hyph_w, justify, rmin=RMIN, rmax=RMAX):
     return lines
 
 
-def typeset(text, font, W, indent, justify, space_factor=1.0, track=0.0, widths=None, fonts_for=None, style='regular'):
+def typeset(text, font, W, indent, justify, space_factor=1.0, track=0.0, widths=None, fonts_for=None, style='regular',
+            uniform=None):
     """Lines for ``text``; each line is a dict with pieces, gap, hyphen flag and justification.
 
     ``widths``: optional callable ``line_no -> width`` (line slots of different widths, e.g. beside a
@@ -406,12 +408,14 @@ def typeset(text, font, W, indent, justify, space_factor=1.0, track=0.0, widths=
         pieces = pieces_of(strip_tags(text), font, track)
     space = font.getlength(' ') * space_factor + track
     hyph_w = font.getlength('-')
+    base_widths = widths
     base = widths if widths is not None else (lambda ln: W)
     widths = lambda ln: base(ln) - (indent if ln == 0 else 0.0)
-    lines = break_lines(pieces, widths, space, hyph_w, justify)
+    uni = (base_widths is None) if uniform is None else uniform
+    lines = break_lines(pieces, widths, space, hyph_w, justify, uniform=uni)
     relaxed = False
     if lines is None:
-        lines = break_lines(pieces, widths, space, hyph_w, justify, rmin=0.5, rmax=4.0)
+        lines = break_lines(pieces, widths, space, hyph_w, justify, rmin=0.5, rmax=4.0, uniform=uni)
         relaxed = True
     if lines is None:                       # last resort: greedy, ragged
         lines = []; a = 0
