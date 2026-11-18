@@ -334,3 +334,20 @@ def test_a_unit_emptied_by_a_human_is_not_sent(tmp_path):
     res = T.run(doc, _args(tmp_path), call=lambda p: (sent.append(p), 'Portal w Byczynie jest prosty. Ma 3 stopnie.')[1])
     assert res['units']['u0003'] == {'source': '', 'pl': '', 'glossary': [], 'flags': []}
     assert len(sent) == 2
+
+
+def test_punctuation_rules_flag_and_retry(tmp_path):
+    bad = 'Niestety, również i to niewiele, co posiadamy z owych czasów, - chodzi tu o kościoły -, zostało'
+    assert T.punctuation_problems(bad) == ['comma and dash together', 'spaced hyphen as a dash']
+    assert T.punctuation_problems('kościół — portal') == ['long dash']
+    assert T.punctuation_problems('wiek?, nie') == ['two punctuation marks together']
+    for ok in ('z owych czasów – chodzi tu o kościoły – zostało', 'biało-czerwony, XII-wieczny', 'itd., oraz',
+               'lata 1900–1910 (il. 37).', 'por. il. 5, s. 12.'):
+        assert T.punctuation_problems(ok) == [], ok
+    answers = iter(['Portal w Byczynie, - jak widać -, jest prosty. Ma 3 stopnie.',
+                    'Portal w Byczynie – jak widać – jest prosty. Ma 3 stopnie.'])
+    prompts = []
+    res = T.run(_doc(), _args(tmp_path, only=['u0002']), call=lambda p: (prompts.append(p), next(answers))[1])
+    assert res['units']['u0002']['pl'].startswith('Portal w Byczynie – jak') and not res['units']['u0002']['flags']
+    assert 'never both' in prompts[1]                  # the retry names the rule
+    assert 'półpauza' in prompts[0]                    # the rule is in the prompt

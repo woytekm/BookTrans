@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — translation: punctuation rules
+
+- Owner's finding: "... z owych czasów, - chodzi tu w istocie o kościoły -, zostało ..." (the old German print's `, -`
+  around an inserted phrase carried over). `prompts/translate_rules_pl.txt`: no two punctuation marks together, an
+  inserted phrase set off by dashes or by commas (never both), the dash is the Polish short dash `–` with spaces (no `—`,
+  no spaced hyphen), the hyphen only inside words. `translate.punctuation_problems` checks every answer; a hit makes a
+  retry naming the rule, what is left is flagged.
+- The rules file is part of the cache key: the next translation run sends every unit again.
+- Tests: 1 new.
+
 ## Unreleased — GUI: app icon
 
 - `assets/booktrans_icon.png` (512 px, drawn by `assets/make_icon.py`: an open book, grey type on the left page, red on
