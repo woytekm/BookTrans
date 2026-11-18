@@ -318,8 +318,33 @@ the detection).
 `--pdf [NAME]` (default `book.pdf`) writes the drawn pages as one PDF, page by page (JPEG, quality 90; nothing kept in
 memory). Page size = pixels / DPI; the default DPI is the output resolution (`--dpi`; the drawing scale x `WORK_DPI`, the
 working images of the 600 DPI originals being at about 120 DPI), so the PDF has the book's physical size;
-`--pdf-dpi` overrides it. A vector PDF
-(real, selectable text over the figures) is possible from the plan later (needs a PDF library such as reportlab).
+`--pdf-dpi` overrides it. The text in this PDF is pixels: not searchable, not selectable.
+
+### TODO: searchable vector PDF (agreed with the owner 2026-11-18, not started)
+
+Goal: a PDF whose text is real text (searchable, selectable, sharp at any zoom, much smaller), as a third output next to
+the PNG pages and the image PDF (`render.py --vector-pdf`, *Vector PDF (searchable)* in *Render book…*).
+
+Chosen approach (B; the owner agreed it is the right one, deferred as a serious effort, estimated 1-2 days):
+- Draw from the layout plan, not from pixels: every plan line already has its words with x positions and widths,
+  baseline, font, size, letter-spacing and `<i>`/`<b>`/`<sp>` runs. Place each word at its planned x (exact
+  justification), letter-spacing with the PDF character-spacing operator (`Tc`), italic / bold with the family's font
+  files, hyphen at line ends as drawn.
+- Page content: the paper colour (or, for `--background scan`, the scan with the translated text wiped, as an image),
+  figures and graphics as images (lossless or high-quality JPEG; line drawings as ink-only images), kept original text
+  blocks as image crops, then the text. Both page positions (`original` / `centered`, `render.page_frame`).
+- Library: **reportlab** (pure Python, `pip install reportlab`; TrueType embedding with subsetting, so ą ć ę ł ń ó ś
+  ź ż work). Writing font embedding into the existing minimal `PdfWriter` is not worth it.
+- Text order in the PDF = plan line order, so copying gives body text, captions and footnotes in sequence.
+
+Rejected alternative (A): keep the image pages and add an invisible text layer (as OCRmyPDF does). Half a day, looks
+identical, searchable, but the visible text stays pixels and files stay large; B covers it.
+
+Points to check when it is built: Pillow (layout) and reportlab (PDF) measure glyphs with their own code, so kerning
+inside a word may differ slightly (each word starts at its exact x, so it does not add up); a word hyphenated at a line
+end is two pieces for search - add `/ActualText` with the whole word and test search in Preview and Acrobat; compare
+each vector page with the raster render (rasterise the PDF, diff against `page_*.png`); file size and speed on a
+whole book.
 
 ## Not done
 
@@ -329,5 +354,5 @@ working images of the 600 DPI originals being at about 120 DPI), so the PDF has 
   would break the page sync).
 - Choosing the font automatically (`fontcheck.py` scores candidates; picking the best and passing it on is not wired).
 - Detecting emphasis in the scan and keeping it through the translation (the renderer is ready, see above).
-- A vector PDF.
+- A searchable vector PDF (see *TODO* under PDF).
 - Re-typesetting page numbers.
