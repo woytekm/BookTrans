@@ -426,19 +426,64 @@ def key_of(model, base, rules, block, kind, upper, text, context):
     return h.hexdigest()
 
 
-def run(doc, a, call=None):
-    base, rules = read(a.prompt), read(a.rules)
-    gfiles = [Path(g) for g in a.glossary] if a.glossary else sorted((ROOT / 'glossary').glob('*.csv'))
-    matcher = G.Matcher(G.load(gfiles))
-    log.info('translate', 'glossary: %d entries from %s' % (len(matcher.entries), ', '.join(f.name for f in gfiles) or '-'))
-    cache_path = a.output.with_suffix('.cache.json')
-    cache = json.loads(cache_path.read_text(encoding='utf-8')) if cache_path.exists() else {}
+def glossary_paths(a):
+    """The glossary files of a run: ``--glossary`` as given, else the central glossary shared by all books."""
+    if a.glossary:
+        return [Path(g) for g in a.glossary]
+    import glossary_store
+    return glossary_store.central_files()
+
+
+def make_call(a):
+    """prompt -> answer with the run's provider, model and limits."""
     extra = json.loads(a.extra_body) if getattr(a, 'extra_body', None) else {}
     if getattr(a, 'no_think', False):                  # servers ignore what they do not know
         extra.setdefault('chat_template_kwargs', {'enable_thinking': False})
         extra.setdefault('reasoning_effort', 'none')
     provider = getattr(a, 'provider', 'openai')
-    call = call or (lambda prompt: chat(a.endpoint, a.model, prompt, a.temperature, a.max_tokens, a.timeout, a.api_key, extra, provider, a))
+    return lambda prompt: chat(a.endpoint, a.model, prompt, a.temperature, a.max_tokens, a.timeout, a.api_key, extra, provider, a)
+
+
+def harvest(doc, a, call=None):
+    """``--harvest FILE``: glossary candidates from the translation in ``a.output`` (``glossary_harvest.py``) -> FILE.
+    -> the candidates."""
+    import glossary_harvest as H
+    import glossary_store
+    gfiles = glossary_paths(a)
+    entries = G.load(gfiles)
+    log.info('translate', 'glossary harvest: %d glossary entries from %s' % (len(entries), ', '.join(str(f) for f in gfiles) or '-'))
+    try:
+        trans = json.loads(a.output.read_text(encoding='utf-8')).get('units', {})
+    except (OSError, ValueError) as e:
+        raise SystemExit('no translation to harvest from (%s): %s' % (a.output, e))
+    units = [(uid, text) for uid, text, role, upper, status in collect(doc) if status == 'translate'
+             and (not a.only or uid in a.only)]
+    cache_path = a.harvest.with_suffix('.cache.json')
+    cache = json.loads(cache_path.read_text(encoding='utf-8')) if cache_path.exists() else {}
+    for k in USAGE:
+        USAGE[k] = 0.0 if k in ('seconds', 'reported_cost') else 0
+    call = call or make_call(a)
+    try:
+        cands, asked = H.harvest(units, trans, entries, call, a.model, cache, glossary_store.rejected(),
+                                 log=lambda m: log.info('translate', m))
+    finally:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding='utf-8')
+    H.write_candidates(a.harvest, cands, a.document)
+    report_usage(a)
+    log.info('translate', 'glossary harvest: %d units asked (%d from the cache), %d candidates -> %s' % (
+        asked, len(units) - asked, len(cands), a.harvest))
+    return cands
+
+
+def run(doc, a, call=None):
+    base, rules = read(a.prompt), read(a.rules)
+    gfiles = glossary_paths(a)
+    matcher = G.Matcher(G.load(gfiles))
+    log.info('translate', 'glossary: %d entries from %s' % (len(matcher.entries), ', '.join(str(f) for f in gfiles) or '-'))
+    cache_path = a.output.with_suffix('.cache.json')
+    cache = json.loads(cache_path.read_text(encoding='utf-8')) if cache_path.exists() else {}
+    call = call or make_call(a)
     for k in USAGE:
         USAGE[k] = 0.0 if k in ('seconds', 'reported_cost') else 0
     units = collect(doc)
@@ -583,7 +628,7 @@ def main():
     ap.add_argument('--api-key', default=None, help='default: $ANTHROPIC_API_KEY (anthropic) or $LMSTUDIO_API_KEY (openai)')
     ap.add_argument('--price-in', type=float, help='price per million input tokens, to report a cost')
     ap.add_argument('--price-out', type=float, help='price per million output tokens')
-    ap.add_argument('--glossary', nargs='*', type=Path, help='glossary CSV files (default: glossary/*.csv)')
+    ap.add_argument('--glossary', nargs='*', type=Path, help='glossary CSV files, first wins (default: the central glossary, glossary_store.central_dir())')
     ap.add_argument('--prompt', type=Path, default=ROOT / 'prompts' / 'translate_pl.txt')
     ap.add_argument('--rules', type=Path, default=ROOT / 'prompts' / 'translate_rules_pl.txt')
     ap.add_argument('--temperature', type=float, default=0.2)
@@ -598,6 +643,9 @@ def main():
     ap.add_argument('--no-think', action='store_true', help='ask a reasoning model not to think (sends chat_template_kwargs.enable_thinking=false and reasoning_effort=none; whether the server passes them on depends on the server and model; in LM Studio the reliable switch is the model\'s "Enable Thinking" custom field)')
     ap.add_argument('--extra-body', help='JSON merged into every request body, e.g. \'{"top_p": 0.9}\'')
     ap.add_argument('--dry-run', action='store_true', help='write the prompts, do not call the model')
+    ap.add_argument('--harvest', type=Path, default=None,
+                    help='instead of translating: ask the model, unit by unit, which names and terms the existing translation '
+                         '(-o) used, and write the ones the glossary lacks to this JSON (glossary candidates, glossary_harvest.py)')
     ap.add_argument('--raw', action='store_true', help='use document.json even if document.corrected.json (OCR-corrected by ocrfix.py) exists next to it')
     a = ap.parse_args()
     if a.provider == 'anthropic':
@@ -644,6 +692,9 @@ def main():
         a.model = ms[0]
         log.info('translate', 'model: %s (first reported; choose another with --model)' % a.model)
     a.model = a.model or 'dry-run'
+    if a.harvest:
+        harvest(doc, a)
+        return
     run(doc, a)
 
 

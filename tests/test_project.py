@@ -197,7 +197,13 @@ def test_translate_command_maps_the_settings(tmp_path, scans):
     c = p.translate_command()
     assert c[1].endswith('translate.py') and c[2] == str(p.book_dir() / 'document.json')
     assert c[c.index('-o') + 1] == str(p.translations_file) and c[c.index('--provider') + 1] == 'claude-code'
-    assert '--model' not in c and '--endpoint' not in c and '--glossary' not in c and '--raw' not in c
+    assert '--model' not in c and '--endpoint' not in c and '--raw' not in c
+    import glossary_store as GS                                                      # default: the central glossary,
+    g = c[c.index('--glossary') + 1:c.index('--timeout')]                            # the project's layer first when it has one
+    assert g == [str(f) for f in GS.central_files()] and g[0].endswith('terms.csv')
+    GS.add_project(p.root, {'de': 'Pitschen', 'pl': 'Byczyna', 'kind': 'place'})
+    c = p.translate_command()
+    assert c[c.index('--glossary') + 1] == str(p.review_dir / 'glossary.csv')
     assert c[c.index('--timeout') + 1] == '600' and c[c.index('--retries') + 1] == '2' and '--pages' not in c
     (p.root / 'g.csv').write_text('de,pl,kind,status\n', encoding='utf-8')
     p.translation.update(model='sonnet', endpoint='http://x:1/v1', glossary='g.csv; ~/none.csv', source='raw', no_think=True)
