@@ -187,13 +187,50 @@ the default is bundled Crimson Text.
 `hyphenated_lines`, `starts_on_page`, `original_page`, for fixed frames `capacity`, `shrink`; per page
 `body_lines_used`, `body_lines_capacity`, `blank`, `size_px`, `tracking_em`, `delayed`; plus `warnings`.
 
+## Ink and fonts
+
+**Ink** (`--ink auto`, default; project `render.ink` = `auto`): `render.measure_ink` takes, inside the text blocks of up to
+12 pages, the pixels darker than 0.6 x the paper and of those the darkest tenth (stroke cores), median colour. The
+measured colour is in `report.json` (`ink`) and in `layout.json`, so `draw_page` from a saved plan uses it. Before it
+was a fixed (34, 30, 26), darker and colder than the brownish print.
+
+**Fonts.** `--font` takes a TTF/OTF or `path@weight` for a variable font (`CrimsonPro[wght].ttf@300`). Without
+`--bold-font` / `--italic-font` the siblings of the regular file are used (`X-Light.ttf` -> `X-LightItalic.ttf`,
+`X-SemiBold.ttf`; a variable font: its `-Italic[...]` file, bold = weight + 300), else the regular font: nothing is
+mixed in from another family (before, any `--font` got Crimson Text's bold and italic). Bundled: Crimson Text
+(Regular, SemiBold, Italic) and, since 2026-11-18, **Crimson Pro** (Light, LightItalic, Regular, Italic, SemiBold;
+static instances of the OFL variable font), its lighter successor.
+
+**Choosing a font: `fontcheck.py`.**
+
+```bash
+python fontcheck.py output/book/document.json [-o DIR] [--pages 50-53] [--blocks 6] \
+    --candidate "Spectral Light=~/fonts/Spectral-Light.ttf" --candidate "Vollkorn=~/fonts/Vollkorn[wght].ttf@400"
+```
+
+For a few large body paragraphs it sets the *original German text* into the *original line boxes* with the
+renderer's own size and letter-spacing fit, in the scan's ink, next to the scan (`specimen_<block>.png`, 2x), and
+measures per candidate (`fontcheck.json`, table on stderr):
+
+| metric | meaning (1.0 = like the scan) |
+|---|---|
+| `width` | size that reproduces the original line widths / size that reproduces the scan's ascender height; > 1: the font is narrower (gets letter-spacing or a larger size) |
+| `x_height` | font x-height / ascender over the scan's (both scan values measured from the ink profile of each line, not from the OCR glyph height) |
+| `darkness` | mean ink coverage of the set paragraph / the scan's (noise floor 0.08); > 1: darker page |
+| `tracking` | the fitted letter-spacing in em |
+| `score` | 3 abs(ln width) + 3 abs(ln x_height) + 2 abs(ln darkness); lower is better |
+
+Checked on synthetic scans set in a known font: that font ranks first with width, x-height and darkness within a
+few percent of 1. The original book's face is a light, wide, low-contrast Antiqua with a large x-height and a `ch`
+ligature; none of the bundled fonts is that, so try candidates on the real 600 DPI scans. The scoring is the basis
+for an automatic choice later (roadmap).
+
 ## Not done
 
 - Reading order across a block that spans several columns (columns are found per page from the body blocks;
   a heading across two columns is a fixed frame, so it is not affected).
 - Pulling text back to fill a page whose paragraphs are much shorter in Polish (deliberately not done: it
   would break the page sync).
-- Choosing a font automatically from a supplied set (score x-height ratio, mean advance, stem
-  darkness against the scan; the tracking fit already exists).
+- Choosing the font automatically (`fontcheck.py` scores candidates; picking the best and passing it on is not wired).
 - Bold/italic or letter-spaced emphasis inside a paragraph (the model has no run-level styles).
 - Re-typesetting page numbers.

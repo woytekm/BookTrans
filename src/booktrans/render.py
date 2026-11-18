@@ -91,8 +91,10 @@ def _page_images(doc, page, background, resolution):
     return canvas, orig, S
 
 
-def draw_page(doc, plan, pi, fonts=None, background='paper', ink=INK, resolution='auto'):
-    """Page ``pi`` (index into ``doc['pages']``) drawn from the layout plan: (rebuilt image, original image)."""
+def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolution='auto'):
+    """Page ``pi`` (index into ``doc['pages']``) drawn from the layout plan: (rebuilt image, original image).
+    ``ink``: default the plan's (``render`` stores the measured one) or ``INK``."""
+    ink = tuple(ink or plan.get('ink') or INK)
     fonts = fonts or Fonts(plan['fonts']['regular'], plan['fonts']['bold'], plan['fonts']['italic'])
     base = Path(doc.get('_dir', '.'))
     page, pp = doc['pages'][pi], plan['pages'][pi]
@@ -131,6 +133,42 @@ def draw_page(doc, plan, pi, fonts=None, background='paper', ink=INK, resolution
     return canvas, orig
 
 
+def measure_ink(doc, max_pages=12):
+    """The colour of the printed text, from the scan: inside the text blocks of up to ``max_pages`` pages, the pixels
+    clearly darker than the paper (below 0.6 x its brightness), and of those the darkest tenth (the cores of the
+    strokes; the edges are mixed with paper at this resolution, in the original and in the rebuilt page alike).
+    Returns (R, G, B) or None when there is no text."""
+    base = Path(doc.get('_dir', '.'))
+    pages = [p for p in doc['pages'] if any(b['kind'] == 'text' for b in p['blocks'])]
+    if not pages:
+        return None
+    step = max(1, len(pages) // max_pages)
+    samples = []
+    for page in pages[::step][:max_pages]:
+        try:
+            arr = np.asarray(Image.open(base / page['image']).convert('RGB')).astype(np.float32)
+        except OSError:
+            continue
+        for b in page['blocks']:
+            if b['kind'] != 'text':
+                continue
+            x1, y1, x2, y2 = [int(round(v)) for v in b['bbox']]
+            reg = arr[max(0, y1):y2, max(0, x1):x2].reshape(-1, 3)
+            if len(reg) < 50:
+                continue
+            lum = reg.mean(axis=1)
+            paper = np.percentile(lum, 90)
+            dark = reg[lum < 0.6 * paper]
+            if len(dark):
+                samples.append(dark)
+    if not samples:
+        return None
+    dark = np.concatenate(samples)
+    lum = dark.mean(axis=1)
+    core = dark[lum <= np.percentile(lum, 10)]
+    return tuple(int(round(v)) for v in np.median(core, axis=0))
+
+
 def compare_strip(images, H=1100):
     tiles = [im.resize((int(im.width * H / im.height), H), Image.LANCZOS) for im in images]
     comp = Image.new('RGB', (sum(t.width for t in tiles) + 10 * (len(tiles) - 1), H), (90, 90, 90))
@@ -156,19 +194,23 @@ def parse_pages(spec, doc):
     return [i for i, p in enumerate(doc['pages']) if p['page'] in want]
 
 
-def render(doc, trans, out_dir, fonts, background='paper', ink=INK, resolution='auto', para_indent_em=None,
+def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolution='auto', para_indent_em=None,
            tracking=None, size_scale=1.0, word_space=1.0, pages=None, settings=None):
     """Lay out the whole book, draw the pages ``pages`` (indexes; default all) into ``out_dir``.
 
     ``tracking``: None = fit the letter-spacing so the translation fills the original line widths; a number =
     fixed letter-spacing in em (0 = none).  ``size_scale`` and ``word_space`` multiply the chosen font size and
-    the natural word space.  ``settings`` (a dict, see ``layout.DEFAULTS``) overrides these.
+    the natural word space.  ``ink``: (R, G, B) or 'auto' (measured from the scan, ``measure_ink``).  ``settings``
+    (a dict, see ``layout.DEFAULTS``) overrides these.
     Returns (file names, report)."""
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     st = {'tracking': tracking, 'size_scale': size_scale, 'word_space': word_space, 'paragraph_indent_em': para_indent_em}
     st.update(settings or {})
     plan = make_plan(doc, trans, fonts, st)
     report = plan['report']
+    if ink is None or ink == 'auto':
+        ink = measure_ink(doc) or INK
+    report['ink'] = plan['ink'] = list(ink)
     idx = list(range(len(doc['pages']))) if pages is None else list(pages)
     names, pairs = [], []
     for pi in idx:
@@ -206,7 +248,7 @@ def main():
                          "line widths; a number in em (e.g. 0.05) fixes it; 0 = none")
     ap.add_argument('--size-scale', type=float, default=1.0, help='multiply the chosen font size (default 1.0)')
     ap.add_argument('--word-space', type=float, default=1.0, help='multiply the natural word space (default 1.0)')
-    ap.add_argument('--ink', default='%d,%d,%d' % INK)
+    ap.add_argument('--ink', default='auto', help="text colour R,G,B, or 'auto' (default): measured from the scan")
     ap.add_argument('--paragraph-indent', type=float, default=None,
                     help='first-line indent in em (default: as in the original page, normally none)')
     ap.add_argument('--pages', help='draw only these pages (printed numbers, e.g. 3,5-7); the layout still covers the book')
@@ -219,7 +261,7 @@ def main():
     doc['_dir'] = str(a.document.parent)
     trans = json.loads(a.translations.read_text(encoding='utf-8'))
     out = a.output or a.document.parent / 'render'
-    ink = tuple(int(v) for v in a.ink.split(','))
+    ink = 'auto' if a.ink == 'auto' else tuple(int(v) for v in a.ink.split(','))
     log.info('render', 'typesetting %d pages with %d translated units' % (len(doc['pages']), len(trans['units'])))
     if _HYPH is None:
         log.info('render', 'pyphen not installed: no hyphenation (pip install pyphen)')
@@ -244,6 +286,7 @@ def main():
     kinds = {}
     for c in rep.get('checks', []):
         kinds[c['kind']] = kinds.get(c['kind'], 0) + 1
+    log.info('render', 'ink %s' % ','.join(str(v) for v in rep['ink']))
     log.info('render', 'checks: %s' % (', '.join('%s %d' % kv for kv in sorted(kinds.items())) or 'none'))
     log.info('render', 'wrote %s' % ', '.join(names) + ', compare, layout.json, report.json in %s' % out)
 

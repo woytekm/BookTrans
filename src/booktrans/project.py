@@ -65,7 +65,7 @@ DEFAULT_RENDER = {
     'word_space': 1.0,          # multiplies the natural word space
     'paragraph_indent': '',     # '' = as in the original | first-line indent in em
     'page_fit': True,           # fit size and letter-spacing of the body text per page
-    'ink': '34,30,26',          # text colour R,G,B
+    'ink': 'auto',              # text colour: auto (measured from the scan) | R,G,B
 }
 
 
@@ -134,8 +134,17 @@ def glossary_files(spec, base=None):
 
 
 def _font_path(spec, base):
-    p = Path(os.path.expanduser(str(spec)))
-    return p if p.is_absolute() or base is None else Path(base) / p
+    """A font setting (``path`` or ``path@weight`` for a variable font) with a relative path made absolute."""
+    s = str(spec)
+    path, wght = (s.rsplit('@', 1) + [''])[:2] if '@' in s else (s, '')
+    p = Path(os.path.expanduser(path))
+    p = p if p.is_absolute() or base is None else Path(base) / p
+    return Path('%s@%s' % (p, wght)) if wght else p
+
+
+def _font_file(spec, base):
+    s = str(_font_path(spec, base))
+    return Path(s.rsplit('@', 1)[0]) if '@' in s else Path(s)
 
 
 def check_render(r, base=None):
@@ -146,7 +155,7 @@ def check_render(r, base=None):
         raise ProjectError('resolution must be one of %s' % ', '.join(RESOLUTIONS))
     for k in ('font', 'bold_font', 'italic_font'):
         v = str(r.get(k) or '').strip()
-        if v and not _font_path(v, base).is_file():
+        if v and not _font_file(v, base).is_file():
             raise ProjectError('%s: file not found: %s' % (k.replace('_', ' '), v))
     tr = str(r.get('tracking', 'auto')).strip()
     if tr != 'auto':
@@ -168,12 +177,14 @@ def check_render(r, base=None):
                 raise ValueError
         except ValueError:
             raise ProjectError('paragraph indent must be empty or a number of em from 0 to 5')
+    if str(r.get('ink', '')).strip() == 'auto':
+        return r
     try:
         ink = [int(v) for v in str(r.get('ink')).split(',')]
         if len(ink) != 3 or not all(0 <= v <= 255 for v in ink):
             raise ValueError
     except ValueError:
-        raise ProjectError('ink must be R,G,B with values 0 to 255')
+        raise ProjectError('ink must be "auto" or R,G,B with values 0 to 255')
     return r
 
 

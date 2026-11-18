@@ -68,7 +68,7 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only (--pages 3,5-7: draw some pages)
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 245 tests, ~30 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 246 tests, ~30 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -97,6 +97,7 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/typeset.py` | fonts, pieces, optimum-fit line breaking (no page model) |
 | `src/booktrans/layout.py` | the layout plan of the book: line slots, page-synchronised body flow, per-page fit, fixed frames (`RENDERING.md`) |
 | `src/booktrans/render.py` | drawing a page from the plan (canvas, figures, kept text, lines), `render()`, the CLI |
+| `src/booktrans/fontcheck.py` | which font matches the scan: specimens and a score per candidate (`RENDERING.md`) |
 | `src/booktrans/render_overrides.py` | toolkit-free: human adjustments of blocks and pages (`review/render_overrides.json`), hash-tied |
 | `src/booktrans/scale.py` | resolution detection from the body line pitch |
 | `src/booktrans/ocrfix.py` | stage 5: offline OCR correction of the units (dictionaries, confusions, lost spaces), corrections log and review file (`OCR_CORRECTION.md`) |
@@ -112,7 +113,7 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/envcheck.py` | toolkit-free: the environment check (also `python envcheck.py` in a terminal) |
 | `src/booktrans/pageindex.py` | toolkit-free: traces `ocrfix` offsets back to pages/lines (`replay` of stage 4), page rows, the page JSON views, marks |
 | `src/booktrans/gui_demo.py` | a synthetic demo project built with the real stage 4 and `ocrfix.run` |
-| `fonts/` | bundled Crimson Text (SIL OFL) |
+| `fonts/` | bundled Crimson Text and Crimson Pro (SIL OFL) |
 | `prompts/translate_pl.txt` | the translation prompt |
 | `examples/` | `0001.pl.json`, `0002.pl.json` (hand translations), render comparisons, older stage JSONs |
 | `tests/` | pytest, synthetic data only (the sample scans are not in the repository) |
@@ -157,8 +158,8 @@ Full detail: `PIPELINE.md`, `RENDERING.md`, `DATA_MODEL.md`.
   ("Fin", "Kinfassung"), "s ist" for "Es ist". Higher resolution did not measurably improve clean
   text; its gain is in figure crops.
 - Page numbers and printer's marks are pasted back as image crops, not re-typeset.
-- Fonts: the original is a light, widely letter-spaced Antiqua (no Fraktur). Crimson Text is denser, so
-  tracking is added. There is no automatic choice between several fonts yet.
+- Fonts: the original is a light, widely letter-spaced, low-contrast Antiqua with a large x-height (no Fraktur). Crimson
+  Text is denser, so tracking is added. `fontcheck.py` scores candidates; the choice is not automatic yet.
 - A synthetic 5x upscale of a drawing page splits the main plate (merge gap limit 40 px); not seen on
   real data.
 - Tesseract confidence is not a calibrated probability.
@@ -228,7 +229,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (245 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (246 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -331,7 +332,9 @@ engine should be complete before a GUI goes on top. Agreed order (2026-11-18):
 4. ~~Checks in `report.json`~~ **done**: collision (figure, graphic, kept text, other block, page edge), overflow, drift, blank, loose/tight (`layout.check_plan`).
 5. ~~Settings~~ **done**: `project.json` → `render` (schema 1.2, `Project.render_command` → `<project>/render/`), adjustments per
    block / page in `review/render_overrides.json` (`render_overrides.py`, hash-tied, `render.py --overrides`).
-6. Ink colour measured from the scan; lighter OFL Antiquas to compare (the rebuilt page is darker than the original).
+6. ~~Ink and font~~ **done**: `--ink auto` (measured), font families without mixing, variable fonts (`path@300`), bundled Crimson
+   Pro (light weights), **`fontcheck.py`** (specimens + width / x-height / darkness score per candidate font on the real scan).
+   **Owner to do:** run `fontcheck.py` on the 600 DPI sample with candidate fonts and pick one.
 7. PDF export; run-level emphasis (Sperrsatz, italics) in the model; more tests. Then the GUI render window (viewer over
    `layout.json` + `draw_page`).
 

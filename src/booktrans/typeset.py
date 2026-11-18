@@ -25,34 +25,98 @@ RMIN, RMAX = 0.75, 2.0           # allowed word-space stretch (1 = natural)
 
 
 # ---------------------------------------------------------------- fonts
+FAMILY_STYLES = {'bold': ('SemiBold', 'Bold', 'Medium'), 'italic': ('Italic', 'LightItalic', 'BookItalic')}
+
+
+def font_spec(spec):
+    """'path/Font.ttf' or 'path/Font[wght].ttf@300' (a variable font at that weight) -> (path, weight or None)."""
+    s = str(spec)
+    if '@' in s:
+        path, w = s.rsplit('@', 1)
+        try:
+            return path, float(w.replace('wght=', ''))
+        except ValueError:
+            pass
+    return s, None
+
+
+def load_font(spec, size):
+    path, wght = font_spec(spec)
+    f = ImageFont.truetype(path, size)
+    if wght is not None:
+        axes = f.get_variation_axes()
+        f.set_variation_by_axes([wght if a.get('name', b'') in (b'Weight', 'Weight') or i == 0 else a['default']
+                                 for i, a in enumerate(axes)])
+    f.bt_spec = str(spec)
+    return f
+
+
+def family_of(regular, style):
+    """A sibling of a regular font file for ``style`` (``X-Regular.ttf`` -> ``X-SemiBold.ttf`` / ``X-Italic.ttf``,
+    ``X-Light.ttf`` -> ``X-LightItalic.ttf``), or None."""
+    path, wght = font_spec(regular)
+    p = Path(path)
+    stem, suf = p.stem, p.suffix
+    base, _, weight = stem.rpartition('-')
+    if not base:
+        base, weight = stem, ''
+    if wght is not None:                              # a variable font: its italic sibling, same weight; bold = heavier
+        if style == 'bold':
+            return '%s@%g' % (path, min(900, wght + 300))
+        for cand in (p.with_name(stem.replace('[', '-Italic[', 1) + suf), p.with_name(base + '-Italic' + suf)):
+            if cand.exists():
+                return '%s@%g' % (cand, wght)
+        return None
+    names = list(FAMILY_STYLES[style])
+    if style == 'italic' and weight and weight not in ('Regular', 'Book'):
+        names.insert(0, weight + 'Italic')
+    for n in names:
+        cand = p.with_name('%s-%s%s' % (base, n, suf))
+        if cand.exists() and cand != p:
+            return str(cand)
+    return None
+
+
 class Fonts:
+    """The regular, bold and italic font of the rebuilt text.  A font is a TTF/OTF path, or ``path@weight`` for a
+    variable font.  Without bold / italic, siblings of the regular file are used (``X-Regular.ttf`` ->
+    ``X-SemiBold.ttf``, ``X-Italic.ttf``), else the regular font itself; nothing is mixed in from another family."""
+
     def __init__(self, regular=None, bold=None, italic=None):
-        def find(name, given):
-            if given:
-                return str(given)
+        def find(name):
             for d in DEFAULT_FONT_DIRS:
                 p = d / name
                 if p.exists():
                     return str(p)
             raise SystemExit('font %s not found; pass --font (a serif TTF with Polish letters)' % name)
-        self.paths = {'regular': find('CrimsonText-Regular.ttf', regular)}
-        self.paths['bold'] = find('CrimsonText-SemiBold.ttf', bold) if (bold or any((d / 'CrimsonText-SemiBold.ttf').exists() for d in DEFAULT_FONT_DIRS)) else self.paths['regular']
-        self.paths['italic'] = find('CrimsonText-Italic.ttf', italic) if (italic or any((d / 'CrimsonText-Italic.ttf').exists() for d in DEFAULT_FONT_DIRS)) else self.paths['regular']
+        reg = str(regular) if regular else find('CrimsonText-Regular.ttf')
+        if not Path(font_spec(reg)[0]).is_file():
+            raise SystemExit('font file not found: %s' % font_spec(reg)[0])
+        self.paths = {'regular': reg,
+                      'bold': str(bold) if bold else (family_of(reg, 'bold') or reg),
+                      'italic': str(italic) if italic else (family_of(reg, 'italic') or reg)}
         self._cache = {}
+        self._ratios = {}
 
     def get(self, style, size):
         key = (style, round(size, 2))
         if key not in self._cache:
-            self._cache[key] = ImageFont.truetype(self.paths[style], size)
+            if len(self._cache) > 2000:
+                self._cache.clear()
+            self._cache[key] = load_font(self.paths[style], size)
         return self._cache[key]
 
     def ratios(self, style='regular'):
+        if style in self._ratios:
+            return self._ratios[style]
         f = self.get(style, 200)
         cap = -f.getbbox('H', anchor='ls')[1] / 200.0
         asc = -f.getbbox('dbl', anchor='ls')[1] / 200.0
         box = (f.getbbox('Hg', anchor='ls')[3] - f.getbbox('Hg', anchor='ls')[1]) / 200.0
         desc = f.getbbox('gjpqy', anchor='ls')[3] / 200.0
-        return {'cap': cap, 'asc': asc, 'box': box, 'desc': desc}
+        x = -f.getbbox('x', anchor='ls')[1] / 200.0
+        self._ratios[style] = {'cap': cap, 'asc': asc, 'box': box, 'desc': desc, 'x': x}
+        return self._ratios[style]
 
 
 # ---------------------------------------------------------------- typesetting
@@ -66,15 +130,15 @@ def pieces_of(text, font, track=0.0):
 
     Widths are measured once per (font file, text) at a reference size and scaled to ``font.size``; the
     layout tries many sizes of the same paragraph, and measuring is the expensive part."""
-    path = getattr(font, 'path', None)
-    if not path:
+    spec = getattr(font, 'bt_spec', None) or getattr(font, 'path', None)
+    if not spec:
         return _pieces_of(text, font, track)
-    key = (path, getattr(font, 'index', 0), text)
+    key = (spec, getattr(font, 'index', 0), text)
     base = _PIECES.get(key)
     if base is None:
-        rf = _REF_FONTS.get(path)
+        rf = _REF_FONTS.get(spec)
         if rf is None:
-            rf = _REF_FONTS[path] = ImageFont.truetype(path, _REF)
+            rf = _REF_FONTS[spec] = load_font(spec, _REF) if getattr(font, 'bt_spec', None) else ImageFont.truetype(spec, _REF)
         if len(_PIECES) > 20000:
             _PIECES.clear()
         base = _PIECES[key] = _pieces_of(text, rf, 0.0)

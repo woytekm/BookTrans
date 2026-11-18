@@ -1,10 +1,19 @@
 # Changelog
 
+## Unreleased — render: ink and fonts; fontcheck.py
+
+- **`--ink auto`** (default; project `render.ink`): the text colour is measured from the scan (darkest tenth of the ink pixels in the text blocks), stored in `report.json` and `layout.json`.
+- **Font families**: without `--bold-font` / `--italic-font` the siblings of `--font` are used, else the regular font (before, any `--font` was mixed with Crimson Text's bold and italic). **Variable fonts**: `path@weight`.
+- **Crimson Pro** bundled (Light, LightItalic, Regular, Italic, SemiBold; static instances, SIL OFL, `fonts/OFL-CrimsonPro.txt`).
+- **`fontcheck.py`**: specimen sheets (scan vs each candidate setting the original text in the original line boxes) and per-font width / x-height / darkness / tracking with a score, to choose the font on the real scans.
+- Font ratios include the x-height and are cached; the font cache is bounded.
+- Tests: 2 new (246 passed).
+
 ## Unreleased — render: settings and human adjustments
 
 - **Render settings in `project.json`** (schema 1.2; older files load with the defaults): `render` = background, resolution, fonts, tracking, size scale, word space, paragraph indent, page fit, ink; `project.check_render`; `Project.render_command(pages, resolution)` → `<project>/render/` (outside `pipeline/`), with `review/render_overrides.json` when it exists.
 - **Adjustments** (`render_overrides.py`, `render.py --overrides FILE`): per block `size_scale`, `tracking_em`, `word_space`, `anchor`, `max_width`, `keep_original`; per page `size_factor`, `track_delta_em` (replace the automatic body fit). Tied to a hash of the OCR text: stale entries are not applied and are named. `report.json`: `adjusted` per fixed frame, `kept_by_hand`.
-- Tests: 7 new (245 passed).
+- Tests: 6 new (244 passed).
 
 ## Unreleased — render: checks
 
