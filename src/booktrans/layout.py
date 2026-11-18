@@ -38,6 +38,8 @@ DEFAULTS = {
     'word_space': 1.0,           # multiplies the natural word space
     'paragraph_indent_em': None, # None: as in the original
     'page_fit': True,            # fit size/tracking of the body text per page (False: one size, shrink only)
+    'blocks': {},                # human adjustments per block id (render_overrides.resolve)
+    'pages': {},                 # human adjustments of the body fit per page index
 }
 
 # Per-page fit of the body text: (size factor, letter-spacing change in em, visual cost).  Tried in order of
@@ -301,7 +303,11 @@ class _Flow:
         k = self.order.index(pi)
         nxt = self.order[k + 1] if lookahead and k + 1 < len(self.order) else None
         best = None
-        for ci, cand in enumerate(self.cands):
+        cands = self.cands
+        adj = self.settings['pages'].get(pi) or self.settings['pages'].get(str(pi))
+        if adj:                                             # a human fixed this page's fit
+            cands = [(float(adj.get('size_factor', 1.0)), float(adj.get('track_delta_em', 0.0)), 0)]
+        for ci, cand in enumerate(cands):
             res = self.simulate(pi, cand, carry, pending, prev)
             total = res[0]
             if nxt is not None:
@@ -309,7 +315,7 @@ class _Flow:
             if best is None or total < best[0]:
                 best = (total, res)
             # every later candidate costs at least its visual cost: stop when none can do better
-            if ci + 1 < len(self.cands) and best[0] <= self.cands[ci + 1][2]:
+            if ci + 1 < len(cands) and best[0] <= cands[ci + 1][2]:
                 break
         return best
 
@@ -386,9 +392,14 @@ def _plan_line(line, unit, block, role, style, size, track, x, baseline, upper=F
 
 # ---------------------------------------------------------------- fixed frames
 def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pages):
-    tracking, size_scale, word_space = settings['tracking'], settings['size_scale'], settings['word_space']
-    up = FIT_UP if tracking is None else 1.15
     first = frames[0][1]
+    adj = settings['blocks'].get(first['block_id'], {})
+    tracking, size_scale, word_space = settings['tracking'], settings['size_scale'], settings['word_space']
+    if 'tracking_em' in adj:
+        tracking = float(adj['tracking_em'])
+    size_scale *= float(adj.get('size_scale', 1.0))
+    word_space *= float(adj.get('word_space', 1.0))
+    up = FIT_UP if tracking is None else 1.15
     style, upper = block_style(first)
     if first['role'] == 'author_byline_candidate':
         style = 'italic'
@@ -401,7 +412,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     size0 *= size_scale
     col = doc['pages'][frames[0][0]]['layout']['columns']
     col = col[0] if col else None
-    anchor = anchor_of(first, col)
+    anchor = adj.get('anchor') or anchor_of(first, col)
     capacity = sum(b['line_count'] for _, b in frames)
     W0 = min(b['bbox'][2] - b['bbox'][0] for _, b in frames)
     Ws = [W0]
@@ -419,6 +430,9 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
                 elif anchor == 'right' and ox2 <= fx1:
                     avail = min(avail, fx2 - ox2 - 6)
         Ws = [W0 * k for k in (1.0, 1.06, 1.12, 1.2, 1.3) if W0 * k <= avail + 0.5] or [W0]
+    if 'max_width' in adj:                            # a human set the widest the text may be
+        mw = float(adj['max_width'])
+        Ws = sorted({W0 * min(k, mw) for k in (1.0, 1.06, 1.12, 1.2, 1.3)} | {W0 * mw})
     chosen = None
     for shrink in (1.0, 0.98, 0.96, 0.94, 0.92, 0.9, 0.86, 0.82):
         size = size0 * shrink
@@ -473,7 +487,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
             li += 1
     return {'unit': uid, 'kind': first['role'], 'lines': len(lines), 'capacity': capacity,
             'size_px': round(size, 2), 'tracking_px': round(track, 2), 'tracking_em': round(track / size, 3),
-            'lines_original': capacity, 'shrink': shrink}
+            'lines_original': capacity, 'shrink': shrink, **({'adjusted': sorted(adj)} if adj else {})}
 
 
 # ---------------------------------------------------------------- checks
@@ -595,6 +609,11 @@ def make_plan(doc, trans, fonts, settings=None):
             if b['kind'] == 'text' and not b.get('unit_id') and not any(_inside(b['bbox'], f) for f in figs):
                 keep([(pi, b)], None)
 
+    for u, fr in list(chains.items()):               # a human chose to keep the original of a block: its whole unit
+        if any(st['blocks'].get(b['block_id'], {}).get('keep_original') for _, b in fr):
+            keep(fr, None)
+            report.setdefault('kept_by_hand', []).append(u)
+            del chains[u]
     body_units = [u for u, fr in chains.items() if all(b['role'] == 'paragraph' for _, b in fr)]
     fixed_units = [u for u in chains if u not in body_units]
     for u in list(body_units):

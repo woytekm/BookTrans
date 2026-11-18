@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — render: settings and human adjustments
+
+- **Render settings in `project.json`** (schema 1.2; older files load with the defaults): `render` = background, resolution, fonts, tracking, size scale, word space, paragraph indent, page fit, ink; `project.check_render`; `Project.render_command(pages, resolution)` → `<project>/render/` (outside `pipeline/`), with `review/render_overrides.json` when it exists.
+- **Adjustments** (`render_overrides.py`, `render.py --overrides FILE`): per block `size_scale`, `tracking_em`, `word_space`, `anchor`, `max_width`, `keep_original`; per page `size_factor`, `track_delta_em` (replace the automatic body fit). Tied to a hash of the OCR text: stale entries are not applied and are named. `report.json`: `adjusted` per fixed frame, `kept_by_hand`.
+- Tests: 7 new (245 passed).
+
 ## Unreleased — render: checks
 
 - **`report.json` checks** (`layout.check_plan`): `collision` (a line over a figure, graphic, kept text, another block's lines, or off the page; also a warning), `overflow`, `drift` (paragraph on a later page than in the original), `blank` (empty slots at a page foot), `loose` / `tight` justified lines (word space > 1.6x / < 0.8x natural); `check_summary` per page. The CLI prints the totals.

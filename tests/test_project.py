@@ -181,7 +181,7 @@ def _with_doc(p, corrected=True):
 def test_translation_defaults_and_an_old_project_file(tmp_path, scans):
     p = PR.Project.create(tmp_path / 'p', 'mybook', scans)
     data = json.loads(p.file.read_text(encoding='utf-8'))
-    assert data['schema'] == '1.1' and data['translation']['provider'] == 'claude-code'
+    assert data['schema'] == PR.SCHEMA and data['translation']['provider'] == 'claude-code'
     del data['translation']
     data['schema'] = '1.0'                                         # a project made before translation settings existed
     p.file.write_text(json.dumps(data), encoding='utf-8')
@@ -249,3 +249,45 @@ def test_translate_dry_run_on_the_demo_project(tmp_path):
     assert '--pages 1:' in r.stderr and 'dry run:' in r.stderr
     prompts = p.translations_file.with_suffix('.prompts.txt').read_text(encoding='utf-8')
     assert 'Text to translate' in prompts
+
+
+# ---------------------------------------------------------------- render settings
+def test_render_defaults_validation_and_an_old_project_file(tmp_path, scans):
+    p = PR.Project.create(tmp_path / 'p', 'mybook', scans)
+    data = json.loads(p.file.read_text(encoding='utf-8'))
+    assert data['schema'] == '1.2' and data['render'] == PR.DEFAULT_RENDER
+    del data['render']
+    data['schema'] = '1.1'
+    p.file.write_text(json.dumps(data), encoding='utf-8')
+    q = PR.Project.load(p.root)
+    assert q.render_settings == PR.DEFAULT_RENDER
+    assert q.render_dir == p.root / 'render' and q.overrides_file == p.root / 'review' / 'render_overrides.json'
+    PR.check_render(dict(PR.DEFAULT_RENDER))
+    for bad in ({'background': 'x'}, {'tracking': 'wide'}, {'tracking': '0.9'}, {'size_scale': 3}, {'ink': '1,2'},
+                {'font': 'nope.ttf'}, {'paragraph_indent': 'x'}):
+        with pytest.raises(PR.ProjectError):
+            PR.check_render(dict(PR.DEFAULT_RENDER, **bad), p.root)
+
+
+def test_render_command_maps_the_settings(tmp_path, scans):
+    p = PR.Project.create(tmp_path / 'p', 'mybook', scans)
+    with pytest.raises(PR.ProjectError, match='run the pipeline first'):
+        p.render_command()
+    _with_doc(p)
+    with pytest.raises(PR.ProjectError, match='run the translation first'):
+        p.render_command()
+    p.translations_file.parent.mkdir(parents=True)
+    p.translations_file.write_text('{"units": {}}', encoding='utf-8')
+    c = p.render_command()
+    assert c[1].endswith('render.py') and c[2] == str(p.book_dir() / 'document.json') and c[3] == str(p.translations_file)
+    assert c[c.index('-o') + 1] == str(p.render_dir) and c[c.index('--tracking') + 1] == 'auto'
+    assert '--font' not in c and '--overrides' not in c and '--no-page-fit' not in c and '--pages' not in c
+    (p.root / 'fonts').mkdir()
+    (p.root / 'fonts' / 'X.ttf').write_bytes(b'')
+    p.render_settings.update(font='fonts/X.ttf', tracking='0.05', page_fit=False, paragraph_indent='1', background='scan')
+    p.overrides_file.write_text('{"blocks": {}, "pages": {}}', encoding='utf-8')
+    c = p.render_command(pages='3, 5-6', resolution='work')
+    assert c[c.index('--font') + 1] == str(p.root / 'fonts' / 'X.ttf') and c[c.index('--tracking') + 1] == '0.05'
+    assert '--no-page-fit' in c and c[c.index('--paragraph-indent') + 1] == '1' and c[c.index('--background') + 1] == 'scan'
+    assert c[c.index('--overrides') + 1] == str(p.overrides_file) and c[c.index('--pages') + 1] == '3,5-6'
+    assert c[c.index('--resolution') + 1] == 'work'

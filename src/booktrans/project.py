@@ -7,6 +7,7 @@ A project is one folder, chosen by the user as "output directory" + project name
     <project>/pipeline/<book>/   output of booktrans.py (-o <project>/pipeline --name <book>); a re-run may wipe it
     <project>/review/            human decisions made in the GUI; never written or deleted by the pipeline
     <project>/translation/       translations.json (+ its .cache.json) of translate.py; outside pipeline/ for the same reason
+    <project>/render/            the rebuilt pages of render.py (page PNGs, compare, layout.json, report.json)
 
 The split is deliberate: ``booktrans.py`` removes its result folder before a full (non ``--resume``) run, so
 nothing a human typed may live inside it (see docs/GUI.md, decision D4).
@@ -24,7 +25,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 
-SCHEMA = '1.1'           # 1.1: "translation" settings (a 1.0 file loads with the defaults)
+SCHEMA = '1.2'           # 1.1: "translation" settings; 1.2: "render" settings (older files load with the defaults)
 KIND = 'booktrans-project'
 FILE = 'project.json'
 LAYOUTS = ('spread', 'page', 'crop')
@@ -49,6 +50,22 @@ DEFAULT_TRANSLATION = {
     'timeout': 600,             # seconds per request
     'retries': 2,               # extra attempts when a check fails
     'no_think': False,          # openai: ask a reasoning model not to think
+}
+
+BACKGROUNDS = ('paper', 'scan')
+RESOLUTIONS = ('auto', 'work')
+DEFAULT_RENDER = {
+    'background': 'paper',      # paper: clean canvas | scan: the scan with the text wiped (render.py --background)
+    'resolution': 'auto',       # auto: full resolution when the scan has it | work: analysis scale (fast previews)
+    'font': '',                 # regular TTF ('' = bundled Crimson Text); relative paths are relative to the project
+    'bold_font': '',
+    'italic_font': '',
+    'tracking': 'auto',         # auto: fitted | letter-spacing in em, e.g. 0.05
+    'size_scale': 1.0,          # multiplies the fitted font size
+    'word_space': 1.0,          # multiplies the natural word space
+    'paragraph_indent': '',     # '' = as in the original | first-line indent in em
+    'page_fit': True,           # fit size and letter-spacing of the body text per page
+    'ink': '34,30,26',          # text colour R,G,B
 }
 
 
@@ -116,6 +133,50 @@ def glossary_files(spec, base=None):
     return out
 
 
+def _font_path(spec, base):
+    p = Path(os.path.expanduser(str(spec)))
+    return p if p.is_absolute() or base is None else Path(base) / p
+
+
+def check_render(r, base=None):
+    """Validate render settings; raises ProjectError with a readable message."""
+    if r.get('background') not in BACKGROUNDS:
+        raise ProjectError('background must be one of %s' % ', '.join(BACKGROUNDS))
+    if r.get('resolution') not in RESOLUTIONS:
+        raise ProjectError('resolution must be one of %s' % ', '.join(RESOLUTIONS))
+    for k in ('font', 'bold_font', 'italic_font'):
+        v = str(r.get(k) or '').strip()
+        if v and not _font_path(v, base).is_file():
+            raise ProjectError('%s: file not found: %s' % (k.replace('_', ' '), v))
+    tr = str(r.get('tracking', 'auto')).strip()
+    if tr != 'auto':
+        try:
+            if not 0 <= float(tr) <= 0.5:
+                raise ValueError
+        except ValueError:
+            raise ProjectError('letter-spacing must be "auto" or a number of em from 0 to 0.5')
+    for k, lo, hi in (('size_scale', 0.5, 1.5), ('word_space', 0.5, 3.0)):
+        try:
+            if not lo <= float(r.get(k)) <= hi:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ProjectError('%s must be a number from %g to %g' % (k.replace('_', ' '), lo, hi))
+    ind = str(r.get('paragraph_indent', '')).strip()
+    if ind:
+        try:
+            if not 0 <= float(ind) <= 5:
+                raise ValueError
+        except ValueError:
+            raise ProjectError('paragraph indent must be empty or a number of em from 0 to 5')
+    try:
+        ink = [int(v) for v in str(r.get('ink')).split(',')]
+        if len(ink) != 3 or not all(0 <= v <= 255 for v in ink):
+            raise ValueError
+    except ValueError:
+        raise ProjectError('ink must be R,G,B with values 0 to 255')
+    return r
+
+
 def check_translation(t, base=None):
     """Validate translation settings; raises ProjectError with a readable message."""
     if t.get('provider') not in PROVIDERS:
@@ -159,7 +220,7 @@ class Project:
         data = {'kind': KIND, 'schema': SCHEMA, 'name': name,
                 'created': time.strftime('%Y-%m-%dT%H:%M:%S'),
                 'input_dir': os.path.abspath(os.path.expanduser(str(input_dir))), 'params': p,
-                'translation': dict(DEFAULT_TRANSLATION)}
+                'translation': dict(DEFAULT_TRANSLATION), 'render': dict(DEFAULT_RENDER)}
         pr = cls(root, data)
         pr.save()
         pr.review_dir.mkdir(parents=True, exist_ok=True)
@@ -186,6 +247,9 @@ class Project:
         tr = dict(DEFAULT_TRANSLATION)
         tr.update(data.get('translation') or {})
         data['translation'] = tr
+        rd = dict(DEFAULT_RENDER)
+        rd.update(data.get('render') or {})
+        data['render'] = rd
         return cls(f.parent, data)
 
     def save(self):
@@ -211,6 +275,19 @@ class Project:
     @property
     def translation(self):
         return self.data.setdefault('translation', dict(DEFAULT_TRANSLATION))
+
+    @property
+    def render_settings(self):
+        return self.data.setdefault('render', dict(DEFAULT_RENDER))
+
+    @property
+    def render_dir(self):
+        return self.root / 'render'
+
+    @property
+    def overrides_file(self):
+        """Human adjustments of the rebuilt pages (``render_overrides.py``)."""
+        return self.review_dir / 'render_overrides.json'
 
     @property
     def translation_dir(self):
@@ -379,6 +456,38 @@ class Project:
             return ['%s changed after document.corrected.json was written: your latest edits would not be translated. '
                     'Run "Re-run OCR correction" first.' % ' and '.join(newer)]
         return []
+
+    # ------------------------------------------------------------ render
+    def render_command(self, pages=None, resolution=None):
+        """``render.py`` for this project: the book's document.json and ``translation/translations.json`` ->
+        ``render/``, with the project's render settings and ``review/render_overrides.json``.  ``pages``: e.g. '3-5'
+        (only these are drawn; the layout covers the book); ``resolution``: overrides the setting (``work`` for a
+        quick preview).  Raises ProjectError when the document or the translation is missing."""
+        r = self.render_settings
+        doc = self.book_dir() / 'document.json'
+        if not doc.exists():
+            raise ProjectError('no document.json yet in %s: run the pipeline first' % self.book_dir())
+        if not self.translations_file.exists():
+            raise ProjectError('no translation yet (%s): run the translation first' % self.translations_file)
+        cmd = [sys.executable, str(HERE / 'render.py'), str(doc), str(self.translations_file), '-o', str(self.render_dir),
+               '--background', r['background'], '--resolution', resolution or r['resolution'],
+               '--tracking', str(r['tracking']).strip() or 'auto', '--size-scale', str(r['size_scale']),
+               '--word-space', str(r['word_space']), '--ink', str(r['ink']).replace(' ', '')]
+        for k, flag in (('font', '--font'), ('bold_font', '--bold-font'), ('italic_font', '--italic-font')):
+            if str(r.get(k) or '').strip():
+                cmd += [flag, str(_font_path(str(r[k]).strip(), self.root))]
+        if str(r.get('paragraph_indent', '')).strip():
+            cmd += ['--paragraph-indent', str(r['paragraph_indent']).strip()]
+        if not r.get('page_fit', True):
+            cmd.append('--no-page-fit')
+        if self.overrides_file.exists():
+            cmd += ['--overrides', str(self.overrides_file)]
+        if pages and str(pages).strip():
+            cmd += ['--pages', str(pages).replace(' ', '')]
+        return cmd
+
+    def render_command_line(self, pages=None, resolution=None):
+        return ' '.join(shlex.quote(str(c)) for c in self.render_command(pages, resolution))
 
     def load_translations(self):
         """translations.json -> its ``units`` dict ({} when there is none or it cannot be read)."""

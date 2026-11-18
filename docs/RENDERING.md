@@ -7,7 +7,8 @@ drawing, so the output has the full resolution of the scan.
 ```bash
 python render.py document.json translations.json -o out [--pages 3,5-7] \
   [--font F --bold-font F --italic-font F] [--background paper|scan] [--resolution auto|work] \
-  [--ink R,G,B] [--paragraph-indent EM] [--tracking auto|EM] [--size-scale F] [--word-space F] [--no-page-fit]
+  [--ink R,G,B] [--paragraph-indent EM] [--tracking auto|EM] [--size-scale F] [--word-space F] [--no-page-fit] \
+  [--overrides review/render_overrides.json]
 ```
 
 Writes `page_NNN_X.png`, `compare.png` (original | reconstruction; one `compare_page_NNN.png` per page
@@ -106,6 +107,26 @@ hold its text (1.0 ... 0.9). With a fixed `--tracking` only the size varies.
 
 Measured on a synthetic 60-page book (paragraphs 0.90-1.08 x the original length): no paragraph off its
 page, 7 empty slots in 2300, most pages at the base size; 3.5 s for the layout.
+
+## Settings and human adjustments
+
+**Book settings** are the CLI options; in a GUI project they live in `project.json` → `render` (schema 1.2, `project.DEFAULT_RENDER`:
+`background`, `resolution`, `font`/`bold_font`/`italic_font` (relative to the project), `tracking` (`auto` or em), `size_scale`,
+`word_space`, `paragraph_indent`, `page_fit`, `ink`), validated by `project.check_render`; `Project.render_command(pages, resolution)`
+builds the `render.py` call → `<project>/render/` (outside `pipeline/`).
+
+**Adjustments** (`render_overrides.py`, `--overrides FILE`; in a project `review/render_overrides.json`) are for what the automatic
+layout gets wrong:
+
+| for | keys |
+|---|---|
+| a block (fixed frames) | `size_scale` (x fitted size), `tracking_em` (fixed), `word_space`, `anchor` (`left`/`right`/`center`), `max_width` (x frame width, replaces the 1.0-1.3 candidates and the neighbour limit) |
+| any text block | `keep_original`: keep the scan's pixels (the whole unit, also on other pages) |
+| a page (body text) | `size_factor`, `track_delta_em`: replace the automatic per-page fit |
+
+Each entry carries `base`, a hash of the OCR text it was made for (block: its line texts; page: its text blocks). Pages are keyed by
+`source_tiff#page_in_spread` (or `page N`). An entry whose block or page is gone or whose text changed is *stale*: not applied and named
+as a warning. Fixed frames with adjustments have `adjusted: [keys]` in `report.json`; units kept by hand are in `kept_by_hand`.
 
 ## Checks (`report.json`: `checks`, `check_summary`)
 

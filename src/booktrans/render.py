@@ -210,6 +210,8 @@ def main():
     ap.add_argument('--paragraph-indent', type=float, default=None,
                     help='first-line indent in em (default: as in the original page, normally none)')
     ap.add_argument('--pages', help='draw only these pages (printed numbers, e.g. 3,5-7); the layout still covers the book')
+    ap.add_argument('--overrides', type=Path,
+                    help="human adjustments of blocks and pages (a project's review/render_overrides.json, see render_overrides.py)")
     ap.add_argument('--no-page-fit', action='store_true',
                     help='one body size for the whole book (shrunk only when a page cannot hold its text)')
     a = ap.parse_args()
@@ -221,9 +223,17 @@ def main():
     log.info('render', 'typesetting %d pages with %d translated units' % (len(doc['pages']), len(trans['units'])))
     if _HYPH is None:
         log.info('render', 'pyphen not installed: no hyphenation (pip install pyphen)')
+    settings = {'page_fit': not a.no_page_fit}
+    stale = []
+    if a.overrides:
+        import render_overrides
+        settings['blocks'], settings['pages'], stale = render_overrides.resolve(doc, render_overrides.load(a.overrides))
+        log.info('render', 'overrides: %d block(s), %d page(s) adjusted by hand' % (len(settings['blocks']), len(settings['pages'])))
     names, rep = render(doc, trans, out, Fonts(a.font, a.bold_font, a.italic_font), a.background, ink, a.resolution, a.paragraph_indent,
                         None if a.tracking == 'auto' else float(a.tracking), a.size_scale, a.word_space,
-                        pages=parse_pages(a.pages, doc), settings={'page_fit': not a.no_page_fit})
+                        pages=parse_pages(a.pages, doc), settings=settings)
+    for s in stale:
+        log.info('render', 'WARNING stale override (not applied): ' + s)
     for r in rep['units']:
         log.info('render', '%s %s: %d lines (original %d), size %.1f px, tracking %.3f em' % (r['unit'], r['kind'], r['lines'], r['lines_original'], r['size_px'], r['tracking_em']))
     for r in rep['pages']:
