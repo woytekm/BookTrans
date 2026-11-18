@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — gui: translation settings and Run translation
+
+- **Run translation…** (button next to *Re-run OCR correction…*, Project menu, `Cmd/Ctrl+Shift+T`; `gui_run.TranslateWindow`): runs `translate.py` on the book with the project's translation settings -> `<project>/translation/translations.json` (outside `pipeline/`, so a full pipeline run cannot delete it; the answer cache is `translations.cache.json` beside it). Per run, not saved: pages (`3`, `1,4-6`, blank = whole book) and dry run. Live log, Stop; the header then shows "translation: N of M units, K flagged".
+- **Translation settings in `project.json`** (schema 1.1; a 1.0 file loads with the defaults): `provider` (`claude-code` default, `openai`, `anthropic`), `model` (blank = the engine's default), `endpoint` (openai/anthropic), `glossary` (CSV files separated by `;`, relative to the project; blank = `glossary/*.csv`), `source` (`corrected` / `raw`), `timeout`, `retries`, `no_think` (openai). Validated (`project.check_translation`); `Project.translate_command()` builds the command.
+- The window warns, and asks before starting, when the translation would not see your work: no `document.corrected.json`, or `review/unit_edits.json` / `ocr_decisions.json` newer than it (`Project.translation_warnings`). Unsaved correction windows are asked about as for the other runs. One run window per project: pipeline, OCR correction and translation never run together.
+- `translate.py --pages 1,3-5`: translate the units on these pages.
+- Fix: a partial `translate.py` run (`--only`, `--pages`) rewrote `translations.json` with only the selected units; it now keeps the other units (document order). And it took the paragraph context only from the selected units, so the first one got a different prompt and cache key than in a full run; the context now comes from the whole book.
+- Fix: `translate.py` failed when the output folder did not exist; it is created.
+- `gui_run.py` refactored: `ProcessWindow` (Start/Stop, log) under `RunWindow` and `TranslateWindow`.
+- Tests: 221 passed (was 212).
+
 ## Unreleased — gui: re-run OCR correction; --resume for a single TIFF
 
 - **Re-run OCR correction…** (button next to *Run pipeline…*, Project menu, `Cmd/Ctrl+Shift+O`): runs only stage 5, `ocrfix.py run <book>/document.json` with the project's OCR-correction mode and `--edits review/unit_edits.json --decisions review/ocr_decisions.json` (`project.ocrfix_command`), in the run window (mode `ocrfix`: live log, Stop, the page list reloads at the end). Saved edits and decisions reach `document.corrected.json`, the file `translate.py` reads, in seconds instead of a stage-4-onwards pipeline run. Errors are named (no `document.json` yet, OCR correction switched off).

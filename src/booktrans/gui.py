@@ -32,7 +32,7 @@ except ImportError as e:
 
 from gui_correction import CorrectionWindow          # noqa: E402
 from gui_dialogs import CommandDialog, EnvWindow, NewProjectDialog   # noqa: E402
-from gui_run import RunWindow                          # noqa: E402
+from gui_run import RunWindow, TranslateWindow                          # noqa: E402
 from gui_widgets import (MAC, MOD, MOD_LABEL, MUTED, ROW_TINT, STATUS_COLORS, TREE_FG, JsonView, apply_dark_theme, Legend, copy_to_clipboard,   # noqa: E402
                          human_bytes, reveal_in_file_manager, run_async)
 import ocr_decisions                                   # noqa: E402
@@ -103,6 +103,7 @@ class MainWindow(tk.Tk):
         p.add_command(label='Check environment…', accelerator='%s+E' % MOD_LABEL, command=self.check_env)
         p.add_command(label='Run pipeline…', accelerator='%s+Shift+R' % MOD_LABEL, command=self.run_pipeline)
         p.add_command(label='Re-run OCR correction…', accelerator='%s+Shift+O' % MOD_LABEL, command=self.rerun_ocrfix)
+        p.add_command(label='Run translation…', accelerator='%s+Shift+T' % MOD_LABEL, command=self.run_translation)
         p.add_command(label='Pipeline command…', command=self.show_command)
         p.add_command(label='Reload from disk', accelerator='%s+R' % MOD_LABEL, command=self.reload)
         p.add_command(label='Show project folder', command=lambda: self.project and reveal_in_file_manager(self.project.root))
@@ -114,6 +115,7 @@ class MainWindow(tk.Tk):
         self.page_menu = g
         self.bind_all('<%s-R>' % MOD, lambda _e: self.run_pipeline())
         self.bind_all('<%s-O>' % MOD, lambda _e: self.rerun_ocrfix())
+        self.bind_all('<%s-T>' % MOD, lambda _e: self.run_translation())
         for key, fn in (('n', self.new_project), ('o', self.open_dialog), ('e', self.check_env), ('r', self.reload),
                         ('f', lambda: (self.find_entry.focus_set(), self.find_entry.selection_range(0, 'end')))):
             self.bind_all('<%s-%s>' % (MOD, key), lambda _e, fn=fn: fn())
@@ -136,6 +138,8 @@ class MainWindow(tk.Tk):
         self.run_btn.pack(side='left')
         self.ocrfix_btn = ttk.Button(btns, text='Re-run OCR correction\u2026', command=self.rerun_ocrfix)
         self.ocrfix_btn.pack(side='left', padx=(6, 0))
+        self.translate_btn = ttk.Button(btns, text='Run translation\u2026', command=self.run_translation)
+        self.translate_btn.pack(side='left', padx=(6, 0))
         self.info_lbl.pack(anchor='w', pady=(4, 0))
         left.bind('<Configure>', lambda e: self.info_lbl.configure(wraplength=max(300, e.width - 10)))
         Legend(head, short=True).pack(side='right', anchor='ne')
@@ -218,6 +222,7 @@ class MainWindow(tk.Tk):
         self.open_btn.configure(state='normal' if self.project and self.index else 'disabled')
         self.run_btn.configure(state=on)
         self.ocrfix_btn.configure(state=on)
+        self.translate_btn.configure(state=on)
 
     def _recent(self):
         try:
@@ -304,7 +309,21 @@ class MainWindow(tk.Tk):
             parts.append('pipeline result: %s' % ('with OCR correction' if st['corrected'] else 'without OCR correction (document.json only)'))
         else:
             parts.append('pipeline not run yet (Project › Run pipeline…)')
+        tr = p.load_translations()
+        if tr:
+            done = sum(1 for u in tr.values() if str(u.get('pl', '')).strip())
+            flagged = sum(1 for u in tr.values() if u.get('flags'))
+            total = self._translatable()
+            parts.append('translation: %d%s units%s' % (done, ' of %d' % total if total else '', ', %d flagged' % flagged if flagged else ''))
         self.info_lbl.configure(text='   ·   '.join(parts))
+
+    def _translatable(self):
+        """Units translate.py would translate (translation_status translate), from the loaded document; 0 = unknown."""
+        ix = getattr(self, 'index', None)
+        if not ix:
+            return 0
+        import translate
+        return sum(1 for u in translate.collect(ix.doc) if u[4] == 'translate')
 
     def reload(self):
         """Read document.json / document.corrected.json and ocr_review.json again (also after the pipeline ran)."""
@@ -355,6 +374,7 @@ class MainWindow(tk.Tk):
                 self._menu_state()
                 return
             which, self.index, self.rows, self.edits, self.stale_edits, self.decisions = res
+            self._header()                       # again: the translation summary needs the loaded document
             self.source_lbl.configure(text='showing document.%sjson' % ('corrected.' if which == 'corrected' else ''))
             self._fill_tree(self.rows, keep)
             for w in list(self.windows.values()):
@@ -518,31 +538,38 @@ class MainWindow(tk.Tk):
     def run_pipeline(self):
         self._open_run_window('pipeline')
 
+    def run_translation(self):
+        """translate.py with the project's translation settings -> translation/translations.json."""
+        self._open_run_window('translate')
+
     def rerun_ocrfix(self):
         """Stage 5 only (``ocrfix.py run`` with the saved edits and decisions) -> a fresh ``document.corrected.json``."""
         self._open_run_window('ocrfix')
 
     def _open_run_window(self, mode):
-        """One run window per project: a pipeline run and an OCR-correction run both write document.corrected.json, so
-        they never run at the same time.  A window of the other mode is replaced unless it is running."""
+        """One run window per project: the pipeline and the OCR correction write document.corrected.json, the
+        translation reads it, so they never run at the same time.  A window of another mode is replaced unless it is
+        running."""
         if not self.project:
             return
         w = getattr(self, 'run_window', None)
         if w is not None and w.winfo_exists():
             if w.mode == mode or (w.run is not None and w.run.running):
                 if w.mode != mode:
-                    messagebox.showinfo('A run is in progress', 'Wait until the running %s has finished.'
-                                        % ('pipeline' if w.mode == 'pipeline' else 'OCR correction'), parent=w)
+                    messagebox.showinfo('A run is in progress', 'Wait until the running %s has finished.' % w.WHAT, parent=w)
                 w.deiconify()
                 w.lift()
                 return
             w.destroy()
-        self.run_window = RunWindow(self, self.project, on_done=self._pipeline_done, mode=mode,
-                                    unsaved=lambda: sorted(n for n, cw in self.windows.items() if cw.dirty))
+        unsaved = lambda: sorted(n for n, cw in self.windows.items() if cw.dirty)
+        if mode == 'translate':
+            self.run_window = TranslateWindow(self, self.project, on_done=self._pipeline_done, unsaved=unsaved)
+        else:
+            self.run_window = RunWindow(self, self.project, on_done=self._pipeline_done, mode=mode, unsaved=unsaved)
 
     def _pipeline_done(self):
-        self._header()
         self.reload()
+        self._header()
 
     def show_command(self):
         if self.project:

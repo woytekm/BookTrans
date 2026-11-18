@@ -80,6 +80,7 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --endpoint http://192.168.1.20:1234/v1 --model gemma-3-12b-it
 python translate.py output/book/document.json --dry-run                                     # only write the prompts (translations.prompts.txt)
 python translate.py output/book/document.json --only u0021 u0022                            # just these units
+python translate.py output/book/document.json --pages 3,5-7                                 # the units on these pages
 python render.py output/book/document.json output/book/translations.json -o output/book/render
 ```
 
@@ -130,6 +131,18 @@ server, not against the real API.
 export ANTHROPIC_API_KEY=...            # never commit or paste a key; create a key limited to this use and revoke it when done
 python translate.py output/book/document.json --provider anthropic --price-in 3 --price-out 15   # use the real prices
 ```
+
+### Partial runs (`--only`, `--pages`) and the output folder (2026-11-18)
+
+- `--pages 1,3-5` selects the units with at least one source block on those pages (a paragraph across a page
+  break belongs to both pages); with `--only` both sets are translated.
+- A partial run **updates** `translations.json`: the selected units are translated, the other units of the existing
+  file are kept, everything in document order. (Before, the file was rewritten with only the selected units.)
+- The context sent with a paragraph (the last sentence of the preceding paragraph) is taken from the whole book,
+  also in a partial run, so the prompt and the cache key are the same as in a full run: translating page 3 first
+  and the whole book later does not translate page 3 twice. (Before, the first selected paragraph lost its context.)
+- The output folder is created when it does not exist (the GUI writes to `<project>/translation/`).
+- The GUI's *Run translation* window builds this command from the project's translation settings (`GUI.md`, section 3).
 
 ### Claude Code as the translation engine (`--provider claude-code`)
 

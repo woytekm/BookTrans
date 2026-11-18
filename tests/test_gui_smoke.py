@@ -332,6 +332,98 @@ def test_rerun_ocr_correction_reports_switched_off(app, monkeypatch):
     app.project.save()
 
 
+def test_translation_window_saves_settings_and_runs(app, monkeypatch):
+    import json
+    import sys
+    import time
+    import tkinter.messagebox as mb
+    app.run_translation()
+    w = app.run_window
+    assert w.mode == 'translate' and 'translation' in w.title().lower()
+    assert str(w.endpoint_entry.cget('state')) == 'disabled'          # claude-code: no endpoint
+    assert str(w.no_think_btn.cget('state')) == 'disabled'
+    w.v['provider'].set('openai')
+    app.update()
+    assert str(w.endpoint_entry.cget('state')) == 'normal' and str(w.no_think_btn.cget('state')) == 'normal'
+    assert 'LM Studio' in w.model_hint.cget('text')
+    w.v['provider'].set('claude-code')
+    w.v['model'].set('sonnet')
+    w.v['pages'].set('1')
+    errors, asked = [], []
+    monkeypatch.setattr(mb, 'showerror', lambda *a, **k: errors.append(a))
+    monkeypatch.setattr(mb, 'askyesno', lambda *a, **k: (asked.append(a), True)[1])
+    w.v['retries'].set('x')
+    w.start()
+    assert errors and 'retries' in errors[-1][1] and w.run is None
+    w.v['retries'].set('1')
+    w.v['pages'].set('3-1')
+    w.start()
+    assert 'backwards' in errors[-1][1] and w.run is None
+    w.v['pages'].set('1')
+    seen = {}
+    real = app.project.translate_command
+
+    def fake(pages=None, dry_run=False):
+        seen['cmd'] = real(pages, dry_run)
+        out = app.project.translations_file
+        code = ('import json, pathlib; p = pathlib.Path(%r); p.parent.mkdir(parents=True, exist_ok=True); '
+                'p.write_text(json.dumps({"units": {"u0001": {"pl": "Tekst", "flags": []}, '
+                '"u0002": {"pl": "Inny", "flags": ["x"]}}})); print("translate: done")' % str(out))
+        return [sys.executable, '-c', code]
+    monkeypatch.setattr(app.project, 'translate_command', fake)
+    done = []
+    w.on_done = lambda: (app._pipeline_done(), done.append(1))
+    w.start()
+    saved = json.loads(app.project.file.read_text(encoding='utf-8'))['translation']
+    assert saved['model'] == 'sonnet' and saved['retries'] == 1 and 'pages' not in saved   # pages are per run
+    c = seen['cmd']
+    assert c[c.index('--model') + 1] == 'sonnet' and c[c.index('--pages') + 1] == '1'
+    t0 = time.time()
+    while not done and time.time() - t0 < 20:
+        app.update()
+        time.sleep(0.02)
+    for _ in range(50):                                              # the reload runs in a worker thread
+        app.update()
+        time.sleep(0.02)
+    assert done and 'finished' in w.state.cget('text')
+    assert 'translation: 2 of' in app.info_lbl.cget('text') and '1 flagged' in app.info_lbl.cget('text')
+    app.project.translations_file.unlink()
+    app.project.data['translation'] = dict(__import__('project').DEFAULT_TRANSLATION)
+    app.project.save()
+
+
+def test_translation_window_warns_about_a_stale_corrected_copy(app, monkeypatch):
+    import os
+    import tkinter.messagebox as mb
+    p = app.project
+    corrected = p.files()['corrected']
+    if not corrected.exists():
+        return                                                       # the demo without symspellpy has no corrected copy
+    p.edits_file.parent.mkdir(parents=True, exist_ok=True)
+    had = p.edits_file.exists()
+    if not had:
+        p.edits_file.write_text('{"schema": "1.0", "units": {}}', encoding='utf-8')
+    old = p.edits_file.stat().st_mtime
+    t = corrected.stat().st_mtime
+    os.utime(p.edits_file, (t + 10, t + 10))
+    try:
+        app.run_translation()
+        w = app.run_window
+        assert 'Re-run OCR correction' in w.warn.cget('text')
+        asked = []
+        monkeypatch.setattr(mb, 'askyesno', lambda *a, **k: (asked.append(a), False)[1])
+        w.start()
+        assert asked and asked[0][0] == 'Translate anyway?' and w.run is None
+        w.v['source'].set('raw')
+        app.update()
+        assert 'raw' in w.warn.cget('text')
+    finally:
+        if had:
+            os.utime(p.edits_file, (old, old))
+        else:
+            p.edits_file.unlink()
+
+
 def test_run_window_rejects_bad_parameters(app, monkeypatch):
     import tkinter.messagebox as mb
     errors = []

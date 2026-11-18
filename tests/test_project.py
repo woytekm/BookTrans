@@ -168,3 +168,83 @@ def test_ocrfix_command_runs_stage_5_alone_with_the_gui_files(tmp_path, scans):
     p.params['ocrfix'] = 'off'
     with pytest.raises(PR.ProjectError, match='switched off'):
         p.ocrfix_command()
+
+
+# ---------------------------------------------------------------- translation settings
+def _with_doc(p, corrected=True):
+    p.book_dir().mkdir(parents=True, exist_ok=True)
+    (p.book_dir() / 'document.json').write_text('{}', encoding='utf-8')
+    if corrected:
+        (p.book_dir() / 'document.corrected.json').write_text('{}', encoding='utf-8')
+
+
+def test_translation_defaults_and_an_old_project_file(tmp_path, scans):
+    p = PR.Project.create(tmp_path / 'p', 'mybook', scans)
+    data = json.loads(p.file.read_text(encoding='utf-8'))
+    assert data['schema'] == '1.1' and data['translation']['provider'] == 'claude-code'
+    del data['translation']
+    data['schema'] = '1.0'                                         # a project made before translation settings existed
+    p.file.write_text(json.dumps(data), encoding='utf-8')
+    q = PR.Project.load(p.root)
+    assert q.translation == PR.DEFAULT_TRANSLATION and q.translations_file == p.root / 'translation' / 'translations.json'
+
+
+def test_translate_command_maps_the_settings(tmp_path, scans):
+    p = PR.Project.create(tmp_path / 'p', 'mybook', scans)
+    with pytest.raises(PR.ProjectError, match='run the pipeline first'):
+        p.translate_command()
+    _with_doc(p)
+    c = p.translate_command()
+    assert c[1].endswith('translate.py') and c[2] == str(p.book_dir() / 'document.json')
+    assert c[c.index('-o') + 1] == str(p.translations_file) and c[c.index('--provider') + 1] == 'claude-code'
+    assert '--model' not in c and '--endpoint' not in c and '--glossary' not in c and '--raw' not in c
+    assert c[c.index('--timeout') + 1] == '600' and c[c.index('--retries') + 1] == '2' and '--pages' not in c
+    (p.root / 'g.csv').write_text('de,pl,kind,status\n', encoding='utf-8')
+    p.translation.update(model='sonnet', endpoint='http://x:1/v1', glossary='g.csv; ~/none.csv', source='raw', no_think=True)
+    c = p.translate_command(pages='3, 5-6', dry_run=True)
+    assert c[c.index('--model') + 1] == 'sonnet' and '--endpoint' not in c          # claude-code has no endpoint
+    assert c[c.index('--glossary') + 1] == str(p.root / 'g.csv')                     # relative to the project folder
+    assert '--raw' in c and '--no-think' not in c and c[c.index('--pages') + 1] == '3,5-6' and '--dry-run' in c
+    p.translation['provider'] = 'openai'
+    c = p.translate_command()
+    assert c[c.index('--endpoint') + 1] == 'http://x:1/v1' and '--no-think' in c
+
+
+def test_check_translation(tmp_path):
+    ok = dict(PR.DEFAULT_TRANSLATION)
+    assert PR.check_translation(dict(ok)) == ok
+    for bad, msg in ((dict(provider='gpt'), 'engine'), (dict(source='x'), 'source'), (dict(model='two words'), 'model'),
+                     (dict(timeout='0'), 'timeout'), (dict(retries='-1'), 'retries'), (dict(retries='x'), 'retries'),
+                     (dict(glossary='missing.csv'), 'not found')):
+        with pytest.raises(PR.ProjectError, match=msg):
+            PR.check_translation(dict(ok, **bad), tmp_path)
+
+
+def test_translation_warnings_name_a_stale_corrected_copy(tmp_path, scans):
+    import os
+    p = PR.Project.create(tmp_path / 'p', 'mybook', scans)
+    assert p.translation_warnings() == []                                            # no document yet: nothing to say
+    _with_doc(p, corrected=False)
+    assert 'no document.corrected.json' in p.translation_warnings()[0]
+    _with_doc(p)
+    assert p.translation_warnings() == []
+    p.edits_file.write_text('{}', encoding='utf-8')
+    t = (p.book_dir() / 'document.corrected.json').stat().st_mtime
+    os.utime(p.edits_file, (t + 10, t + 10))
+    w = p.translation_warnings()
+    assert 'unit_edits.json changed after' in w[0] and 'Re-run OCR correction' in w[0]
+    p.translation['source'] = 'raw'
+    assert 'raw' in p.translation_warnings()[0]
+
+
+def test_translate_dry_run_on_the_demo_project(tmp_path):
+    """The real translate.py, from the project's command, on the GUI demo document: prompts only, no model."""
+    import subprocess
+    import gui_demo
+    gui_demo.make_demo(tmp_path / 'd')
+    p = PR.Project.load(tmp_path / 'd')
+    r = subprocess.run(p.translate_command(pages='1', dry_run=True), capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+    assert '--pages 1:' in r.stderr and 'dry run:' in r.stderr
+    prompts = p.translations_file.with_suffix('.prompts.txt').read_text(encoding='utf-8')
+    assert 'Text to translate' in prompts
