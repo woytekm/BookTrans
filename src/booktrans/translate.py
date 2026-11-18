@@ -319,6 +319,26 @@ def digits(s):
     return sorted(re.findall(r'\d+', s))
 
 
+# Punctuation the rules forbid (prompts/translate_rules_pl.txt): found in an answer they make a retry with this remark.
+PUNCT_RULES = [
+    ('comma and dash together', re.compile(r'[,;:]\s*[-–—](?=\s)|(?<=\s)[-–—]\s*[,;:]')),
+    ('long dash', re.compile(r'—')),
+    ('spaced hyphen as a dash', re.compile(r'(?<=\s)-(?=\s)')),
+    ('two punctuation marks together', re.compile(r'(?<![A-Za-ząćęłńóśźżĄĆĘŁŃÓŚŹŻ]\.)[,;:!?]\s*[,;:]|[,;:]\s*\.(?!\.)')),
+]
+PUNCT_FIX = {
+    'comma and dash together': 'set off an inserted phrase either with dashes or with commas, never both',
+    'long dash': 'use the short dash "–" instead of the long dash "—"',
+    'spaced hyphen as a dash': 'a dash between words is "–" with spaces, not a hyphen "-"',
+    'two punctuation marks together': 'never put two punctuation marks next to each other',
+}
+
+
+def punctuation_problems(pl):
+    """The punctuation rules an answer breaks (names from ``PUNCT_RULES``)."""
+    return [name for name, rx in PUNCT_RULES if rx.search(pl)]
+
+
 def problems(src, pl, hits):
     """(problems found, remark for a retry or None).  Digit differences are reported only: OCR often
     misreads digits in the source, so a retry would not help."""
@@ -335,6 +355,10 @@ def problems(src, pl, hits):
             found.append('length ratio %.2f' % ratio)
             fixes.append('Your answer is %s than the original; translate the whole text, neither shortening nor '
                          'adding to it.' % ('shorter' if ratio < 1 else 'longer'))
+    bad = punctuation_problems(pl)
+    if bad:
+        found.append('punctuation: ' + ', '.join(bad))
+        fixes.append('Fix the punctuation: ' + '; '.join(PUNCT_FIX[k] for k in bad) + '.')
     if digits(src) != digits(pl):
         found.append('digits differ (%s vs %s)' % (' '.join(digits(src)), ' '.join(digits(pl))))
     return found, (' '.join(fixes) if fixes else None)

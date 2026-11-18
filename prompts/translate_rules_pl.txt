@@ -5,3 +5,8 @@ Rules:
 - "Abb. 37" becomes "il. 37"; keep all figure numbers, page numbers, years and other digits unchanged.
 - A footnote reference mark after a word (the OCR may show it as an apostrophe or a digit) is kept as a superscript digit, for example "¹".
 - Keep the register and the technical terminology of an art-history monograph of the first half of the 20th century.
+- Punctuation follows modern Polish typography:
+  - Never put two punctuation marks next to each other (no ",-", "-,", ";-", ".,", ",)" and the like). The only exceptions are the period of an abbreviation followed by another mark ("itd.,"), and a closing parenthesis or quotation mark followed by a mark.
+  - An inserted phrase is set off either by commas or by dashes, never by both. The old German print often writes ", -" or "-," around an inserted phrase: drop the comma and keep only the dashes, or use commas only.
+  - A dash between words is the short dash (półpauza) "–" with a space on each side. Never use the long dash "—", and never a hyphen "-" with spaces around it as a dash.
+  - The hyphen "-" is used only inside a word or a compound without spaces ("biało-czerwony", "XII-wieczny").
