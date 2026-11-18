@@ -70,7 +70,7 @@ def _doc(tmp_path, with_translation=True):
 
 def test_render_end_to_end(tmp_path):
     doc, trans = _doc(tmp_path)
-    names, rep = R.render(doc, trans, tmp_path / 'out', _fonts())
+    names, rep = R.render(doc, trans, tmp_path / 'out', _fonts(), resolution='work')
     out = np.asarray(Image.open(tmp_path / 'out' / names[0]).convert('RGB'))
     assert (out[30:70, 40:190] == 60).all()                              # figure pasted
     assert (out[400 - 5, 5] == (240, 230, 190)).all()                    # clean paper
@@ -85,7 +85,7 @@ def test_missing_translation_keeps_original_pixels(tmp_path):
     page = np.array(Image.open(tmp_path / 'page.png').convert('RGB'))
     page[130:140, 100:300] = (10, 10, 10)                                # "original text" pixels
     Image.fromarray(page).save(tmp_path / 'page.png')
-    names, rep = R.render(doc, trans, tmp_path / 'out', _fonts())
+    names, rep = R.render(doc, trans, tmp_path / 'out', _fonts(), resolution='work')
     out = np.asarray(Image.open(tmp_path / 'out' / names[0]).convert('RGB'))
     assert (out[130:140, 100:300] == 10).all()
     assert any('no translation' in w for w in rep['warnings'])
@@ -118,3 +118,28 @@ def test_tracking_option_and_report(tmp_path):
     assert 'lines_original' in u1
     _, rep2 = R.render(doc, trans, tmp_path / 'o2', _fonts(), size_scale=0.9)
     assert rep2['units'][0]['size_px'] < rep0['units'][0]['size_px'] * 0.95
+
+
+# ---------------------------------------------------------------- output resolution, line drawings (captions work)
+def test_final_pages_are_drawn_at_the_output_dpi(tmp_path):
+    doc, trans = _doc(tmp_path)
+    page = doc['pages'][0]
+    assert R.output_scale(page) == R.DEFAULT_OUTPUT_DPI / R.WORK_DPI
+    assert R.output_scale(page, 'work') == 1.0 and R.output_scale(page, 'auto', 240) == 2.0
+    names, _ = R.render(doc, trans, tmp_path / 'out', _fonts(), output_dpi=240)
+    out = Image.open(tmp_path / 'out' / names[0])
+    assert out.size == (1200, 800)                                        # 600 x 400 working px at 2x
+    assert (np.asarray(out.convert('RGB'))[60:140, 80:380] == 60).all()   # the figure scaled with the page
+
+
+def test_line_drawings_are_printed_ink_only():
+    paper = np.full((60, 80, 3), (235, 225, 190), np.uint8)
+    drawing = paper.copy()
+    drawing[10:50, 20:22] = 40; drawing[30:32, 10:70] = 40                # strokes on paper
+    photo = np.linspace(40, 230, 60 * 80).reshape(60, 80, 1).repeat(3, axis=2).astype(np.uint8)
+    assert R.is_line_drawing(drawing) and not R.is_line_drawing(photo)
+    canvas = Image.new('RGB', (80, 60), (250, 245, 230))
+    R._ink_only(canvas, Image.fromarray(drawing), (0, 0))
+    a = np.asarray(canvas)
+    assert tuple(a[5, 5]) == (250, 245, 230)                              # the drawing's paper tone is not pasted
+    assert a[20, 20].max() < 80                                           # its strokes are

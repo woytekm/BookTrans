@@ -484,8 +484,128 @@ def _plan_line(line, unit, block, role, style, size, track, x, baseline, upper=F
 
 
 # ---------------------------------------------------------------- fixed frames
-def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pages):
+def _caption_figure(page, b):
+    """The figure a caption belongs to: its associated figure, else the nearest figure above or beside it."""
+    figs = [o for o in page['blocks'] if o['kind'] == 'figure']
+    ids = b.get('figure_ids') or []
+    for o in figs:
+        if o['block_id'] in ids:
+            return o
+    x1, y1, x2, y2 = b['bbox']
+    best = None
+    for o in figs:
+        ox1, oy1, ox2, oy2 = o['bbox']
+        horiz = _overlap(x1, x2, ox1, ox2) > 0
+        vert = _overlap(y1, y2, oy1, oy2) > 0.5 * (y2 - y1)
+        if (horiz and 0 <= y1 - oy2 < 60) or (vert and min(abs(x1 - ox2), abs(ox1 - x2)) < 40):
+            d = abs(y1 - oy2) if horiz else min(abs(x1 - ox2), abs(ox1 - x2))
+            if best is None or d < best[0]:
+                best = (d, o)
+    return best[1] if best else None
+
+
+def _content_box(page, noise=()):
+    """The page's content: the union of its text blocks (not noise) and figures, and of its columns."""
+    bs = [o['bbox'] for o in page['blocks'] if o['kind'] in ('text', 'figure') and o['block_id'] not in noise]
+    for c in page['layout'].get('columns') or []:
+        bs.append([c['left'], 0, c['right'], 0])
+    if not bs:
+        return None
+    return (min(b[0] for b in bs), max(b[2] for b in bs))
+
+
+def caption_geometry(page, b, noise=(), pitch=None):
+    """How much room a caption has: (anchor, lo, hi, extra lines, grow).  ``lo``/``hi``: the leftmost and rightmost x the
+    text may reach (neighbours on the same rows, else the page content); ``extra``: lines that fit in the free space below
+    (``grow`` 'down') or, for a caption beside its figure and aligned with its foot, above (``grow`` 'up')."""
+    x1, y1, x2, y2 = b['bbox']
+    gh = (b.get('typography') or {}).get('glyph_height_px') or 8.0
+    pitch = pitch or (b.get('typography') or {}).get('line_pitch_px') or 1.6 * gh
+    gap = max(6.0, 1.0 * gh)
+    fig = _caption_figure(page, b)
+    beside = fig is not None and _overlap(y1, y2, fig['bbox'][1], fig['bbox'][3]) > 0.5 * (y2 - y1)
+    if fig is None:
+        anchor = 'left'
+    elif beside:
+        anchor = 'right' if (x1 + x2) / 2 < (fig['bbox'][0] + fig['bbox'][2]) / 2 else 'left'
+    else:
+        fx1, _, fx2, _ = fig['bbox']
+        if abs((x1 + x2) / 2 - (fx1 + fx2) / 2) <= max(8.0, 0.04 * (fx2 - fx1)) and x1 - fx1 > 10:
+            anchor = 'center'
+        elif abs(x2 - fx2) <= 8 and abs(x1 - fx1) > 8:
+            anchor = 'right'
+        else:
+            anchor = 'left'
+    box = _content_box(page, noise) or (x1, x2)
+    lo, hi = min(box[0], x1), max(box[1], x2)
+    for o in page['blocks']:
+        if o is b or o['block_id'] in noise or o['kind'] not in ('text', 'figure'):
+            continue
+        ox1, oy1, ox2, oy2 = o['bbox']
+        if _overlap(y1 - 1, y2 + 1, oy1, oy2) > 0.3 * min(y2 - y1, oy2 - oy1) or (o is fig and beside):
+            if ox2 <= x1 + 2:
+                lo = max(lo, ox2 + gap)
+            elif ox1 >= x2 - 2:
+                hi = min(hi, ox1 - gap)
+    grow = 'up' if beside and abs(y2 - fig['bbox'][3]) < pitch else 'down'
+    if grow == 'down':
+        limit = min([o['bbox'][1] for o in page['blocks'] if o is not b and o['block_id'] not in noise
+                     and o['kind'] in ('text', 'figure', 'graphic') and o['bbox'][1] >= y2 - 1
+                     and _overlap(lo, hi, o['bbox'][0], o['bbox'][2]) > 0] or [y2 + 3 * pitch])
+        free = limit - gap - y2
+    else:
+        limit = max([o['bbox'][3] for o in page['blocks'] if o is not b and o['block_id'] not in noise
+                     and o['kind'] in ('text', 'figure', 'graphic') and o['bbox'][3] <= y1 + 1
+                     and _overlap(lo, hi, o['bbox'][0], o['bbox'][2]) > 0] or [y1 - 3 * pitch])
+        free = y1 - gap - limit
+    extra = int(max(0, min(3, free // pitch)))
+    return anchor, lo, hi, extra, grow
+
+
+def caption_bases(doc, chains, tr, fonts, ratios, settings):
+    """One size and letter-spacing for captions of the same kind: per caption unit the median fitted size / spacing
+    of the book's captions (those whose glyph height is within 0.7–1.6 × the median; others alone).  -> {unit: (size, track_em)}."""
+    cands = []
+    for uid, fr in chains.items():
+        b = fr[0][1]
+        if b['role'] != 'caption' or uid not in tr or looks_like_body(b):
+            continue
+        style, upper = block_style(b)
+        r = ratios.get(style, ratios['regular'])
+        size0, s_h, s_w = calibrated_size(b, fonts, style, upper, r, FIT_UP)
+        if upper:                     # letter-spaced capitals: the size from the glyph height, the width from spacing
+            size0 = float(s_h)
+        font = fonts.get(style, size0 * M)
+        gaps = []
+        for ln in b['lines']:
+            n = len(ln['text'].strip())
+            if n > 3:
+                gaps.append(((ln['bbox'][2] - ln['bbox'][0]) - font.getlength(ln['text'].strip()) / M) / (n - 1))
+        track_em = float(min(max(np.median(gaps) if gaps else 0.0, 0.0), 0.25 * size0)) / size0 if upper else \
+            fit_track([b], font, M, size0) / size0
+        cands.append((uid, b['typography'].get('glyph_height_px') or s_h, size0, track_em))
+    out = {}
+    if not cands:
+        return out
+    # a book sets its captions in one size; OCR'd glyph heights scatter (accents, Ä, broken fragments), so all
+    # captions near the book median form one group and only clear outliers (another type size) stand alone
+    med = float(np.median([c[1] for c in cands]))
+    main = [c for c in cands if 0.7 * med <= c[1] <= 1.6 * med]
+    groups = [main] + [[c] for c in cands if c not in main]
+    for g in groups:
+        base = (round(float(np.median([c[2] for c in g])), 2), float(np.median([c[3] for c in g])))
+        for c in g:
+            out[c[0]] = base
+    return out
+
+
+def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pages, base=None, size_cap=None,
+                noise=(), emit=True):
+    """Set a heading, caption, byline or footnote in its frame.  Captions (``base``: the shared size and spacing of
+    their kind, ``size_cap``: the largest size allowed, to match the other captions of the page) take room from the
+    free space around them, follow their figure's alignment and are never hyphenated."""
     first = frames[0][1]
+    page = doc['pages'][frames[0][0]]
     adj = settings['blocks'].get(first['block_id'], {})
     tracking, size_scale, word_space = settings['tracking'], settings['size_scale'], settings['word_space']
     if 'tracking_em' in adj:
@@ -494,6 +614,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     word_space *= float(adj.get('word_space', 1.0))
     up = FIT_UP if tracking is None else 1.15
     style, upper = block_style(first)
+    caption = first['role'] == 'caption'
     if first['role'] == 'author_byline_candidate':
         style = 'italic'
     if upper:
@@ -502,55 +623,84 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     size0, s_h, s_w = calibrated_size(first, fonts, style, upper, ratios.get(style, ratios['regular']), up)
     if upper:
         size0 = float(min(max(s_w, 0.7 * s_h), 1.15 * s_h))
+    base_track_em = None
+    if caption and base:
+        size0, base_track_em = base
     size0 *= size_scale
-    col = doc['pages'][frames[0][0]]['layout']['columns']
+    if size_cap:
+        size0 = min(size0, size_cap)
+    pitch = t0.get('line_pitch_px') or size0 * 1.5
+    col = page['layout']['columns']
     col = col[0] if col else None
-    anchor = adj.get('anchor') or anchor_of(first, col)
     capacity = sum(b['line_count'] for _, b in frames)
     W0 = min(b['bbox'][2] - b['bbox'][0] for _, b in frames)
-    Ws = [W0]
-    if col:
-        avail = (col['right'] - first['bbox'][0]) if anchor == 'left' else (first['bbox'][2] - col['left'])
-        # do not grow into a neighbouring block on the same rows (side-by-side captions)
-        fx1, fy1, fx2, fy2 = first['bbox']
-        for ob in doc['pages'][frames[0][0]]['blocks']:
-            if ob is first or ob['kind'] not in ('text', 'figure'):
-                continue
-            ox1, oy1, ox2, oy2 = ob['bbox']
-            if min(fy2, oy2) - max(fy1, oy1) > 0.3 * (fy2 - fy1):
-                if anchor == 'left' and ox1 >= fx2:
-                    avail = min(avail, ox1 - 6 - fx1)
-                elif anchor == 'right' and ox2 <= fx1:
-                    avail = min(avail, fx2 - ox2 - 6)
-        Ws = [W0 * k for k in (1.0, 1.06, 1.12, 1.2, 1.3) if W0 * k <= avail + 0.5] or [W0]
+    extra, grow = 0, 'down'
+    if caption and len(frames) == 1:
+        anchor, lo, hi, extra, grow = caption_geometry(page, first, noise, pitch)
+        anchor = adj.get('anchor') or anchor
+        fx1, _, fx2, _ = first['bbox']
+        maxw = hi - fx1 if anchor == 'left' else (fx2 - lo if anchor == 'right' else 2 * min((fx1 + fx2) / 2 - lo,
+                                                                                            hi - (fx1 + fx2) / 2))
+        maxw = max(W0, maxw)
+        Ws = sorted({W0} | {min(maxw, W0 * k) for k in (1.1, 1.25, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0)} | {maxw})
+    else:
+        anchor = adj.get('anchor') or anchor_of(first, col)
+        Ws = [W0]
+        if col:
+            avail = (col['right'] - first['bbox'][0]) if anchor == 'left' else (first['bbox'][2] - col['left'])
+            # do not grow into a neighbouring block on the same rows (side-by-side captions)
+            fx1, fy1, fx2, fy2 = first['bbox']
+            for ob in page['blocks']:
+                if ob is first or ob['kind'] not in ('text', 'figure'):
+                    continue
+                ox1, oy1, ox2, oy2 = ob['bbox']
+                if min(fy2, oy2) - max(fy1, oy1) > 0.3 * (fy2 - fy1):
+                    if anchor == 'left' and ox1 >= fx2:
+                        avail = min(avail, ox1 - 6 - fx1)
+                    elif anchor == 'right' and ox2 <= fx1:
+                        avail = min(avail, fx2 - ox2 - 6)
+            Ws = [W0 * k for k in (1.0, 1.06, 1.12, 1.2, 1.3) if W0 * k <= avail + 0.5] or [W0]
     if 'max_width' in adj:                            # a human set the widest the text may be
         mw = float(adj['max_width'])
         Ws = sorted({W0 * min(k, mw) for k in (1.0, 1.06, 1.12, 1.2, 1.3)} | {W0 * mw})
-    chosen = None
-    for shrink in (1.0, 0.98, 0.96, 0.94, 0.92, 0.9, 0.86, 0.82):
-        size = size0 * shrink
+    hyph = first['role'] not in ('caption', 'heading')
+    caps = [capacity] + ([capacity + extra] if extra else [])
+
+    def fit(size, track, caps=caps):
         font = fonts.get(style, size * M)
-        track0 = 0.0
+        for cap in caps:
+            for Wc in Ws:
+                lines, relaxed = typeset(text, font, Wc * M, 0.0, False, space_factor=word_space, track=track * M,
+                                         fonts_for=lambda st, sz=size: fonts.get(st, sz * M), style=style, hyphenate=hyph)
+                if len(lines) <= cap and max(l['width'] for l in lines) / M <= Wc + 0.5:
+                    return Wc, lines, relaxed
+        return None
+
+    chosen = None
+    # a caption keeps its original line count if a slightly smaller size (down to 90 %) allows it, before it takes
+    # extra lines from the free space
+    tries = [(k, [capacity]) for k in (1.0, 0.97, 0.94, 0.92, 0.9)] if extra else []
+    tries += [(k, caps) for k in (1.0, 0.98, 0.96, 0.94, 0.92, 0.9, 0.86, 0.82)]
+    for shrink, cps in tries:
+        size = size0 * shrink
         if tracking is not None:
             track0 = tracking * size
+        elif base_track_em is not None:
+            track0 = base_track_em * size
         elif not upper:                               # fit the letter-spacing to the original line widths
-            track0 = fit_track([first], font, M, size)
+            track0 = fit_track([first], fonts.get(style, size * M), M, size)
         else:                                         # letter-space capitals up to the original line widths
+            font = fonts.get(style, size * M)
             gaps = []
             for ln in first['lines']:
                 n = len(ln['text'].strip())
                 if n > 3:
-                    nat = font.getlength(ln['text'].strip()) / M
-                    gaps.append(((ln['bbox'][2] - ln['bbox'][0]) - nat) / (n - 1))
+                    gaps.append(((ln['bbox'][2] - ln['bbox'][0]) - font.getlength(ln['text'].strip()) / M) / (n - 1))
             track0 = float(min(max(np.median(gaps) if gaps else 0.0, 0.0), 0.25 * size))
         for tf in ((1.0, 0.5, 0.0) if track0 > 0 else (1.0,)):
-            track = track0 * tf
-            for Wc in Ws:
-                lines, relaxed = typeset(text, font, Wc * M, 0.0, False, space_factor=word_space, track=track * M,
-                                         fonts_for=lambda st, sz=size: fonts.get(st, sz * M), style=style)
-                if len(lines) <= capacity and max(l['width'] for l in lines) / M <= Wc + 0.5:
-                    chosen = (shrink, Wc, lines, relaxed, size, track); break
-            if chosen:
+            res = fit(size, track0 * tf, cps)
+            if res:
+                chosen = (shrink, res[0], res[1], res[2], size, track0 * tf)
                 break
         if chosen:
             break
@@ -558,31 +708,39 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
         shrink, Wc = 0.82, Ws[-1]; size = size0 * shrink
         font = fonts.get(style, size * M)
         lines, relaxed = typeset(text, font, Wc * M, 0.0, False, space_factor=word_space, track=0.0,
-                                 fonts_for=lambda st, sz=size: fonts.get(st, sz * M), style=style)
+                                 fonts_for=lambda st, sz=size: fonts.get(st, sz * M), style=style, hyphenate=hyph)
         chosen = (shrink, Wc, lines, relaxed, size, 0.0)
-        report['warnings'].append('%s: needs %d lines, frame holds %d (overflow)' % (uid, len(lines), capacity))
+        if emit:
+            report['warnings'].append('%s: needs %d lines, frame holds %d (overflow)' % (uid, len(lines), caps[-1]))
     shrink, Wc, lines, relaxed, size, track = chosen
-    pitch = t0.get('line_pitch_px') or size * 1.5
     r = ratios.get(style, ratios['regular'])
     asc = (r['cap'] if upper else r['asc']) * size
-    li = 0
-    for fi, (pi, b) in enumerate(frames):
-        x1, x2 = b['bbox'][0], b['bbox'][2]
-        tops = line_tops(b)
-        n_here = b['line_count'] if fi < len(frames) - 1 else len(lines) - li
-        for k in range(n_here):
-            if li >= len(lines):
-                break
-            line = lines[li]
-            width = line['width'] / M
-            x = x2 - width if anchor == 'right' else ((x1 + x2) / 2 - width / 2 if anchor == 'center' else x1)
-            top = tops[k] if k < len(tops) else tops[-1] + (k - len(tops) + 1) * pitch
-            plan_pages[pi]['lines'].append(_plan_line(line, uid, b['block_id'], first['role'], style, size, track, x,
-                                                      top + asc, upper=upper, overflow=k >= b['line_count']))
-            li += 1
+    if emit:
+        li = 0
+        for fi, (pi, b) in enumerate(frames):
+            x1, x2 = b['bbox'][0], b['bbox'][2]
+            tops = line_tops(b)
+            n_here = b['line_count'] if fi < len(frames) - 1 else len(lines) - li
+            shift = 0
+            if grow == 'up' and fi == len(frames) - 1 and n_here > len(tops):
+                shift = n_here - len(tops)            # beside its figure, foot aligned: extra lines go above
+            for k in range(n_here):
+                if li >= len(lines):
+                    break
+                line = lines[li]
+                width = line['width'] / M
+                x = x2 - width if anchor == 'right' else ((x1 + x2) / 2 - width / 2 if anchor == 'center' else x1)
+                kk = k - shift
+                top = tops[kk] if 0 <= kk < len(tops) else (tops[-1] + (kk - len(tops) + 1) * pitch if kk >= 0
+                                                            else tops[0] + kk * pitch)
+                plan_pages[pi]['lines'].append(_plan_line(line, uid, b['block_id'], first['role'], style, size, track, x,
+                                                          top + asc, upper=upper,
+                                                          overflow=len(lines) > caps[-1] and k >= b['line_count']))
+                li += 1
     return {'unit': uid, 'kind': first['role'], 'lines': len(lines), 'capacity': capacity,
             'size_px': round(size, 2), 'tracking_px': round(track, 2), 'tracking_em': round(track / size, 3),
-            'lines_original': capacity, 'shrink': shrink, **({'adjusted': sorted(adj)} if adj else {})}
+            'lines_original': capacity, 'shrink': shrink, 'page_index': frames[0][0],
+            **({'adjusted': sorted(adj)} if adj else {})}
 
 
 # ---------------------------------------------------------------- checks
@@ -747,12 +905,23 @@ def make_plan(doc, trans, fonts, settings=None):
         flow = _Flow(doc, tr, fonts, st, chains, body_units, ratios, report)
         flow.run(plan['pages'], unit_info)
         report['units'].extend(unit_info[u] for u in flow.units if u in unit_info)
+    bases = caption_bases(doc, chains, tr, fonts, ratios, st)
+    # captions of one page share one size: a dry run gives each its fitted size, the page uses the smallest
+    page_cap = {}
+    for uid in fixed_units:
+        if uid in bases and uid in tr:
+            res = _fixed_unit(doc, uid, chains[uid], tr[uid]['pl'].strip(), fonts, ratios, st, report, plan['pages'],
+                              base=bases[uid], noise=noise, emit=False)
+            key = (res['page_index'], bases[uid][0])
+            if res['size_px'] >= 0.88 * bases[uid][0] * st['size_scale']:   # one over-long caption shrinks alone
+                page_cap[key] = min(page_cap.get(key, 1e9), res['size_px'])
     for uid in fixed_units:
         if uid not in tr:
             keep(chains[uid], '%s: no translation; original pixels kept' % uid)
             continue
+        cap = page_cap.get((chains[uid][0][0], bases[uid][0])) if uid in bases else None
         report['units'].append(_fixed_unit(doc, uid, chains[uid], tr[uid]['pl'].strip(), fonts, ratios, st, report,
-                                           plan['pages']))
+                                           plan['pages'], base=bases.get(uid), size_cap=cap, noise=noise))
     checks, summary = check_plan(doc, plan)
     report['checks'], report['check_summary'] = checks, summary
     for c in checks:

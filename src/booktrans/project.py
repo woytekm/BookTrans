@@ -57,7 +57,8 @@ BACKGROUNDS = ('paper', 'scan')
 RESOLUTIONS = ('auto', 'work')
 DEFAULT_RENDER = {
     'background': 'paper',      # paper: clean canvas | scan: the scan with the text wiped (render.py --background)
-    'resolution': 'auto',       # auto: full resolution when the scan has it | work: analysis scale (fast previews)
+    'resolution': 'auto',       # auto: pages at output_dpi | work: analysis scale (fast previews)
+    'output_dpi': 300,          # resolution of the final pages and the PDF (text is drawn at this size)
     'font': '',                 # regular TTF or path@weight ('' = the default font, config/fonts.json); relative to the project
     'bold_font': '',
     'italic_font': '',
@@ -165,7 +166,7 @@ def check_render(r, base=None):
                 raise ValueError
         except ValueError:
             raise ProjectError('letter-spacing must be "auto" or a number of em from 0 to 0.5')
-    for k, lo, hi in (('size_scale', 0.5, 1.5), ('word_space', 0.5, 3.0)):
+    for k, lo, hi in (('size_scale', 0.5, 1.5), ('word_space', 0.5, 3.0), ('output_dpi', 100, 1200)):
         try:
             if not lo <= float(r.get(k)) <= hi:
                 raise ValueError
@@ -569,7 +570,8 @@ class Project:
         cmd = [sys.executable, str(HERE / 'render.py'), str(doc), str(self.translations_file), '-o', str(self.render_dir),
                '--background', r['background'], '--resolution', resolution or r['resolution'],
                '--tracking', str(r['tracking']).strip() or 'auto', '--size-scale', str(r['size_scale']),
-               '--word-space', str(r['word_space']), '--ink', str(r['ink']).replace(' ', '')]
+               '--word-space', str(r['word_space']), '--ink', str(r['ink']).replace(' ', ''),
+               '--dpi', str(r.get('output_dpi') or 300)]
         for k, flag in (('font', '--font'), ('bold_font', '--bold-font'), ('italic_font', '--italic-font')):
             if str(r.get(k) or '').strip():
                 cmd += [flag, str(_font_path(str(r[k]).strip(), self.root))]
