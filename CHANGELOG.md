@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — render: PDF, emphasis runs, memory
+
+- **`render.py --pdf [NAME]`** (`render(pdf=, pdf_dpi=)`): the drawn pages as one PDF, written page by page (JPEG), page size from the pixels at 120 DPI x the drawing scale (the book's physical size for the 600 DPI scans) or `--pdf-dpi`.
+- **Emphasis inside a paragraph**: translations may use `<i>`, `<b>`, `<sp>` (letter-spaced Sperrsatz, +0.16 em), also inside a word; measured per run, carried across pages with their tags, drawn in the run's font; headings in capitals keep the tags. Plan words in another style carry `{style, track, join}`. Not yet produced by stage 2 / the translation prompt.
+- `render()` no longer holds every original and rebuilt page in memory (a whole book at full resolution would not fit): per-page comparisons are written as each page is drawn, `compare.png` from small copies.
+- Tests: 4 new (250 passed).
+
 ## Unreleased — render: ink and fonts; fontcheck.py
 
 - **`--ink auto`** (default; project `render.ink`): the text colour is measured from the scan (darkest tenth of the ink pixels in the text blocks), stored in `report.json` and `layout.json`.

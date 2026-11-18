@@ -290,3 +290,63 @@ def test_drift_is_reported(tmp_path):
     plan = L.make_plan(doc, {'units': {'u1': {'pl': _pl(1500)}, 'u2': {'pl': _pl(300)}, 'u3': {'pl': _pl(300)}}}, _fonts())
     drift = [c for c in plan['report']['checks'] if c['kind'] == 'drift']
     assert drift and drift[0]['unit'] == 'u2'
+
+
+# ---------------------------------------------------------------- emphasis inside a paragraph, PDF
+STYLED = ('Portal kościoła w <sp>Byczynie</sp> jest jednym z najstarszych, a jego <i>tympanon</i> i <i>archiwolta</i> '
+          'pochodzą z <b>XIII</b> wieku; zachowały się też <i>Steinmetzzeichen</i>u oraz <sp>bardzo charakterystyczne</sp> '
+          'detale portalu bocznego, które opisał już Lutsch w swoim spisie zabytków.')
+
+
+def test_styled_runs_round_trip_and_carry_their_style():
+    f = _fonts(); size = 18
+    font = f.get('regular', size * 8)
+    lines, _ = typeset(STYLED, font, 8 * 400, 0.0, True, fonts_for=lambda st: f.get(st, size * 8))
+    assert text_of(lines) == STYLED
+    rest = text_of(lines[2:])
+    assert rest.count('<sp>') == rest.count('</sp>') and rest.count('<i>') == rest.count('</i>')
+    entries = [e for ln in lines for e in line_words(ln)]
+    by_text = {e[0]: (e[2] if len(e) > 2 else {}) for e in entries}
+    assert by_text['tympanon'] == {'style': 'italic'} and by_text['XIII'] == {'style': 'bold'}
+    assert by_text['Byczynie']['track'] > 0.1 * size * 8                       # letter-spaced
+    assert by_text['Steinmetzzeichen'] == {'style': 'italic', 'join': True} and 'u' in by_text   # style change inside a word
+    for ln in lines[:-1]:                                                      # still justified
+        assert abs(ln['width'] - 8 * 400) < 1.0
+    plain, _ = typeset(STYLED, font, 8 * 400, 0.0, True)                       # without fonts_for: tags dropped
+    assert '<' not in ''.join(e[0] for ln in plain for e in line_words(ln))
+
+
+def test_styled_text_through_the_plan_and_drawing(tmp_path):
+    p1 = _para('p1', 'u1', 6, 40, 560, 100)
+    doc = _doc(tmp_path, [[p1]])
+    trans = {'units': {'u1': {'pl': STYLED}}}
+    names, _ = R.render(doc, trans, tmp_path / 'out', _fonts())
+    plan = json.loads((tmp_path / 'out' / 'layout.json').read_text(encoding='utf-8'))
+    metas = [w[2] for ln in plan['pages'][0]['lines'] for w in ln['words'] if len(w) > 2]
+    assert any(m.get('style') == 'italic' for m in metas) and any('track' in m for m in metas)
+    assert not any('<' in w[0] for ln in plan['pages'][0]['lines'] for w in ln['words'])
+    img, _ = R.draw_page(doc, plan, 0)
+    assert np.array_equal(np.asarray(img), np.asarray(Image.open(tmp_path / 'out' / names[0]).convert('RGB')))
+
+
+def test_heading_uppercase_keeps_tags(tmp_path):
+    from typeset import upper_keep_tags
+    assert upper_keep_tags('portal w <i>byczynie</i>') == 'PORTAL W <i>BYCZYNIE</i>'
+
+
+def test_pdf_has_one_page_per_drawn_page_at_the_physical_size(tmp_path):
+    doc = _doc(tmp_path, [[_para('p1', 'u1', 6, 40, 560, 100)], [_para('p2', 'u2', 6, 40, 560, 100)]])
+    trans = {'units': {'u1': {'pl': _pl(380)}, 'u2': {'pl': _pl(380)}}}
+    _, rep = R.render(doc, trans, tmp_path / 'out', _fonts(), pdf='book.pdf')
+    data = (tmp_path / 'out' / 'book.pdf').read_bytes()
+    assert data.startswith(b'%PDF-1.4') and data.rstrip().endswith(b'%%EOF') and rep['pdf'] == 'book.pdf'
+    assert data.count(b'/Type /Page ') == 2
+    assert b'/MediaBox [0 0 360.000 480.000]' in data                    # 600 x 800 px at 120 DPI
+    try:
+        import pypdf
+    except ImportError:
+        return
+    r = pypdf.PdfReader(str(tmp_path / 'out' / 'book.pdf'))
+    assert len(r.pages) == 2 and float(r.pages[0].mediabox.width) == 360.0
+    R.render(doc, trans, tmp_path / 'o2', _fonts(), pages=[1], pdf='p.pdf', pdf_dpi=300)
+    assert len(pypdf.PdfReader(str(tmp_path / 'o2' / 'p.pdf')).pages) == 1

@@ -25,7 +25,7 @@ Headings, captions, bylines and footnotes are set in their original block ("fixe
 """
 import numpy as np
 
-from typeset import typeset, line_words, text_of
+from typeset import typeset, line_words, text_of, upper_keep_tags
 
 SCHEMA = 'booktrans.layout/1'
 M = 8                            # text is measured at M x the working size (sub-pixel precision)
@@ -246,7 +246,7 @@ class _Flow:
             font = self.fonts.get('regular', size * M)
             wf = lambda ln: (widths[ln] if ln < len(widths) else widths[-1]) * M
             self._cache[key] = typeset(text, font, None, indent * M, True, space_factor=self.settings['word_space'],
-                                       track=track * M, widths=wf)
+                                       track=track * M, widths=wf, fonts_for=lambda st: self.fonts.get(st, size * M))
         return self._cache[key]
 
     def simulate(self, pi, cand, carry, pending, prev=None):
@@ -377,12 +377,22 @@ class _Flow:
             self.report['warnings'].append('body text needs %d more lines than the pages hold: overflow below the last frame' % k)
 
 
+def _word(e):
+    w = [e[0], round(e[1] / M, 3)]
+    if len(e) > 2:
+        meta = dict(e[2])
+        if 'track' in meta:
+            meta['track'] = round(meta['track'] / M, 4)
+        w.append(meta)
+    return w
+
+
 def _plan_line(line, unit, block, role, style, size, track, x, baseline, upper=False, overflow=False):
     d = {'unit': unit, 'block': block, 'role': role, 'style': style, 'size': round(size, 3), 'track': round(track, 4),
          'x': round(x + line['indent'] / M, 2), 'baseline': round(baseline, 2), 'width': round(line['width'] / M, 2),
          'gap': round(line['gap'] / M, 3), 'hyphen': bool(line['hyphen']),
          'stretch': round(line['gap'] / line['space'], 3) if line.get('space') else 1.0,
-         'words': [[t, round(w / M, 3)] for t, w in line_words(line)]}
+         'words': [_word(e) for e in line_words(line)]}
     if upper:
         d['upper'] = True
     if overflow:
@@ -404,7 +414,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     if first['role'] == 'author_byline_candidate':
         style = 'italic'
     if upper:
-        text = text.upper()
+        text = upper_keep_tags(text)
     t0 = first['typography']
     size0, s_h, s_w = calibrated_size(first, fonts, style, upper, ratios.get(style, ratios['regular']), up)
     if upper:
@@ -453,7 +463,8 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
         for tf in ((1.0, 0.5, 0.0) if track0 > 0 else (1.0,)):
             track = track0 * tf
             for Wc in Ws:
-                lines, relaxed = typeset(text, font, Wc * M, 0.0, False, space_factor=word_space, track=track * M)
+                lines, relaxed = typeset(text, font, Wc * M, 0.0, False, space_factor=word_space, track=track * M,
+                                         fonts_for=lambda st, sz=size: fonts.get(st, sz * M), style=style)
                 if len(lines) <= capacity and max(l['width'] for l in lines) / M <= Wc + 0.5:
                     chosen = (shrink, Wc, lines, relaxed, size, track); break
             if chosen:
@@ -463,7 +474,8 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     if not chosen:
         shrink, Wc = 0.82, Ws[-1]; size = size0 * shrink
         font = fonts.get(style, size * M)
-        lines, relaxed = typeset(text, font, Wc * M, 0.0, False, space_factor=word_space, track=0.0)
+        lines, relaxed = typeset(text, font, Wc * M, 0.0, False, space_factor=word_space, track=0.0,
+                                 fonts_for=lambda st, sz=size: fonts.get(st, sz * M), style=style)
         chosen = (shrink, Wc, lines, relaxed, size, 0.0)
         report['warnings'].append('%s: needs %d lines, frame holds %d (overflow)' % (uid, len(lines), capacity))
     shrink, Wc, lines, relaxed, size, track = chosen

@@ -36,20 +36,24 @@ INK = (34, 30, 26)
 
 
 # ---------------------------------------------------------------- drawing
-def draw_line(draw, line, font, S, ink, hyph_char='-'):
-    """Draw one plan line at scale ``S`` (working px -> output px) with ``font`` loaded at ``line['size'] * S``."""
+def draw_line(draw, line, font, S, ink, hyph_char='-', fonts=None):
+    """Draw one plan line at scale ``S`` (working px -> output px) with ``font`` loaded at ``line['size'] * S``;
+    ``fonts`` (a ``Fonts``) for words in another style (``<i>``, ``<b>``)."""
     cx = line['x'] * S
     base = line['baseline'] * S
-    tr = line.get('track', 0.0) * S
     words = line['words']
-    for i, (t, w) in enumerate(words):
+    for i, e in enumerate(words):
+        t, w = e[0], e[1]
+        meta = e[2] if len(e) > 2 else {}
+        f = fonts.get(meta['style'], line['size'] * S) if meta.get('style') and fonts else font
+        tr = meta.get('track', line.get('track', 0.0)) * S
         if tr > 0:
             for k, ch in enumerate(t):
-                draw.text((cx + font.getlength(t[:k]) + tr * k, base), ch, font=font, fill=ink, anchor='ls')
+                draw.text((cx + f.getlength(t[:k]) + tr * k, base), ch, font=f, fill=ink, anchor='ls')
         else:
-            draw.text((cx, base), t, font=font, fill=ink, anchor='ls')
+            draw.text((cx, base), t, font=f, fill=ink, anchor='ls')
         cx += w * S
-        if i < len(words) - 1:
+        if i < len(words) - 1 and not meta.get('join'):
             cx += line['gap'] * S
     if line.get('hyphen'):
         draw.text((cx, base), hyph_char, font=font, fill=ink, anchor='ls')
@@ -129,7 +133,7 @@ def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolutio
         canvas.paste(orig.crop(box), box[:2])
     draw = ImageDraw.Draw(canvas)
     for line in pp['lines']:
-        draw_line(draw, line, fonts.get(line['style'], line['size'] * S), S, ink)
+        draw_line(draw, line, fonts.get(line['style'], line['size'] * S), S, ink, fonts=fonts)
     return canvas, orig
 
 
@@ -169,6 +173,56 @@ def measure_ink(doc, max_pages=12):
     return tuple(int(round(v)) for v in np.median(core, axis=0))
 
 
+WORK_DPI = 120.0                 # resolution of the working page images (the 600 DPI originals at scale ~5)
+
+
+class PdfWriter:
+    """A book PDF written page by page (each page a JPEG; nothing is kept in memory).  Page size from the image
+    and ``dpi``, so a printout has the original's physical size when the DPI is right."""
+
+    def __init__(self, path, quality=90):
+        self.f = open(path, 'wb')
+        self.quality = quality
+        self.offsets = {}
+        self.kids = []
+        self.next = 3                                 # 1: catalog, 2: page tree (written last)
+        self.f.write(b'%PDF-1.4\n%\xe2\xe3\xcf\xd3\n')
+
+    def _obj(self, num, body, stream=None):
+        self.offsets[num] = self.f.tell()
+        self.f.write(b'%d 0 obj\n' % num + body)
+        if stream is not None:
+            self.f.write(b'\nstream\n' + stream + b'\nendstream')
+        self.f.write(b'\nendobj\n')
+
+    def add(self, img, dpi):
+        import io
+        buf = io.BytesIO()
+        img.convert('RGB').save(buf, 'JPEG', quality=self.quality, dpi=(dpi, dpi))
+        data = buf.getvalue()
+        w_pt, h_pt = img.width * 72.0 / dpi, img.height * 72.0 / dpi
+        page, content, image = self.next, self.next + 1, self.next + 2
+        self.next += 3
+        self._obj(image, b'<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB '
+                         b'/BitsPerComponent 8 /Filter /DCTDecode /Length %d >>' % (img.width, img.height, len(data)), data)
+        cs = b'q %.3f 0 0 %.3f 0 0 cm /Im0 Do Q' % (w_pt, h_pt)
+        self._obj(content, b'<< /Length %d >>' % len(cs), cs)
+        self._obj(page, b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.3f %.3f] /Contents %d 0 R '
+                        b'/Resources << /XObject << /Im0 %d 0 R >> >> >>' % (w_pt, h_pt, content, image))
+        self.kids.append(page)
+
+    def close(self):
+        self._obj(2, b'<< /Type /Pages /Kids [%s] /Count %d >>' % (b' '.join(b'%d 0 R' % k for k in self.kids), len(self.kids)))
+        self._obj(1, b'<< /Type /Catalog /Pages 2 0 R >>')
+        xref = self.f.tell()
+        n = self.next
+        self.f.write(b'xref\n0 %d\n0000000000 65535 f \n' % n)
+        for i in range(1, n):
+            self.f.write(b'%010d 00000 n \n' % self.offsets.get(i, 0))
+        self.f.write(b'trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n' % (n, xref))
+        self.f.close()
+
+
 def compare_strip(images, H=1100):
     tiles = [im.resize((int(im.width * H / im.height), H), Image.LANCZOS) for im in images]
     comp = Image.new('RGB', (sum(t.width for t in tiles) + 10 * (len(tiles) - 1), H), (90, 90, 90))
@@ -195,13 +249,14 @@ def parse_pages(spec, doc):
 
 
 def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolution='auto', para_indent_em=None,
-           tracking=None, size_scale=1.0, word_space=1.0, pages=None, settings=None):
+           tracking=None, size_scale=1.0, word_space=1.0, pages=None, settings=None, pdf=None, pdf_dpi=None):
     """Lay out the whole book, draw the pages ``pages`` (indexes; default all) into ``out_dir``.
 
     ``tracking``: None = fit the letter-spacing so the translation fills the original line widths; a number =
     fixed letter-spacing in em (0 = none).  ``size_scale`` and ``word_space`` multiply the chosen font size and
     the natural word space.  ``ink``: (R, G, B) or 'auto' (measured from the scan, ``measure_ink``).  ``settings``
-    (a dict, see ``layout.DEFAULTS``) overrides these.
+    (a dict, see ``layout.DEFAULTS``) overrides these.  ``pdf``: a file name in ``out_dir`` for the drawn pages as one
+    PDF, at ``pdf_dpi`` (default: ``WORK_DPI`` x the drawing scale).
     Returns (file names, report)."""
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     st = {'tracking': tracking, 'size_scale': size_scale, 'word_space': word_space, 'paragraph_indent_em': para_indent_em}
@@ -212,19 +267,27 @@ def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolutio
         ink = measure_ink(doc) or INK
     report['ink'] = plan['ink'] = list(ink)
     idx = list(range(len(doc['pages']))) if pages is None else list(pages)
-    names, pairs = [], []
+    names, tiles = [], []
+    many = len(idx) > 4
+    pdf_w = PdfWriter(out_dir / pdf) if pdf else None
     for pi in idx:
         page = doc['pages'][pi]
         canvas, orig = draw_page(doc, plan, pi, fonts, background, ink, resolution)
         name = 'page_%03d_%s.png' % (page['page'], page.get('side', ''))
         canvas.save(out_dir / name); names.append(name)
-        pairs.append((page, orig, canvas))
-    if len(pairs) <= 4:
-        if pairs:
-            compare_strip([im for _, o, c in pairs for im in (o, c)]).save(out_dir / 'compare.png')
-    else:                                             # a whole book: one comparison per page
-        for page, o, c in pairs:
-            compare_strip([o, c]).save(out_dir / ('compare_page_%03d.png' % page['page']))
+        if pdf_w:
+            S = float(page.get('scale') or 1.0) if (page.get('image_full') and resolution != 'work') else 1.0
+            pdf_w.add(canvas, pdf_dpi or WORK_DPI * S)
+        if many:                                      # a whole book: one comparison per page, written at once
+            compare_strip([orig, canvas]).save(out_dir / ('compare_page_%03d.png' % page['page']))
+        else:                                         # keep small copies only (full-resolution pages are large)
+            tiles += [im.resize((int(im.width * 1100 / im.height), 1100), Image.LANCZOS) for im in (orig, canvas)]
+        del canvas, orig
+    if tiles:
+        compare_strip(tiles).save(out_dir / 'compare.png')
+    if pdf_w:
+        pdf_w.close()
+        report['pdf'] = pdf
     (out_dir / 'layout.json').write_text(json.dumps({k: v for k, v in plan.items() if k != 'report'}, ensure_ascii=False),
                                          encoding='utf-8')
     (out_dir / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -254,6 +317,8 @@ def main():
     ap.add_argument('--pages', help='draw only these pages (printed numbers, e.g. 3,5-7); the layout still covers the book')
     ap.add_argument('--overrides', type=Path,
                     help="human adjustments of blocks and pages (a project's review/render_overrides.json, see render_overrides.py)")
+    ap.add_argument('--pdf', nargs='?', const='book.pdf', help='also write the drawn pages as one PDF (default name book.pdf)')
+    ap.add_argument('--pdf-dpi', type=float, help='PDF resolution (default %g x the drawing scale: the physical size of the 600 DPI scans)' % WORK_DPI)
     ap.add_argument('--no-page-fit', action='store_true',
                     help='one body size for the whole book (shrunk only when a page cannot hold its text)')
     a = ap.parse_args()
@@ -273,7 +338,7 @@ def main():
         log.info('render', 'overrides: %d block(s), %d page(s) adjusted by hand' % (len(settings['blocks']), len(settings['pages'])))
     names, rep = render(doc, trans, out, Fonts(a.font, a.bold_font, a.italic_font), a.background, ink, a.resolution, a.paragraph_indent,
                         None if a.tracking == 'auto' else float(a.tracking), a.size_scale, a.word_space,
-                        pages=parse_pages(a.pages, doc), settings=settings)
+                        pages=parse_pages(a.pages, doc), settings=settings, pdf=a.pdf, pdf_dpi=a.pdf_dpi)
     for s in stale:
         log.info('render', 'WARNING stale override (not applied): ' + s)
     for r in rep['units']:

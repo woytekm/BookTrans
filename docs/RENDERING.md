@@ -8,11 +8,12 @@ drawing, so the output has the full resolution of the scan.
 python render.py document.json translations.json -o out [--pages 3,5-7] \
   [--font F --bold-font F --italic-font F] [--background paper|scan] [--resolution auto|work] \
   [--ink R,G,B] [--paragraph-indent EM] [--tracking auto|EM] [--size-scale F] [--word-space F] [--no-page-fit] \
-  [--overrides review/render_overrides.json]
+  [--overrides review/render_overrides.json] [--pdf [book.pdf]] [--pdf-dpi N]
 ```
 
 Writes `page_NNN_X.png`, `compare.png` (original | reconstruction; one `compare_page_NNN.png` per page
-for more than 4 pages), `layout.json` (the plan) and `report.json`.
+for more than 4 pages, written as each page is drawn), `layout.json` (the plan), `report.json`, and with `--pdf` one
+PDF of the drawn pages.
 
 ## Two steps: plan, then draw (since 2026-11-18)
 
@@ -225,6 +226,24 @@ few percent of 1. The original book's face is a light, wide, low-contrast Antiqu
 ligature; none of the bundled fonts is that, so try candidates on the real 600 DPI scans. The scoring is the basis
 for an automatic choice later (roadmap).
 
+## Emphasis inside a paragraph
+
+A translation may mark words with `<i>…</i>` (italic), `<b>…</b>` (bold) and `<sp>…</sp>` (Sperrsatz: letter-spaced,
++0.16 em, `typeset.SP_EM`), also across words and inside a word (`<i>Steinmetzzeichen</i>u`). The line breaker
+measures each run in its own font; a word that changes style inside is not hyphenated. In the plan a word in another
+style is `[text, width, {style, track, join}]` (`join`: no word space after it). The rest of a paragraph carried to the
+next page keeps its tags. Headings in capitals keep the tags (`upper_keep_tags`). Without tags nothing changes.
+Not yet produced upstream: stage 2 does not detect emphasis in the German scan (letter-spaced words, italics), and the
+translation prompt does not ask to keep tags (changing the rules would invalidate the translation cache, so it waits for
+the detection).
+
+## PDF
+
+`--pdf [NAME]` (default `book.pdf`) writes the drawn pages as one PDF, page by page (JPEG, quality 90; nothing kept in
+memory). Page size = pixels / DPI; the default DPI is 120 x the drawing scale (`WORK_DPI`: the working images of the
+600 DPI originals are at about 120 DPI), so the PDF has the book's physical size; `--pdf-dpi` overrides it. A vector PDF
+(real, selectable text over the figures) is possible from the plan later (needs a PDF library such as reportlab).
+
 ## Not done
 
 - Reading order across a block that spans several columns (columns are found per page from the body blocks;
@@ -232,5 +251,6 @@ for an automatic choice later (roadmap).
 - Pulling text back to fill a page whose paragraphs are much shorter in Polish (deliberately not done: it
   would break the page sync).
 - Choosing the font automatically (`fontcheck.py` scores candidates; picking the best and passing it on is not wired).
-- Bold/italic or letter-spaced emphasis inside a paragraph (the model has no run-level styles).
+- Detecting emphasis in the scan and keeping it through the translation (the renderer is ready, see above).
+- A vector PDF.
 - Re-typesetting page numbers.

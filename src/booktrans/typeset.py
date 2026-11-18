@@ -184,6 +184,94 @@ def _pieces_of(text, font, track=0.0):
     return out
 
 
+# ---------------------------------------------------------------- emphasis inside a paragraph
+TAG = re.compile(r'</?(i|b|sp)>')
+SP_EM = 0.16                     # extra letter-spacing of <sp> (Sperrsatz, the German emphasis by spacing), in em
+
+
+def has_tags(text):
+    return TAG.search(text) is not None
+
+
+def strip_tags(text):
+    return TAG.sub('', text)
+
+
+def upper_keep_tags(text):
+    return ''.join(seg if TAG.fullmatch(seg) else seg.upper() for seg in re.split(r'(</?(?:i|b|sp)>)', text))
+
+
+def _style_of(base, tags):
+    if 'b' in tags:
+        return 'bold'
+    if 'i' in tags:
+        return 'italic'
+    return base
+
+
+def styled_pieces(text, fonts_for, base_style, track=0.0, sp_track=0.0):
+    """Pieces of a text with ``<i>``, ``<b>``, ``<sp>`` runs (``fonts_for(style)`` gives the font at the measuring
+    size).  A word in one run is split as usual (hyphenation, hard breaks); a word that changes style inside is one
+    unbreakable group of pieces (break kind ``join`` between them).  Every piece carries ``tags`` (the open tags), and
+    ``style`` / ``sp`` when they differ from the paragraph's."""
+    chars, open_ = [], set()
+    pos = 0
+    for m in TAG.finditer(text):
+        chars += [(c, frozenset(open_)) for c in text[pos:m.start()]]
+        name = m.group(1)
+        if m.group(0).startswith('</'):
+            open_.discard(name)
+        else:
+            open_.add(name)
+        pos = m.end()
+    chars += [(c, frozenset(open_)) for c in text[pos:]]
+    words, cur = [], []
+    for c, t in chars:
+        if c.isspace():
+            if cur:
+                words.append(cur); cur = []
+        else:
+            cur.append((c, t))
+    if cur:
+        words.append(cur)
+    out = []
+    plain = [''.join(c for c, _ in w) for w in words]
+    for wi, w in enumerate(words):
+        runs = []
+        for c, t in w:
+            if runs and runs[-1][1] == t:
+                runs[-1][0] += c
+            else:
+                runs.append([c, t])
+        word = plain[wi]
+        glue = word.lower().strip('.,;:') in SINGLE_LETTER and wi + 1 < len(words) and len(word.strip('.,;:')) == 1
+        end = None if wi == len(words) - 1 else ('glue' if glue else 'space')
+        if len(runs) == 1:
+            t = runs[0][1]
+            st = _style_of(base_style, t)
+            tr = track + (sp_track if 'sp' in t else 0.0)
+            ps = pieces_of(word, fonts_for(st), tr)
+            ps[-1]['brk'] = end
+        else:
+            ps = []
+            for ri, (rt, t) in enumerate(runs):
+                st = _style_of(base_style, t)
+                tr = track + (sp_track if 'sp' in t else 0.0)
+                ps.append({'t': rt, 'w': fonts_for(st).getlength(rt) + tr * len(rt), 'brk': 'join', 'track': tr})
+                ps[-1]['_t'] = t
+            ps[-1]['brk'] = end
+        for p in ps:
+            t = p.pop('_t', runs[0][1])
+            p['tags'] = tuple(sorted(t))
+            st = _style_of(base_style, t)
+            if st != base_style:
+                p['style'] = st
+            if 'sp' in t:
+                p['sp'] = True
+        out += ps
+    return out
+
+
 def break_lines(pieces, widths, space, hyph_w, justify, rmin=RMIN, rmax=RMAX):
     """Optimum-fit line breaking. ``widths(line_no)`` gives each line's width.
 
@@ -256,12 +344,17 @@ def break_lines(pieces, widths, space, hyph_w, justify, rmin=RMIN, rmax=RMAX):
     return lines
 
 
-def typeset(text, font, W, indent, justify, space_factor=1.0, track=0.0, widths=None):
+def typeset(text, font, W, indent, justify, space_factor=1.0, track=0.0, widths=None, fonts_for=None, style='regular'):
     """Lines for ``text``; each line is a dict with pieces, gap, hyphen flag and justification.
 
     ``widths``: optional callable ``line_no -> width`` (line slots of different widths, e.g. beside a
-    figure); the first-line ``indent`` is subtracted from it.  Without it every line is ``W`` wide."""
-    pieces = pieces_of(text, font, track)
+    figure); the first-line ``indent`` is subtracted from it.  Without it every line is ``W`` wide.
+    ``fonts_for(style)`` (fonts at the measuring size) enables ``<i>``/``<b>``/``<sp>`` runs in ``text``; without it
+    tags are dropped."""
+    if has_tags(text) and fonts_for is not None:
+        pieces = styled_pieces(text, fonts_for, style, track, SP_EM * font.size)
+    else:
+        pieces = pieces_of(strip_tags(text), font, track)
     space = font.getlength(' ') * space_factor + track
     hyph_w = font.getlength('-')
     base = widths if widths is not None else (lambda ln: W)
@@ -296,24 +389,51 @@ def typeset(text, font, W, indent, justify, space_factor=1.0, track=0.0, widths=
 
 
 def line_words(line):
-    """A typeset line as drawable words: ``[[text, width], ...]``.  Pieces of one word (hyphenation parts,
-    a hard break after a dash) are joined; word gaps come between the returned words."""
-    words, cur, w = [], '', 0.0
-    for i, p in enumerate(line['pieces']):
-        cur += p['t']; w += p['w']
-        if p['brk'] in ('space', 'glue') or i == len(line['pieces']) - 1:
-            words.append([cur, w]); cur, w = '', 0.0
+    """A typeset line as drawable words: ``[[text, width], ...]``; an entry gets a third element ``{style, track,
+    join}`` when its style or letter-spacing differs from the paragraph's (``join``: no word space after it, the
+    word goes on in another style).  Pieces of one word in one style are joined."""
+    words, cur = [], None
+    pieces = line['pieces']
+    for i, p in enumerate(pieces):
+        key = (p.get('style'), p['track'] if p.get('sp') else None)
+        if cur is not None and cur['key'] == key:
+            cur['t'] += p['t']; cur['w'] += p['w']
+        else:
+            if cur is not None:                     # style change inside a word
+                words.append(_entry(cur, join=True))
+            cur = {'t': p['t'], 'w': p['w'], 'key': key}
+        if p['brk'] in ('space', 'glue') or i == len(pieces) - 1:
+            words.append(_entry(cur, join=False)); cur = None
     return words
 
 
+def _entry(cur, join):
+    style, track = cur['key']
+    meta = {}
+    if style:
+        meta['style'] = style
+    if track is not None:
+        meta['track'] = track
+    if join:
+        meta['join'] = True
+    return [cur['t'], cur['w'], meta] if meta else [cur['t'], cur['w']]
+
+
 def text_of(lines):
-    """The text of typeset lines (to typeset the rest of a paragraph again, e.g. on the next page)."""
-    out = ''
+    """The text of typeset lines (to typeset the rest of a paragraph again, e.g. on the next page), with its
+    ``<i>``/``<b>``/``<sp>`` tags."""
+    out, open_, space = '', (), ''
     for ln in lines:
         for p in ln['pieces']:
-            out += p['t']
+            tags = p.get('tags', ())
+            if tags != open_:
+                out += ''.join('</%s>' % t for t in reversed(open_) if t not in tags)
+                out += space; space = ''
+                out += ''.join('<%s>' % t for t in tags if t not in open_)
+                open_ = tags
+            out += space + p['t']; space = ''
             if p['brk'] in ('space', 'glue'):
-                out += ' '
+                space = ' '
         if ln['pieces'] and ln['pieces'][-1]['brk'] in ('space', 'glue', None):
-            out = out.rstrip() + ' '
-    return out.strip()
+            space = ' '
+    return (out + ''.join('</%s>' % t for t in reversed(open_))).strip()
