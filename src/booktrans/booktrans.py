@@ -20,7 +20,7 @@ Several TIFFs (or a folder of them) are processed as one book: ``python booktran
 writes ``<out>/<folder name>/`` with the same layout but one ``document.json`` for all spreads (pages
 numbered consecutively, paragraphs joined across spread boundaries, one list of translation units),
 and the per-spread stage files in ``stages/<tiff name>/``. ``--resume`` skips spreads whose stages 1-3
-are already there; ``--separate`` keeps one folder per TIFF instead.
+are already there (also for a single TIFF); ``--separate`` keeps one folder per TIFF instead.
 
 The input may be an open-book spread (default, split at the gutter), a single
 whole page (``--layout page``) or a crop of a page (``--layout crop``).
@@ -69,21 +69,29 @@ def step(n, title):
     log.info('wrap', '=== stage %d/4: %s ===' % (n, title))
 
 
-def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spread'):
+def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spread', resume=False):
+    """One TIFF -> ``<out_root>/<tiff stem>/``.  With ``resume`` and stages 1-3 present they are kept and only stage 4
+    and ``document.json`` are redone (as for a book); otherwise the folder is deleted and everything runs."""
     tiff = Path(tiff)
     out = Path(out_root) / tiff.stem
-    if out.exists():
-        shutil.rmtree(out)
     st = out / 'stages'
     s1, s2, s3, s4 = (st / n for n in ('s1', 's2', 's3', 's4'))
+    done = (s3 / 'page_structure_stage3.json').exists()
     log.info('wrap', 'input %s -> %s' % (tiff, out))
-    step(1, 'page split, deskew, illustrations, text regions')
-    run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang, '--scale', scale, '--layout', layout])
-    step(2, 'OCR lines, captions, paragraphs')
-    run([HERE / 'stage2.py', tiff, '--stage1-json', s1 / 'page_structure.json', '-o', s2,
-         '--lang', lang, '--ocr-scale', ocr_scale])
-    step(3, 'classification and illustration association')
-    run([HERE / 'stage3.py', s2 / 'page_structure_stage2.json', '--stage1-json', s1 / 'page_structure.json', '-o', s3])
+    if resume and done:
+        log.info('wrap', '%s: stages 1-3 present, skipped (--resume)' % tiff.name)
+    else:
+        if resume:
+            log.info('wrap', '%s: --resume, but stages 1-3 are not complete: running everything' % tiff.name)
+        if out.exists():
+            shutil.rmtree(out)
+        step(1, 'page split, deskew, illustrations, text regions')
+        run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang, '--scale', scale, '--layout', layout])
+        step(2, 'OCR lines, captions, paragraphs')
+        run([HERE / 'stage2.py', tiff, '--stage1-json', s1 / 'page_structure.json', '-o', s2,
+             '--lang', lang, '--ocr-scale', ocr_scale])
+        step(3, 'classification and illustration association')
+        run([HERE / 'stage3.py', s2 / 'page_structure_stage2.json', '--stage1-json', s1 / 'page_structure.json', '-o', s3])
     step(4, 'cross-page links and translation units')
     run([HERE / 'stage4.py', s3 / 'page_structure_stage3.json', '-o', s4])
     log.info('wrap', '=== building document.json and cropping figures ===')
@@ -192,7 +200,7 @@ def main():
         jobs.append((name, out, doc))
     else:
         for f in tiffs:
-            out, doc = process(f, a.output, a.lang, a.ocr_scale, a.scale, a.layout)
+            out, doc = process(f, a.output, a.lang, a.ocr_scale, a.scale, a.layout, a.resume)
             jobs.append((f.name, out, doc))
     for label, out, doc in jobs:
         for p in doc['pages']:

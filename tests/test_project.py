@@ -150,3 +150,21 @@ def test_pipeline_run_stop_ends_the_process_group():
     while run.running and time.time() - t0 < 20:
         time.sleep(0.02)
     assert not run.running and run.stopped and run.returncode != 0
+
+
+def test_ocrfix_command_runs_stage_5_alone_with_the_gui_files(tmp_path, scans):
+    p = PR.Project.create(tmp_path / 'p', 'mybook', scans, {'ocrfix': 'aggressive', 'ocr_suggest': False})
+    with pytest.raises(PR.ProjectError, match='run the pipeline first'):
+        p.ocrfix_command()
+    (p.book_dir()).mkdir(parents=True)
+    (p.book_dir() / 'document.json').write_text('{}', encoding='utf-8')
+    c = p.ocrfix_command()
+    assert c[0] == sys.executable and c[1].endswith('ocrfix.py') and c[2] == 'run' and c[3] == str(p.book_dir() / 'document.json')
+    assert '--aggressive' in c and '--no-suggest' in c
+    assert c[c.index('--edits') + 1] == str(p.edits_file) and c[c.index('--decisions') + 1] == str(p.decisions_file)
+    p.params.update(ocrfix='strict', ocr_suggest=True)
+    c = p.ocrfix_command()
+    assert '--aggressive' not in c and '--no-suggest' not in c
+    p.params['ocrfix'] = 'off'
+    with pytest.raises(PR.ProjectError, match='switched off'):
+        p.ocrfix_command()

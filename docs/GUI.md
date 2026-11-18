@@ -220,7 +220,7 @@ Stage A already has the window as a separate, per-page, reused toplevel with the
 | `gui_dialogs.py` | no | new project, environment window, command dialog |
 | `gui_correction.py` | no | the OCR correction window: page image with marks (editor in stage C); `compose_marks` needs only PIL |
 | `unit_edits.py` | no | the edit store: hash-tied edits, `apply_edits`, `validate_review` (also used by `ocrfix.py run --edits`) |
-| `gui_run.py` | yes | the Run pipeline window (parameters, Start/Stop, live log) |
+| `gui_run.py` | yes | the Run pipeline window (parameters, Start/Stop, live log); mode `ocrfix`: Re-run OCR correction (stage 5 only) |
 | `gui_widgets.py` | no | colours, `JsonView` (read-only JSON with colouring and search), `run_async`, helpers |
 
 Tests: `test_project.py` (22), `test_envcheck.py` (13), `test_pageindex.py` (17), `test_gui_demo.py` (6), `test_gui_smoke.py` (12; needs
@@ -233,7 +233,7 @@ Tests: `test_project.py` (22), `test_envcheck.py` (13), `test_pageindex.py` (17)
 | **A** | this document; project and environment check; page list with counts; page JSON in three views; correction window as a shell; demo project; tests | **done** |
 | **B** | word boxes: stage 2 keeps `words` per line, `docmodel.py` passes them on (document schema 1.1), `pageindex.line_box` maps a mark to word boxes, with the estimate as fallback; the demo gets words | **done** 2026-11-17 |
 | **C** | the correction window: image with marks (**done**), prev/next page (**done**), JSON editor with validation and save to `review/unit_edits.json` (**done**), click a mark to find the word (**done**), find box in the editor (**done**), accept / replace / accept everywhere for a flag and accept-all on a page (**done**, `ocr_decisions.py`); open: mark list, next/previous mark, accept a candidate with one key, page status (todo / reviewed) | mostly done |
-| **D** | `unit_edits.apply_edits` in `ocrfix.py run --edits` (**done**; staleness by hash; `booktrans.py --edits`, passed by the GUI); open: accept-a-candidate writes a `resolution` into `ocr_review.json`, a "re-run OCR correction" button (today: Run pipeline with `--resume`) | partly done |
+| **D** | `unit_edits.apply_edits` in `ocrfix.py run --edits` (**done**; staleness by hash; `booktrans.py --edits`, passed by the GUI); open: accept-a-candidate writes a `resolution` into `ocr_review.json`, the **Re-run OCR correction** button (**done** 2026-11-17: header button, Project menu, Cmd/Ctrl+Shift+O; the run window in mode `ocrfix` runs `project.ocrfix_command()` = `ocrfix.py run <book>/document.json [--aggressive] [--no-suggest] --edits … --decisions …`, seconds instead of a stage-4-onwards run; asks first when a correction window has unsaved changes) | partly done |
 | **E** | run the pipeline from the GUI (**done** 2026-11-17: `gui_run.RunWindow`, `project.PipelineRun`; parameters edited in the window and saved to `project.json`, live log, Stop, `--resume`, reloads the result when done); open: progress per stage, backup of `ocr_review.json` before a destructive run | partly done |
 | **F** | later: translation review, export, anything the first real use shows is missing | |
 
