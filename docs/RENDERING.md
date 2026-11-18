@@ -227,6 +227,10 @@ are never hyphenated (`typeset(..., hyphenate=False)`).
   flush), how far it may reach (neighbours on the same rows, the page content; under a figure first only the
   picture's width) and how many extra lines fit in the free space below (or above, for a caption beside its picture
   and level with its foot).
+- **Leading.** A caption set smaller than its original glyphs closes its line pitch in proportion (pitch x size /
+  original size), and its lines are laid on a new even grid when their number or pitch changes; the free space it may
+  take (down to about a glyph height above the next block) is counted at that pitch. Before, extra lines kept the
+  original pitch and a long caption ran into the paragraph below (page 52, `59 POLICE. PIERŚCIEŃ TRZONU KOLUMNY`).
 - **Order of tries**: the original number of lines at the base size down to 90 % (first within the picture's width,
   then the content width), then the extra lines, then the usual shrink ladder.
 - An emptied unit (a human joined its text into another caption) is neither drawn nor kept (`report.emptied`).
