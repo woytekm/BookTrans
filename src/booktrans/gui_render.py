@@ -20,7 +20,7 @@ from PIL import Image, ImageColor
 from gui_widgets import (BLOCK_OUTLINE, CANVAS_BG, CHECK_COLORS, MOD, MOD_LABEL, MUTED, NOTE_FG, SELECT_OUTLINE,
                          ADJUSTED_OUTLINE, SEL_BG, SEL_FG, STATUS_COLORS, TEXT_BG, TEXT_FG, SafePhoto,
                          release_pending_images, reveal_in_file_manager, run_async)
-from project import BACKGROUNDS, RESOLUTIONS, ProjectError
+from project import BACKGROUNDS, PAGE_POSITIONS, RESOLUTIONS, ProjectError
 from render_session import CHECK_KINDS, RenderSession, output_files
 from typeset import default_fonts, default_fonts_file, font_spec
 
@@ -75,7 +75,7 @@ class RenderWindow(tk.Toplevel):
         self.zoom = None                       # None: fit the window; else display px per working px
         self._scale = 1.0
         self._img = self._photo = None
-        self._panels = []                      # [(kind, x offset in the image)]
+        self._panels = []                      # [(kind, x offset in the image, (dx, dy) content shift in working px)]
         self._origin = (0, 0)
         self.sel = None                        # selected block id
         self._gen = 0                          # bumps with every layout / draw request: stale results are ignored
@@ -199,7 +199,7 @@ class RenderWindow(tk.Toplevel):
         r = self.project.render_settings
         self.bv = {k: tk.StringVar(value=str(r.get(k, ''))) for k in
                    ('font', 'bold_font', 'italic_font', 'tracking', 'size_scale', 'word_space', 'paragraph_indent',
-                    'background', 'ink', 'resolution', 'output_dpi')}
+                    'background', 'ink', 'resolution', 'output_dpi', 'page_position')}
         self.bv_fit = tk.BooleanVar(value=bool(r.get('page_fit', True)))
         f.columnconfigure(1, weight=1)
         row = 0
@@ -230,6 +230,8 @@ class RenderWindow(tk.Toplevel):
         self._row(f, row, 'Ink', ttk.Entry(f, textvariable=self.bv['ink'], width=12), 'auto or R,G,B'); row += 1
         self._row(f, row, 'Final resolution', ttk.Combobox(f, textvariable=self.bv['resolution'], values=RESOLUTIONS,
                                                            state='readonly', width=8), 'Render book'); row += 1
+        self._row(f, row, 'Page position', ttk.Combobox(f, textvariable=self.bv['page_position'], values=PAGE_POSITIONS,
+                                                        state='readonly', width=9), 'original: print; centered: PDF'); row += 1
         self._row(f, row, 'Output DPI', ttk.Entry(f, textvariable=self.bv['output_dpi'], width=10),
                   'final pages and PDF; 300'); row += 1
         bb = ttk.Frame(f)
@@ -512,15 +514,16 @@ class RenderWindow(tk.Toplevel):
 
         def work():
             rebuilt, orig = s.draw(pi, scale)
+            sh = s.shift(pi)
             if view == 'rebuilt':
-                return rebuilt, [('rebuilt', 0)]
+                return rebuilt, [('rebuilt', 0, sh)]
             if view == 'original':
-                return orig, [('original', 0)]
+                return orig, [('original', 0, (0.0, 0.0))]
             img = Image.new('RGB', (orig.width + GAP + rebuilt.width, max(orig.height, rebuilt.height)),
                             ImageColor.getrgb(CANVAS_BG))
             img.paste(orig, (0, 0))
             img.paste(rebuilt, (orig.width + GAP, 0))
-            return img, [('original', 0), ('rebuilt', orig.width + GAP)]
+            return img, [('original', 0, (0.0, 0.0)), ('rebuilt', orig.width + GAP, sh)]
 
         def done(res, err):
             if gen != self._gen or not self.winfo_exists():
@@ -566,7 +569,7 @@ class RenderWindow(tk.Toplevel):
                 if ch_sel.get('block'):
                     bad[ch_sel['block']] = ch_sel['kind']
         adjusted = {b for b in boxes if s.block_adjustment(b)}
-        for kind, off in self._panels:
+        for kind, off, (sx, sy) in self._panels:
             for bid, box in boxes.items():
                 blk = s.block(self.pi, bid)
                 col, width = None, 1
@@ -580,7 +583,7 @@ class RenderWindow(tk.Toplevel):
                     col = BLOCK_OUTLINE
                 if col is None:
                     continue
-                x1, y1, x2, y2 = [v * self._scale for v in box]
+                x1, y1, x2, y2 = [(v + d) * self._scale for v, d in zip(box, (sx, sy, sx, sy))]
                 ox, oy = self._origin[0] + off, self._origin[1]
                 c.create_rectangle(ox + x1 - 2, oy + y1 - 2, ox + x2 + 2, oy + y2 + 2, outline=col, width=width,
                                    tags=('overlay',))
@@ -621,9 +624,9 @@ class RenderWindow(tk.Toplevel):
             return None
         x -= self._origin[0]
         y -= self._origin[1]
-        for kind, off in reversed(self._panels):
+        for kind, off, (sx, sy) in reversed(self._panels):
             if x >= off:
-                wx, wy = (x - off) / self._scale, y / self._scale
+                wx, wy = (x - off) / self._scale - sx, y / self._scale - sy
                 w, h = self._work_size()
                 return (wx, wy) if 0 <= wx <= w and 0 <= wy <= h else None
         return None

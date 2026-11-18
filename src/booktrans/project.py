@@ -55,10 +55,12 @@ DEFAULT_TRANSLATION = {
 
 BACKGROUNDS = ('paper', 'scan')
 RESOLUTIONS = ('auto', 'work')
+PAGE_POSITIONS = ('original', 'centered')
 DEFAULT_RENDER = {
     'background': 'paper',      # paper: clean canvas | scan: the scan with the text wiped (render.py --background)
     'resolution': 'auto',       # auto: pages at output_dpi | work: analysis scale (fast previews)
     'output_dpi': 300,          # resolution of the final pages and the PDF (text is drawn at this size)
+    'page_position': 'original',   # original: as scanned (print) | centered: one page size, content centred (PDF)
     'font': '',                 # regular TTF or path@weight ('' = the default font, config/fonts.json); relative to the project
     'bold_font': '',
     'italic_font': '',
@@ -153,6 +155,8 @@ def check_render(r, base=None):
     """Validate render settings; raises ProjectError with a readable message."""
     if r.get('background') not in BACKGROUNDS:
         raise ProjectError('background must be one of %s' % ', '.join(BACKGROUNDS))
+    if r.get('page_position', 'original') not in PAGE_POSITIONS:
+        raise ProjectError('page position must be one of %s' % ', '.join(PAGE_POSITIONS))
     if r.get('resolution') not in RESOLUTIONS:
         raise ProjectError('resolution must be one of %s' % ', '.join(RESOLUTIONS))
     for k in ('font', 'bold_font', 'italic_font'):
@@ -571,7 +575,7 @@ class Project:
                '--background', r['background'], '--resolution', resolution or r['resolution'],
                '--tracking', str(r['tracking']).strip() or 'auto', '--size-scale', str(r['size_scale']),
                '--word-space', str(r['word_space']), '--ink', str(r['ink']).replace(' ', ''),
-               '--dpi', str(r.get('output_dpi') or 300)]
+               '--dpi', str(r.get('output_dpi') or 300), '--page-position', r.get('page_position') or 'original']
         for k, flag in (('font', '--font'), ('bold_font', '--bold-font'), ('italic_font', '--italic-font')):
             if str(r.get(k) or '').strip():
                 cmd += [flag, str(_font_path(str(r[k]).strip(), self.root))]

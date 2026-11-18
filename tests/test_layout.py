@@ -2,6 +2,7 @@
 import json
 
 import numpy as np
+import pytest
 from PIL import Image
 
 import layout as L
@@ -484,3 +485,24 @@ def test_a_caption_taking_extra_lines_closes_its_leading_and_stays_clear_of_the_
     assert max(ln['baseline'] for ln in mine) < 362 - 4                        # clear of the paragraph below
     gaps = {round(b['baseline'] - a['baseline'], 1) for a, b in zip(mine, mine[1:])}
     assert len(gaps) == 1 and gaps.pop() <= 14.0                               # one even leading, not wider than the original
+
+
+def test_centered_page_position_puts_every_page_on_one_size_centred_and_level(tmp_path):
+    # a left page with a wide outer margin and a right page with a narrow one, of slightly different sizes
+    p1 = [_para('a', 'u1', 6, 230, 810, 150)]
+    p2 = [_para('b', 'u2', 6, 60, 640, 165)]
+    doc = _doc(tmp_path, [p1, p2], cols=((0, 0), (0, 0)), size=(900, 1300))
+    doc['pages'][0]['layout']['columns'] = [{'left': 230, 'right': 810}]
+    doc['pages'][1]['layout']['columns'] = [{'left': 60, 'right': 640}]
+    doc['pages'][1]['width'] = 880
+    assert R.page_frame(doc, 0, 'original') == (0.0, 0.0, 900.0, 1300.0)
+    f0, f1 = R.page_frame(doc, 0, 'centered'), R.page_frame(doc, 1, 'centered')
+    assert f0[2:] == f1[2:] == (890.0, 1300.0)                                 # one size: the medians
+    assert 230 + f0[0] == pytest.approx(60 + f1[0]) == pytest.approx((890 - 580) / 2)   # column centred on both
+    assert 150 + f0[1] == pytest.approx(165 + f1[1])                           # tops level
+    trans = {'units': {'u1': {'pl': _pl(400)}, 'u2': {'pl': _pl(400)}}}
+    plan = L.make_plan(doc, trans, _fonts(), {})
+    img, _ = R.draw_page(doc, plan, 1, _fonts(), resolution='work', position='centered')
+    assert img.size == (890, 1300)
+    ink = np.where((np.asarray(img.convert('L')) < 150).any(axis=0))[0]
+    assert abs((ink.min() + ink.max()) / 2 - 445) < 12                          # the text sits in the middle

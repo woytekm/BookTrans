@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — render: page position (original / centered)
+
+- `render.py --page-position original|centered`, project `render.page_position` (default `original`), *Page position* in the
+  render window's Book tab. `centered`: one page size for the book (the medians), the content centred horizontally by its
+  text column and level at the book's median top, for a PDF edition; `original` keeps the scan's left / right page
+  margins, for print (`render.page_frame`). The GUI preview, outlines and clicks follow the shift
+  (`RenderSession.shift`).
+- Tests: 2 new.
+
 ## Unreleased — render: caption leading
 
 - Owner's finding: page 52's longest caption touched the paragraph below (4 lines at the original 14.5 px pitch, the

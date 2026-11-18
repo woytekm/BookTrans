@@ -120,7 +120,13 @@ class RenderSession:
                 self._relayout()
             r = self.settings
             return R.draw_page(self.doc, self.plan, pi, self.fonts(), r.get('background', 'paper'), tuple(self.plan['ink']),
-                               'work', scale or 1.0)
+                               'work', scale or 1.0, position=r.get('page_position') or 'original')
+
+    def shift(self, pi):
+        """Where the rebuilt page puts page ``pi``'s content: (dx, dy) working px (0, 0 unless the page position is
+        'centered')."""
+        dx, dy, _, _ = R.page_frame(self.doc, pi, self.settings.get('page_position') or 'original')
+        return dx, dy
 
     # ------------------------------------------------------------ what the window shows
     def page_count(self):

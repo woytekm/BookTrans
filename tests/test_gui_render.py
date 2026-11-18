@@ -58,7 +58,7 @@ def test_window_lays_out_and_lists_the_pages(win):
     vals = w.tree.item('1', 'values')
     assert vals[0] == '2' and 'empty 1' in vals[4]
     assert 'Laid out 3 pages' in w.status_lbl.cget('text')
-    assert [k for k, _ in w._panels] == ['original', 'rebuilt']
+    assert [p[0] for p in w._panels] == ['original', 'rebuilt']
     app.open_render()
     assert app.render_window is w                                        # one window per project
 
@@ -70,7 +70,7 @@ def test_navigation_views_and_zoom(win):
     assert w.tree.selection() == ('1',) and 'Page 2' in w.head.cget('text')
     w.view.set('rebuilt')
     w.redraw()
-    pump(app, lambda: [k for k, _ in w._panels] == ['rebuilt'])
+    pump(app, lambda: [p[0] for p in w._panels] == ['rebuilt'])
     w.set_zoom(1.0)
     pump(app, lambda: abs(w._scale - 1.0) < 1e-6)
     assert w._photo.width() == w._img.width and '100%' in w.zoom_lbl.cget('text')
@@ -82,7 +82,7 @@ def test_click_selects_a_block_and_adjustments_apply(win, monkeypatch):
     cap = next(b for b in s.doc['pages'][0]['blocks'] if b.get('role') == 'caption')
     x = (cap['bbox'][0] + cap['bbox'][2]) / 2
     y = (cap['bbox'][1] + cap['bbox'][3]) / 2
-    off = dict(w._panels)['rebuilt']
+    off = {p[0]: p[1] for p in w._panels}['rebuilt']
     cx, cy = w._origin[0] + off + x * w._scale, w._origin[1] + y * w._scale
     assert w.to_work(cx, cy) == pytest.approx((x, y), abs=0.01)
     w.select_block(s.block_at(0, *w.to_work(cx, cy)))

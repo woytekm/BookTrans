@@ -59,6 +59,14 @@ hyphenated word joined). `report.json` is `plan.report`.
    vanished on a paper background.
 4. **Lines** from the plan.
 
+**Page position** (since 2026-11-18; `--page-position`, project `render.page_position`, *Page position* in the Book tab).
+`original` (default): the content stays where it is on the scan, so left and right pages keep their different
+margins (gutter / outer edge) and the scan's small shifts - right for a print edition. `centered`: every page gets the
+book's median page size, its content is centred horizontally (by the text column, else by the content box without
+scan noise) and its top is put at the book's median top (`render.page_frame`), so pages no longer jump left / right
+and up / down - better for a PDF read on a screen. The page is drawn as usual and moved onto the new page; the GUI
+preview and its outlines and clicks follow the shift.
+
 **Output resolution** (since 2026-11-18). Final pages are drawn at `--dpi` (default 300, `render.DEFAULT_OUTPUT_DPI`;
 the project's `render.output_dpi`, *Output DPI* in the render window's Book tab): the scale is `dpi / WORK_DPI`, the
 text is drawn at that size and the scan / figures are resampled to it, from the full-resolution scan when the document

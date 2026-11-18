@@ -146,10 +146,61 @@ def _page_images(doc, page, background, resolution, scale=None):
     return canvas, orig, S
 
 
-def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolution='auto', scale=None, output_dpi=None):
+POSITIONS = ('original', 'centered')
+
+
+def _reference_box(page):
+    """The box a page's content is placed by: its text columns, else its figures, graphics and text blocks (scan
+    noise left out).  None for an empty page."""
+    from layout import is_noise
+    bs = [b['bbox'] for b in page['blocks']
+          if b['kind'] in ('figure', 'graphic') or (b['kind'] == 'text' and not is_noise(b))]
+    if not bs:
+        return None
+    top = min(b[1] for b in bs)
+    bottom = max(b[3] for b in bs)
+    cols = page['layout'].get('columns') or []
+    if cols:
+        return [min(c['left'] for c in cols), top, max(c['right'] for c in cols), bottom]
+    return [min(b[0] for b in bs), top, max(b[2] for b in bs), bottom]
+
+
+def page_frame(doc, pi, position='original'):
+    """Where page ``pi``'s content goes on the output page: (dx, dy, width, height) in working px.
+
+    'original': as scanned (0, 0, the page's own size) - left and right pages keep their different margins, for a
+    print edition.  'centered': every page has the book's median size, the content is centred horizontally (by the
+    text column, else by the content) and its top is at the book's median top, so pages do not jump left and right
+    or up and down from one page to the next - for a PDF read on a screen."""
+    page = doc['pages'][pi]
+    w, h = float(page.get('width') or 0), float(page.get('height') or 0)
+    if position != 'centered':
+        return 0.0, 0.0, w, h
+    cache = doc.get('_frame_cache')
+    if not cache or cache.get('n') != len(doc['pages']):
+        boxes = [_reference_box(p) for p in doc['pages']]
+        tops = [b[1] for b in boxes if b]
+        cache = {'n': len(doc['pages']), 'boxes': boxes,
+                 'W': float(np.median([p.get('width') or 0 for p in doc['pages']])),
+                 'H': float(np.median([p.get('height') or 0 for p in doc['pages']])),
+                 'top': float(np.median(tops)) if tops else 0.0}
+        doc['_frame_cache'] = cache
+    box = cache['boxes'][pi]
+    W, H = cache['W'] or w, cache['H'] or h
+    if box is None:
+        return (W - w) / 2, (H - h) / 2, W, H
+    dx = W / 2 - (box[0] + box[2]) / 2
+    dy = cache['top'] - box[1]
+    dy = min(max(dy, -box[1]), H - box[3])         # never push content off the page
+    return float(dx), float(dy), W, H
+
+
+def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolution='auto', scale=None, output_dpi=None,
+              position='original'):
     """Page ``pi`` (index into ``doc['pages']``) drawn from the layout plan: (rebuilt image, original image).
     ``ink``: default the plan's (``render`` stores the measured one) or ``INK``.  ``scale``: output pixels per working
-    pixel (a preview at any zoom); default ``output_scale(page, resolution, output_dpi)``."""
+    pixel (a preview at any zoom); default ``output_scale(page, resolution, output_dpi)``.  ``position``: 'original'
+    or 'centered' (``page_frame``)."""
     if not scale:
         scale = output_scale(doc['pages'][pi], resolution, output_dpi)
     ink = tuple(ink or plan.get('ink') or INK)
@@ -183,6 +234,12 @@ def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolutio
     draw = ImageDraw.Draw(canvas)
     for line in pp['lines']:
         draw_line(draw, line, fonts.get(line['style'], line['size'] * S), S, ink, fonts=fonts)
+    if position == 'centered':                      # the drawn page moved onto a page of the book's size
+        dx, dy, W, H = page_frame(doc, pi, position)
+        paper = page['layout'].get('paper_color_rgb') or canvas.getpixel((canvas.width - 1, canvas.height - 1))
+        out = Image.new('RGB', (max(1, int(round(W * S))), max(1, int(round(H * S)))), tuple(paper))
+        out.paste(canvas, (int(round(dx * S)), int(round(dy * S))))
+        canvas = out
     return canvas, orig
 
 
@@ -296,7 +353,7 @@ def parse_pages(spec, doc):
 
 def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolution='auto', para_indent_em=None,
            tracking=None, size_scale=1.0, word_space=1.0, pages=None, settings=None, pdf=None, pdf_dpi=None,
-           output_dpi=None):
+           output_dpi=None, position=None):
     """Lay out the whole book, draw the pages ``pages`` (indexes; default all) into ``out_dir``.
 
     ``tracking``: None = fit the letter-spacing so the translation fills the original line widths; a number =
@@ -305,7 +362,8 @@ def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolutio
     where the rebuilt text is as dark as the scan).  ``settings``
     (a dict, see ``layout.DEFAULTS``) overrides these.  ``pdf``: a file name in ``out_dir`` for the drawn pages as one
     PDF, at ``pdf_dpi`` (default: the output resolution).  ``output_dpi``: resolution of the drawn pages (default
-    ``DEFAULT_OUTPUT_DPI``; ignored for ``resolution`` 'work').
+    ``DEFAULT_OUTPUT_DPI``; ignored for ``resolution`` 'work').  ``position``: 'original' (as scanned, default) or
+    'centered' (``page_frame``); default ``settings['page_position']``.
     Returns (file names, report)."""
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     st = {'tracking': tracking, 'size_scale': size_scale, 'word_space': word_space, 'paragraph_indent_em': para_indent_em}
@@ -323,7 +381,8 @@ def render(doc, trans, out_dir, fonts, background='paper', ink='auto', resolutio
     pdf_w = PdfWriter(out_dir / pdf) if pdf else None
     for pi in idx:
         page = doc['pages'][pi]
-        canvas, orig = draw_page(doc, plan, pi, fonts, background, ink, resolution, output_dpi=output_dpi)
+        canvas, orig = draw_page(doc, plan, pi, fonts, background, ink, resolution, output_dpi=output_dpi,
+                                 position=position or st.get('page_position') or 'original')
         name = 'page_%03d_%s.png' % (page['page'], page.get('side', ''))
         canvas.save(out_dir / name); names.append(name)
         if pdf_w:
@@ -356,6 +415,9 @@ def main():
                     help='paper: clean canvas (default); scan: the scanned page with text blocks wiped')
     ap.add_argument('--resolution', choices=['auto', 'work'], default='auto',
                     help='auto: pages at --dpi (from the full-resolution scan when there is one); work: analysis scale')
+    ap.add_argument('--page-position', choices=POSITIONS, default='original',
+                    help='original: content where it is on the scan (left / right pages differ; print); centered: '
+                         'one page size, content centred and level on every page (a PDF for the screen)')
     ap.add_argument('--dpi', type=float, default=None,
                     help='resolution of the drawn pages (default %g; text is drawn at this size)' % DEFAULT_OUTPUT_DPI)
     ap.add_argument('--tracking', default='auto',
@@ -395,7 +457,7 @@ def main():
         log.info('render', 'overrides: %d block(s), %d page(s) adjusted by hand' % (len(settings['blocks']), len(settings['pages'])))
     names, rep = render(doc, trans, out, Fonts(a.font, a.bold_font, a.italic_font), a.background, ink, a.resolution, a.paragraph_indent,
                         None if a.tracking == 'auto' else float(a.tracking), a.size_scale, a.word_space,
-                        pages=pages, settings=settings, pdf=a.pdf, pdf_dpi=a.pdf_dpi, output_dpi=a.dpi)
+                        pages=pages, settings=settings, pdf=a.pdf, pdf_dpi=a.pdf_dpi, output_dpi=a.dpi, position=a.page_position)
     for s in stale:
         log.info('render', 'WARNING stale override (not applied): ' + s)
     for r in rep['units']:

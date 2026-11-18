@@ -340,3 +340,12 @@ def test_change_input_folder_and_its_warnings(tmp_path, scans):
     assert [t.name for t in p.set_input_dir(other)] == ['a.tif']
     assert PR.Project.load(p.root).input_dir == str(other)
     assert p.command()[2] == str(other)                                       # booktrans.py reads the new folder
+
+
+def test_page_position_setting_is_checked_and_passed_to_render(tmp_path):
+    from project import check_render, DEFAULT_RENDER, ProjectError
+    r = dict(DEFAULT_RENDER)
+    assert r['page_position'] == 'original'
+    check_render(dict(r, page_position='centered'))
+    with pytest.raises(ProjectError):
+        check_render(dict(r, page_position='middle'))
