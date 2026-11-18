@@ -191,7 +191,7 @@ advanced feature.
 
 Per page (Stage 1, carried forward): `skew_deg`, `deskew` (`angle_deg`, `edge_tilt_deg`, `edge_model`, `lines_used`, `full_lines_used`, `matrix_src_to_dst`), `page_image` (the deskewed page PNG; every coordinate refers to it). Illustration regions carry `detector` (`tonal` or `line_art`).
 
-Per OCR line (Stage 2): `paragraph_break` (first line of a paragraph) and `paragraph_break_reason` (`column_start`, `short_last_line`, `first_line_indent`, `extra_line_spacing`); caption lines have `type: caption_line` and get `associated_illustration_id` in Stage 3.
+Per OCR line (Stage 2): `paragraph_break` (first line of a paragraph) and `paragraph_break_reason` (`column_start`, `short_last_line`, `first_line_indent`, `extra_line_spacing`); caption lines have `type: caption_line` and get `associated_illustration_id` in Stage 3. Since 2026-11-18 a caption line may carry `joined_from` (the texts of the pieces it was joined from), `reocr` and `ocr_first` (`{text, confidence}` of the first reading, when the caption strip read alone scored better; see `PIPELINE.md` 7a).
 
 Stage 4 (`units.json`, schema 0.4.0): paragraph regions get `continues_from` / `continues_to` (object ids, made unique per input file as `sN-pM-reg-K`). `units[]` hold `unit_id`, `type`, dehyphenated `text`, `source_object_ids`, `pages` as `[input_index, page]`, `joins[]` (rule `removed_hyphen`, `kept_hyphen_uppercase` or `suspended_compound`; `across_page` for joins over a page break) and `dehyphenated`.
 
