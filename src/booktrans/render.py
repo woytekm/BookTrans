@@ -82,12 +82,25 @@ def wipe(arr, box, S):
 
 
 
-def _page_images(doc, page, background, resolution):
+def _page_images(doc, page, background, resolution, scale=None):
+    """(canvas, original, S): S = output pixels per working pixel.  ``scale``: draw at exactly that S (a preview at
+    the zoom on screen; the full-resolution scan is used as the source when S is above 1 and there is one)."""
     base = Path(doc.get('_dir', '.'))
     f = float(page.get('scale') or 1.0)
-    use_full = page.get('image_full') and resolution != 'work'
-    S = f if use_full else 1.0
-    orig = Image.open(base / (page['image_full'] if use_full else page['image'])).convert('RGB')
+    if scale:
+        use_full = page.get('image_full') and scale > 1.01
+        orig = Image.open(base / (page['image_full'] if use_full else page['image'])).convert('RGB')
+        work = (page.get('width'), page.get('height'))
+        if not all(work):
+            work = (orig.width / f, orig.height / f) if use_full else orig.size
+        size = (max(1, int(round(work[0] * scale))), max(1, int(round(work[1] * scale))))
+        if orig.size != size:
+            orig = orig.resize(size, Image.LANCZOS)
+        S = float(scale)
+    else:
+        use_full = page.get('image_full') and resolution != 'work'
+        S = f if use_full else 1.0
+        orig = Image.open(base / (page['image_full'] if use_full else page['image'])).convert('RGB')
     paper = page['layout'].get('paper_color_rgb')
     if not paper:                                   # older/synthetic documents: the bright end of the page
         paper = np.percentile(np.asarray(orig.convert('RGB')).reshape(-1, 3), 90, axis=0).astype(int).tolist()
@@ -95,14 +108,15 @@ def _page_images(doc, page, background, resolution):
     return canvas, orig, S
 
 
-def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolution='auto'):
+def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolution='auto', scale=None):
     """Page ``pi`` (index into ``doc['pages']``) drawn from the layout plan: (rebuilt image, original image).
-    ``ink``: default the plan's (``render`` stores the measured one) or ``INK``."""
+    ``ink``: default the plan's (``render`` stores the measured one) or ``INK``.  ``scale``: output pixels per working
+    pixel (a preview at any zoom); default the page's own resolution (``resolution``)."""
     ink = tuple(ink or plan.get('ink') or INK)
     fonts = fonts or Fonts(plan['fonts']['regular'], plan['fonts']['bold'], plan['fonts']['italic'])
     base = Path(doc.get('_dir', '.'))
     page, pp = doc['pages'][pi], plan['pages'][pi]
-    canvas, orig, S = _page_images(doc, page, background, resolution)
+    canvas, orig, S = _page_images(doc, page, background, resolution, scale)
     blocks = {b['block_id']: b for b in page['blocks']}
     wipe_ids = set(pp.get('wipe', []))
     for b in page['blocks']:
@@ -229,7 +243,8 @@ def compare_strip(images, H=1100):
 
 
 def parse_pages(spec, doc):
-    """'3,5-7' (printed page numbers as in document.json) -> page indexes; None -> all."""
+    """'3,5-7' (the page numbers of document.json: consecutive over the book, not the printed ones) -> page indexes;
+    None -> all."""
     if not spec:
         return list(range(len(doc['pages'])))
     want = set()
@@ -313,7 +328,7 @@ def main():
     ap.add_argument('--ink', default='auto', help="text colour R,G,B, or 'auto' (default): the scan's ink, shaded so the text is as dark as on the scan")
     ap.add_argument('--paragraph-indent', type=float, default=None,
                     help='first-line indent in em (default: as in the original page, normally none)')
-    ap.add_argument('--pages', help='draw only these pages (printed numbers, e.g. 3,5-7); the layout still covers the book')
+    ap.add_argument('--pages', help="draw only these pages (the document's page numbers, e.g. 3,5-7); the layout still covers the book")
     ap.add_argument('--overrides', type=Path,
                     help="human adjustments of blocks and pages (a project's review/render_overrides.json, see render_overrides.py)")
     ap.add_argument('--pdf', nargs='?', const='book.pdf', help='also write the drawn pages as one PDF (default name book.pdf)')
@@ -329,6 +344,11 @@ def main():
     log.info('render', 'typesetting %d pages with %d translated units' % (len(doc['pages']), len(trans['units'])))
     if _HYPH is None:
         log.info('render', 'pyphen not installed: no hyphenation (pip install pyphen)')
+    pages = parse_pages(a.pages, doc)
+    if a.pages and not pages:
+        have = [p['page'] for p in doc['pages']]
+        log.info('render', 'ERROR no page matches --pages %s (pages of this document: %s-%s)' % (a.pages, min(have), max(have)))
+        sys.exit(2)
     settings = {'page_fit': not a.no_page_fit}
     stale = []
     if a.overrides:
@@ -337,7 +357,7 @@ def main():
         log.info('render', 'overrides: %d block(s), %d page(s) adjusted by hand' % (len(settings['blocks']), len(settings['pages'])))
     names, rep = render(doc, trans, out, Fonts(a.font, a.bold_font, a.italic_font), a.background, ink, a.resolution, a.paragraph_indent,
                         None if a.tracking == 'auto' else float(a.tracking), a.size_scale, a.word_space,
-                        pages=parse_pages(a.pages, doc), settings=settings, pdf=a.pdf, pdf_dpi=a.pdf_dpi)
+                        pages=pages, settings=settings, pdf=a.pdf, pdf_dpi=a.pdf_dpi)
     for s in stale:
         log.info('render', 'WARNING stale override (not applied): ' + s)
     for r in rep['units']:

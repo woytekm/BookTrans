@@ -7,7 +7,10 @@
 ``TranslateWindow`` sets the translation settings of the project (engine, model, glossary ...; saved in
 ``project.json``) and runs ``translate.py`` -> ``translation/translations.json``, for the whole book or some pages.
 
-Both share ``ProcessWindow``: Start / Stop, live log, elapsed time, ``on_done`` when the run ends."""
+``RenderRunWindow`` runs ``render.py`` with the project's render settings and adjustments -> ``render/`` (page images,
+comparisons, layout and report; optionally ``book.pdf``), for the whole book or some pages.
+
+All share ``ProcessWindow``: Start / Stop, live log, elapsed time, ``on_done`` when the run ends."""
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -404,4 +407,51 @@ class TranslateWindow(ProcessWindow):
                     self.project.translate_command_line(pages, dry, force))
         except ProjectError as e:
             messagebox.showerror('Translation', str(e), parent=self)
+            return None
+
+
+class RenderRunWindow(ProcessWindow):
+    """render.py for the book (or some pages) at the final resolution -> ``<project>/render/``; optionally a PDF."""
+
+    WHAT = 'render'
+    mode = 'render'
+
+    def __init__(self, master, project, on_done=None, pages=''):
+        self._pages0 = pages
+        super().__init__(master, project, 'Render book: %s' % project.name, on_done=on_done)
+
+    def _build_settings(self, f):
+        r = self.project.render_settings
+        self.v = {'pages': tk.StringVar(value=''), 'pdf': tk.BooleanVar(value=True),
+                  'resolution': tk.StringVar(value=r.get('resolution', 'auto'))}
+        g = ttk.Frame(f)
+        g.pack(fill='x')
+        ttk.Label(g, text='Pages').grid(row=0, column=0, sticky='w', padx=(0, 6))
+        pe = ttk.Entry(g, textvariable=self.v['pages'], width=14)
+        pe.grid(row=0, column=1, sticky='w')
+        ttk.Label(g, text='as in the page list, e.g. %s or 3-6; blank = the whole book (the layout always covers the book)'
+                          % (self._pages0 or '3'),
+                  foreground=MUTED).grid(row=0, column=2, sticky='w', padx=(8, 0))
+        ttk.Label(g, text='Resolution').grid(row=1, column=0, sticky='w', padx=(0, 6), pady=(4, 0))
+        rc = ttk.Combobox(g, textvariable=self.v['resolution'], values=('auto', 'work'), state='readonly', width=8)
+        rc.grid(row=1, column=1, sticky='w', pady=(4, 0))
+        ttk.Label(g, text='auto: full resolution of the scans; work: analysis scale (quick)', foreground=MUTED).grid(
+            row=1, column=2, sticky='w', padx=(8, 0), pady=(4, 0))
+        pc = ttk.Checkbutton(g, text='also write book.pdf (the drawn pages, at the book\u2019s physical size)', variable=self.v['pdf'])
+        pc.grid(row=2, column=0, columnspan=3, sticky='w', pady=(6, 0))
+        self.controls += [pe, rc, pc]
+        ttk.Label(f, text='Result: %s  (page_NNN_X.png, comparisons with the scan, layout.json, report.json). Settings and '
+                          'adjustments are those of the render window.' % self.project.render_dir,
+                  foreground=MUTED, wraplength=860, justify='left').pack(anchor='w', pady=(8, 0))
+
+    def _prepare(self):
+        pages = self.v['pages'].get().strip()
+        if pages and not all(p.strip().replace('-', '', 1).isdigit() for p in pages.split(',') if p.strip()):
+            messagebox.showerror('Pages', 'Pages are numbers or ranges such as 3, 5-7 (as in the page list).', parent=self)
+            return None
+        try:
+            args = (pages, self.v['resolution'].get(), self.v['pdf'].get())
+            return self.project.render_command(*args), self.project.render_command_line(*args)
+        except ProjectError as e:
+            messagebox.showerror('Render', str(e), parent=self)
             return None

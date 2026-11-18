@@ -172,3 +172,16 @@ starts before its original page; size (0.90-1.03x) and letter-spacing (+-0.02 em
 end with empty slots when the Polish is shorter (reported, not filled by pulling text back). Size can differ
 slightly between pages (the change cost keeps neighbours together). The plan is the interface for the GUI and for
 quality checks; `render()` keeps its signature for `booktrans.py`.
+
+## ADR-022 — The render preview runs in the GUI process; the full render is a subprocess
+
+**Context.** D5 (GUI.md) keeps pipeline stages out of the GUI process: they need OpenCV and Tesseract and a crash must not take
+the window down. Adjusting the layout needs a fast loop (change a value, see the page), and a subprocess per change would reload the
+document and fonts every time.
+**Decision.** `layout.py`, `typeset.py` and `render.draw_page` need only numpy, Pillow and the fonts (OpenCV only for a scan
+background), so `render_session.RenderSession` runs them in the GUI process, in a worker thread (one at a time, a lock), drawing a
+page at the zoom on screen. *Render book…* still runs `render.py` as a subprocess for the full-resolution pages and the PDF.
+Settings go to `project.json` (`render`, schema 1.2), adjustments to `review/render_overrides.json`, both written at once.
+**Consequences.** A change shows in a second or two on a small book (layout 2-4 s for 14 pages); on a 300-page book a re-layout
+will take some 20-60 s (measure; incremental layout from the changed page on would be the fix). The preview and the final render
+use the same code, so they agree; the preview is drawn at screen scale from the working images, the final render at full resolution.

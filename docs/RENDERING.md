@@ -11,7 +11,8 @@ python render.py document.json translations.json -o out [--pages 3,5-7] \
   [--overrides review/render_overrides.json] [--pdf [book.pdf]] [--pdf-dpi N]
 ```
 
-Writes `page_NNN_X.png`, `compare.png` (original | reconstruction; one `compare_page_NNN.png` per page
+`--pages` takes the document's page numbers (consecutive over the book, as in the GUI's page list), not the printed ones; no
+match is an error. Writes `page_NNN_X.png`, `compare.png` (original | reconstruction; one `compare_page_NNN.png` per page
 for more than 4 pages, written as each page is drawn), `layout.json` (the plan), `report.json`, and with `--pdf` one
 PDF of the drawn pages.
 
@@ -127,6 +128,13 @@ Measured on a synthetic 60-page book (paragraphs 0.90-1.08 x the original length
 page, 7 empty slots in 2300, most pages at the base size; 3.5 s for the layout. On the first real book (14 pages,
 74 units, Claude translation): every page at the base size except the broken page 62 (0.97), letter-spacing within
 +-0.02 em, 4 empty slots, one paragraph pushed (page 62, where stage 2 lost lines); 8 s for layout, ink and drawing.
+
+## In the GUI
+
+*Render pages…* opens the render window (`gui_render.py`, `GUI.md` section 8): the rebuilt page beside the scan, the checks,
+book settings and page / block adjustments, each saved at once and the book laid out again (in the GUI process, ADR-022);
+*Render book…* runs this program. `render_session.RenderSession` is the toolkit-free part (also usable from a script).
+`draw_page(..., scale=S)` draws a page at any scale (the preview at the zoom on screen).
 
 ## Settings and human adjustments
 

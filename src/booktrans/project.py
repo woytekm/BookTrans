@@ -469,11 +469,11 @@ class Project:
         return []
 
     # ------------------------------------------------------------ render
-    def render_command(self, pages=None, resolution=None):
+    def render_command(self, pages=None, resolution=None, pdf=False):
         """``render.py`` for this project: the book's document.json and ``translation/translations.json`` ->
         ``render/``, with the project's render settings and ``review/render_overrides.json``.  ``pages``: e.g. '3-5'
         (only these are drawn; the layout covers the book); ``resolution``: overrides the setting (``work`` for a
-        quick preview).  Raises ProjectError when the document or the translation is missing."""
+        quick preview); ``pdf``: also ``render/book.pdf``.  Raises ProjectError when the document or the translation is missing."""
         r = self.render_settings
         doc = self.book_dir() / 'document.json'
         if not doc.exists():
@@ -495,10 +495,12 @@ class Project:
             cmd += ['--overrides', str(self.overrides_file)]
         if pages and str(pages).strip():
             cmd += ['--pages', str(pages).replace(' ', '')]
+        if pdf:
+            cmd += ['--pdf', 'book.pdf']
         return cmd
 
-    def render_command_line(self, pages=None, resolution=None):
-        return ' '.join(shlex.quote(str(c)) for c in self.render_command(pages, resolution))
+    def render_command_line(self, pages=None, resolution=None, pdf=False):
+        return ' '.join(shlex.quote(str(c)) for c in self.render_command(pages, resolution, pdf))
 
     def load_translations(self):
         """translations.json -> its ``units`` dict ({} when there is none or it cannot be read)."""

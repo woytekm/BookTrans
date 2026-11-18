@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — GUI: the render window
+
+- **Render window** (`gui_render.py`; header button *Render pages…*, Project menu, `Cmd/Ctrl+Shift+P`): page list with each page's fit and check counts; the rebuilt page beside the scan (or either alone), zoom with sharp text (drawn at the zoom on screen), drag, click a text block to select it; outlines for the selection, collisions / overflow, adjusted blocks, optionally all blocks. Tabs: **Book** (font, bold, italic, letter-spacing, size, word space, paragraph indent, page fit, background, ink, final resolution; fonts in use, ink match, base size), **Page** (the page's fit, size factor / letter-spacing change by hand, the page's checks), **Block** (how the block is set, size / letter-spacing / word space / max width / alignment for frames, keep original, the Polish text). Every change is saved at once (`project.json` -> `render`, `review/render_overrides.json`) and the book laid out again in a worker thread. Reloads after a pipeline or translation run.
+- **Render book…** (`gui_run.RenderRunWindow`): pages, resolution, PDF -> `<project>/render/`; *Output folder*.
+- `render_session.py` (toolkit-free): load, lay out, draw a page at any scale, block under a point, adjustments, settings.
+- `render.draw_page(..., scale=)`: draw a page at any scale. `render.py --pages` with no matching page is an error (pages are the document's numbers). `Project.render_command(..., pdf=True)`.
+- `gui.py --demo` writes a synthetic translation (`gui_demo.make_demo(translate=True)`).
+- `ADR-022`: the preview runs in the GUI process, the full render is a subprocess.
+- Tests: 11 new (`test_render_session.py`, `test_gui_render.py`; 272 passed).
+
 ## Unreleased — stage 4: repair of stage 2 region errors (page 62)
 
 - **Noise regions** (`|`, `N`, page and figure numbers, strips at the page edge) are excluded from translation (`exclude_reason: noise`).

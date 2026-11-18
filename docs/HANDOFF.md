@@ -4,7 +4,8 @@ Read this first in a new session. It states what works, how to run it, where eve
 pieces fit, what was decided, and what is open. Details live in the other documents in this folder;
 this one is the map.
 
-Last updated: 2026-11-18. **Newest: rendering rework** (section 12: layout plan + per-page drawing, body text through
+Last updated: 2026-11-18. **Newest: the render window in the GUI** (section 11, `GUI.md` section 8, ADR-022) and the
+**rendering rework** (section 12: layout plan + per-page drawing, body text through
 line slots, flow kept in step with the pages; ADR-021). New since 2026-11-11: **a GUI** (projects, Run pipeline, word boxes and marks on the page image, the
 correction editor, Re-run OCR correction, Run translation; section 11, `GUI.md`) and **translation through Claude Code**
 (`translate.py --provider claude-code`, the owner's Claude subscription; section 7b). Neither has been tried on a real book yet.
@@ -68,10 +69,10 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only (--pages 3,5-7: draw some pages)
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 261 tests, ~35 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 272 tests, ~40 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
-python gui.py /path/to/project                                                 # a project made with File > New project
+python gui.py /path/to/project                                                 # a project made with File > New project; Render pages… (Cmd/Ctrl+Shift+P)
 ```
 
 Useful options: `--layout spread|page|crop`, `--scale auto|N`, `--ocr-scale`, `--lang`, `-v`,
@@ -98,6 +99,7 @@ JSON), and `render/` when translations were given (`page_NN_X.png`, `compare.png
 | `src/booktrans/layout.py` | the layout plan of the book: line slots, page-synchronised body flow, per-page fit, fixed frames (`RENDERING.md`) |
 | `src/booktrans/render.py` | drawing a page from the plan (canvas, figures, kept text, lines), `render()`, the CLI |
 | `src/booktrans/fontcheck.py` | which font matches the scan: specimens and a score per candidate (`RENDERING.md`) |
+| `src/booktrans/render_session.py`, `gui_render.py` | the render window: toolkit-free session (layout, drawing, adjustments) and the Tk window |
 | `src/booktrans/render_overrides.py` | toolkit-free: human adjustments of blocks and pages (`review/render_overrides.json`), hash-tied |
 | `src/booktrans/scale.py` | resolution detection from the body line pitch |
 | `src/booktrans/ocrfix.py` | stage 5: offline OCR correction of the units (dictionaries, confusions, lost spaces), corrections log and review file (`OCR_CORRECTION.md`) |
@@ -229,7 +231,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (261 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (272 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -294,6 +296,13 @@ saved edits/decisions. `translate.py` fixes found on the way: a partial run (`--
 output and uses the whole book's context (same cache keys as a full run), and the output folder is created.
 Also: `--force` (GUI: *re-translate* checkbox) asks the model again for the selected pages, ignoring the cache.
 
+**Then 2026-11-18: the render window** (header button *Render pages…*, Project menu, Cmd/Ctrl+Shift+P; `gui_render.py` over the
+toolkit-free `render_session.py`; `GUI.md` section 8, ADR-022): page list with check counts, the rebuilt page beside the scan at any
+zoom, click a block to select it; tabs *Book* (fonts, letter-spacing, size, word space, indent, page fit, background, ink), *Page*
+(the page's fit, its checks) and *Block* (frame adjustments, keep original, the Polish text); every change saved at once and the book
+laid out again; *Render book…* runs `render.py` (pages, resolution, PDF) -> `<project>/render/`. Tried on the owner's 14-page book
+(layout 3.7 s). `gui.py --demo` writes a synthetic translation so the window works on the demo.
+
 **Next** (`GUI.md` sections 6, 8, 10), suggested order:
 1. ~~A "re-run OCR correction" button~~ **done 2026-11-17** (*Re-run OCR correction…* next to *Run pipeline…*, Cmd/Ctrl+Shift+O: stage 5
    alone with the saved edits and decisions, `project.ocrfix_command`, the run window in mode `ocrfix`). Still open: stale edits
@@ -338,9 +347,9 @@ engine should be complete before a GUI goes on top. Agreed order (2026-11-18):
 7. ~~PDF, emphasis, tests~~ **done**: `render.py --pdf` (page by page, physical size), `<i>`/`<b>`/`<sp>` runs in translations
    (renderer side; detection in stage 2 and the prompt rule are open), render no longer keeps every full-resolution page in
    memory. 250 tests.
-8. **Next: the GUI render window** (viewer over `layout.json` + `draw_page`: original | rebuilt, zoom, prev/next, the checks
-   as a list and marks, book settings, block/page adjustments written to `review/render_overrides.json`, Re-render); then
-   automatic font choice from `fontcheck.py`'s score; emphasis detection in stage 2 + prompt rule; vector PDF.
+8. ~~The GUI render window~~ **done** (`gui_render.py`, `render_session.py`; section 11). Next: captions (the weak point: OCR loses
+   words, `marks.py` takes a caption word for a rule, some captions sit inside the figure crop and stay German); automatic font choice
+   from `fontcheck.py`'s score; emphasis detection in stage 2 + prompt rule; vector PDF; incremental layout for long books.
 
 Decided by the owner (2026-11-18): **Crimson Text Regular is the default font**, configurable in `config/fonts.json`
 (or `$BOOKTRANS_FONTS`); **adjustments are book-wide plus per block / per page** (as built). First real pipeline output
