@@ -195,6 +195,13 @@ the default is bundled Crimson Text.
 measured colour is in `report.json` (`ink`) and in `layout.json`, so `draw_page` from a saved plan uses it. Before it
 was a fixed (34, 30, 26), darker and colder than the brownish print.
 
+**Default font** (owner's decision 2026-11-18: Crimson Text Regular, configurable): named in **`config/fonts.json`**
+(`regular`, optional `bold`, `italic`; paths relative to the repository, absolute or `~`; `path@weight` for a variable
+font). `BOOKTRANS_FONTS=/path/to/other.json` points to another file (paths relative to that file). Used whenever no
+font is given: `render.py` / `booktrans.py` without `--font`, a project whose `render.font` is empty, `fontcheck.py`'s
+reference. `python envcheck.py` checks that its files exist. Precedence: `--font` / project `render.font` >
+`$BOOKTRANS_FONTS` > `config/fonts.json` > built-in Crimson Text.
+
 **Fonts.** `--font` takes a TTF/OTF or `path@weight` for a variable font (`CrimsonPro[wght].ttf@300`). Without
 `--bold-font` / `--italic-font` the siblings of the regular file are used (`X-Light.ttf` -> `X-LightItalic.ttf`,
 `X-SemiBold.ttf`; a variable font: its `-Italic[...]` file, bold = weight + 300), else the regular font: nothing is

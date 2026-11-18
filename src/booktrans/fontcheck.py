@@ -21,7 +21,8 @@ measured:
 * ``score``     3 |ln width| + 3 |ln x_height| + 2 |ln darkness|; lower is better.
 
 Writes ``specimen_<block>.png`` (original on top, then each candidate, 2x) and ``fontcheck.json``; prints a table.
-The bundled fonts (Crimson Text; Crimson Pro Light and Regular) are always included.  A candidate is ``NAME=REGULAR[,BOLD[,ITALIC]]``;
+The default font (``config/fonts.json``) and the bundled fonts (Crimson Text; Crimson Pro Light and Regular) are always
+included.  A candidate is ``NAME=REGULAR[,BOLD[,ITALIC]]``;
 ``path@300`` is a variable font at weight 300.
 """
 import argparse
@@ -211,10 +212,12 @@ def main():
     a = ap.parse_args()
     doc = json.loads(a.document.read_text(encoding='utf-8'))
     doc['_dir'] = str(a.document.parent)
-    cands = [('Crimson Text (bundled)', Fonts())]
-    for name, fn in (('Crimson Pro Light (bundled)', 'CrimsonPro-Light.ttf'), ('Crimson Pro (bundled)', 'CrimsonPro-Regular.ttf')):
+    default = Fonts()
+    cands = [('%s (default)' % default.name, default)]
+    for name, fn in (('Crimson Text (bundled)', 'CrimsonText-Regular.ttf'), ('Crimson Pro Light (bundled)', 'CrimsonPro-Light.ttf'),
+                     ('Crimson Pro (bundled)', 'CrimsonPro-Regular.ttf')):
         p = HERE.parent.parent / 'fonts' / fn
-        if p.exists():
+        if p.exists() and str(p) != default.paths['regular']:
             cands.append((name, Fonts(p)))
     cands += [parse_candidate(c) for c in a.candidate]
     out = a.output or a.document.parent / 'fontcheck'

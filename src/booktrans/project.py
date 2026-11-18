@@ -57,7 +57,7 @@ RESOLUTIONS = ('auto', 'work')
 DEFAULT_RENDER = {
     'background': 'paper',      # paper: clean canvas | scan: the scan with the text wiped (render.py --background)
     'resolution': 'auto',       # auto: full resolution when the scan has it | work: analysis scale (fast previews)
-    'font': '',                 # regular TTF ('' = bundled Crimson Text); relative paths are relative to the project
+    'font': '',                 # regular TTF or path@weight ('' = the default font, config/fonts.json); relative to the project
     'bold_font': '',
     'italic_font': '',
     'tracking': 'auto',         # auto: fitted | letter-spacing in em, e.g. 0.05

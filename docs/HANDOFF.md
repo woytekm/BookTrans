@@ -68,7 +68,7 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only (--pages 3,5-7: draw some pages)
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
-python -m pytest -q ../../tests                                                # 250 tests, ~35 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
+python -m pytest -q ../../tests                                                # 251 tests, ~35 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
 python gui.py /path/to/project                                                 # a project made with File > New project
@@ -229,7 +229,7 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 
 ## 10. Verification habits that worked
 
-- Run `python -m pytest -q` before every commit (250 tests). On a headless Linux machine the GUI tests need a display:
+- Run `python -m pytest -q` before every commit (251 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
 - After any layout change, render both samples and look at `render/compare.png` (original | rebuilt
   per page). Most bugs here are visual (overlapping captions, grey patches, wrong tracking).
@@ -342,8 +342,9 @@ engine should be complete before a GUI goes on top. Agreed order (2026-11-18):
    as a list and marks, book settings, block/page adjustments written to `review/render_overrides.json`, Re-render); then
    automatic font choice from `fontcheck.py`'s score; emphasis detection in stage 2 + prompt rule; vector PDF.
 
-Assumptions (the owner did not answer; confirm): adjustments are book-wide plus per block; manual font choice before
-automatic; test data synthetic (`tests/test_layout.py`, the GUI demo) until real pipeline output is supplied.
+Decided by the owner (2026-11-18): **Crimson Text Regular is the default font**, configurable in `config/fonts.json`
+(or `$BOOKTRANS_FONTS`); **adjustments are book-wide plus per block / per page** (as built). Real pipeline output is
+being supplied for testing.
 **Not yet run on the real sample pages** (`0001.tif`, `0002.tif` are not in the repository): render both and compare
 `compare.png` with `examples/0001_render_compare.jpg` / `0002_render_compare.jpg`; expect the same look on those
 simple pages, the slots matter on pages with figures in the column.

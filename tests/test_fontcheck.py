@@ -58,3 +58,28 @@ def test_font_families_and_variable_specs():
     assert 'CrimsonText' not in f.paths['bold'] + f.paths['italic']          # never mixed with another family
     assert font_spec('a/B[wght].ttf@300') == ('a/B[wght].ttf', 300.0) and font_spec('a/B.ttf') == ('a/B.ttf', None)
     assert family_of('x/Font[wght].ttf@300', 'bold') == 'x/Font[wght].ttf@600'
+
+
+def test_default_font_is_configurable(tmp_path, monkeypatch):
+    import json
+    import typeset as T
+    monkeypatch.delenv('BOOKTRANS_FONTS', raising=False)
+    f = Fonts()                                                   # config/fonts.json: Crimson Text
+    assert f.paths['regular'].endswith('CrimsonText-Regular.ttf') and f.paths['bold'].endswith('CrimsonText-SemiBold.ttf')
+    assert f.name == 'CrimsonText-Regular'
+    cfg = tmp_path / 'fonts.json'
+    cfg.write_text(json.dumps({'regular': str(FONTS / 'CrimsonPro-Light.ttf')}), encoding='utf-8')
+    monkeypatch.setenv('BOOKTRANS_FONTS', str(cfg))
+    g = Fonts()
+    assert g.paths['regular'].endswith('CrimsonPro-Light.ttf')
+    assert g.paths['italic'].endswith('CrimsonPro-LightItalic.ttf') and g.paths['bold'].endswith('CrimsonPro-SemiBold.ttf')
+    assert Fonts(FONTS / 'CrimsonText-Italic.ttf').paths['regular'].endswith('CrimsonText-Italic.ttf')   # --font wins
+    cfg.write_text(json.dumps({'regular': 'CrimsonPro-Regular.ttf'}), encoding='utf-8')          # relative to the file
+    (tmp_path / 'CrimsonPro-Regular.ttf').write_bytes((FONTS / 'CrimsonPro-Regular.ttf').read_bytes())
+    assert Fonts().paths['regular'] == str(tmp_path / 'CrimsonPro-Regular.ttf')
+    cfg.write_text('{"bold": "x.ttf"}', encoding='utf-8')
+    import pytest
+    with pytest.raises(ValueError):
+        T.default_fonts()
+    with pytest.raises(SystemExit):
+        Fonts()

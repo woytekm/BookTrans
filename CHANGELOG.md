@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — render: configurable default font
+
+- **Default font in `config/fonts.json`** (Crimson Text Regular / SemiBold / Italic, as before); `BOOKTRANS_FONTS` points to another file. Used by `render.py`, `booktrans.py`, projects without `render.font`, and as `fontcheck.py`'s reference. `envcheck.py` checks the configured default instead of a fixed list of Crimson Text files.
+- Tests: 1 new (251 passed).
+
 ## Unreleased — render: PDF, emphasis runs, memory
 
 - **`render.py --pdf [NAME]`** (`render(pdf=, pdf_dpi=)`): the drawn pages as one PDF, written page by page (JPEG), page size from the pixels at 120 DPI x the drawing scale (the book's physical size for the 600 DPI scans) or `--pdf-dpi`.

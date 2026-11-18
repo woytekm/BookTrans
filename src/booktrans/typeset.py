@@ -4,6 +4,8 @@
 Used by ``layout.py`` (the layout plan) and ``render.py`` (drawing).  All widths are in the units of the
 font that was passed in; callers measure at 8x the working size for sub-pixel precision.
 """
+import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -19,7 +21,11 @@ try:
 except Exception:       # pyphen is optional: without it words are not hyphenated
     _HYPH = None
 
-DEFAULT_FONT_DIRS = [HERE.parent.parent / 'fonts']
+ROOT = HERE.parent.parent
+DEFAULT_FONT_DIRS = [ROOT / 'fonts']
+DEFAULT_FONTS_FILE = ROOT / 'config' / 'fonts.json'
+BUILTIN_FONTS = {'regular': 'fonts/CrimsonText-Regular.ttf', 'bold': 'fonts/CrimsonText-SemiBold.ttf',
+                 'italic': 'fonts/CrimsonText-Italic.ttf'}
 SINGLE_LETTER = {'a', 'i', 'o', 'u', 'w', 'z'}      # Polish: do not end a line with these
 RMIN, RMAX = 0.75, 2.0           # allowed word-space stretch (1 = natural)
 
@@ -77,26 +83,69 @@ def family_of(regular, style):
     return None
 
 
+def _resolve(spec, base=ROOT):
+    path, wght = font_spec(spec)
+    p = Path(os.path.expanduser(path))
+    if not p.is_absolute():
+        p = Path(base) / p
+    return '%s@%g' % (p, wght) if wght is not None else str(p)
+
+
+def default_fonts_file():
+    """The file that names the default font: ``$BOOKTRANS_FONTS`` or ``config/fonts.json``."""
+    env = os.environ.get('BOOKTRANS_FONTS', '').strip()
+    return Path(os.path.expanduser(env)) if env else DEFAULT_FONTS_FILE
+
+
+def default_fonts():
+    """The default font as {regular, bold, italic} specs (absolute paths; bold / italic None when the file does not
+    name them), from ``default_fonts_file()``; the bundled Crimson Text when there is no such file.  Raises
+    ``ValueError`` for a file that cannot be read or names no regular font."""
+    f = default_fonts_file()
+    if not f.exists():
+        if os.environ.get('BOOKTRANS_FONTS', '').strip():
+            raise ValueError('BOOKTRANS_FONTS: %s does not exist' % f)
+        return {k: _resolve(v) for k, v in BUILTIN_FONTS.items()}
+    try:
+        data = json.loads(f.read_text(encoding='utf-8'))
+    except (OSError, ValueError) as e:
+        raise ValueError('cannot read %s: %s' % (f, e))
+    if not isinstance(data, dict) or not str(data.get('regular') or '').strip():
+        raise ValueError('%s names no "regular" font' % f)
+    base = ROOT if f == DEFAULT_FONTS_FILE else f.parent
+    return {k: (_resolve(str(data[k]).strip(), base) if str(data.get(k) or '').strip() else None)
+            for k in ('regular', 'bold', 'italic')}
+
+
 class Fonts:
-    """The regular, bold and italic font of the rebuilt text.  A font is a TTF/OTF path, or ``path@weight`` for a
+    """The regular, bold and italic font of the rebuilt text.  Without a regular font: the configured default
+    (``config/fonts.json`` or ``$BOOKTRANS_FONTS``, see ``default_fonts``).  A font is a TTF/OTF path, or ``path@weight`` for a
     variable font.  Without bold / italic, siblings of the regular file are used (``X-Regular.ttf`` ->
     ``X-SemiBold.ttf``, ``X-Italic.ttf``), else the regular font itself; nothing is mixed in from another family."""
 
     def __init__(self, regular=None, bold=None, italic=None):
-        def find(name):
-            for d in DEFAULT_FONT_DIRS:
-                p = d / name
-                if p.exists():
-                    return str(p)
-            raise SystemExit('font %s not found; pass --font (a serif TTF with Polish letters)' % name)
-        reg = str(regular) if regular else find('CrimsonText-Regular.ttf')
-        if not Path(font_spec(reg)[0]).is_file():
-            raise SystemExit('font file not found: %s' % font_spec(reg)[0])
+        if not regular:                               # the configured default font (config/fonts.json)
+            try:
+                d = default_fonts()
+            except ValueError as e:
+                raise SystemExit('default font: %s' % e)
+            regular = d['regular']
+            bold = bold or d['bold']
+            italic = italic or d['italic']
+        reg = str(regular)
+        for spec in (reg, bold, italic):
+            if spec and not Path(font_spec(str(spec))[0]).is_file():
+                raise SystemExit('font file not found: %s (pass --font, or set the default in %s)'
+                                 % (font_spec(str(spec))[0], default_fonts_file()))
         self.paths = {'regular': reg,
                       'bold': str(bold) if bold else (family_of(reg, 'bold') or reg),
                       'italic': str(italic) if italic else (family_of(reg, 'italic') or reg)}
         self._cache = {}
         self._ratios = {}
+
+    @property
+    def name(self):
+        return Path(font_spec(self.paths['regular'])[0]).stem
 
     def get(self, style, size):
         key = (style, round(size, 2))

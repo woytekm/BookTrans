@@ -42,7 +42,6 @@ MODULES = [
 # Files the OCR correction (ocrfix.py) downloads with ``python ocrfix.py fetch``.  Kept in step with
 # ocrfix.SOURCES by tests/test_envcheck.py.
 DICT_FILES = ('de-100k.txt', 'de_DE_frami.dic', 'de_DE_frami.aff')
-FONTS = ('CrimsonText-Regular.ttf', 'CrimsonText-Bold.ttf', 'CrimsonText-Italic.ttf', 'CrimsonText-SemiBold.ttf')
 PROMPTS = ('translate_pl.txt', 'translate_rules_pl.txt', 'ocr_review_de.txt')
 TESSERACT_DIRS = ('/opt/local/bin', '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin')   # MacPorts, Homebrew, ...
 # Size of deu.traineddata: tessdata_fast is about 1.5 MB, tessdata_best about 8.6 MB.  Below this limit it is
@@ -278,11 +277,20 @@ def check_glossary(root=ROOT):
 
 def check_assets(root=ROOT):
     out = []
-    fonts = Path(root) / 'fonts'
-    for f in FONTS:
-        ok = (fonts / f).is_file() and (fonts / f).stat().st_size > 0
-        out.append(Check(G_RENDER, 'fonts/%s' % f, OK if ok else (FAIL if 'Regular' in f else WARN),
-                         '' if ok else 'missing', '' if ok else 'page rebuilding (render.py) needs the bundled Crimson Text'))
+    from typeset import default_fonts, default_fonts_file, font_spec
+    try:
+        d = default_fonts()
+        for style in ('regular', 'bold', 'italic'):
+            if not d[style]:
+                out.append(Check(G_RENDER, 'default font: %s' % style, OK, 'siblings of the regular file', ''))
+                continue
+            p = Path(font_spec(d[style])[0])
+            ok = p.is_file() and p.stat().st_size > 0
+            out.append(Check(G_RENDER, 'default font: %s' % style, OK if ok else (FAIL if style == 'regular' else WARN),
+                             p.name if ok else 'missing: %s' % p,
+                             '' if ok else 'set the default font in %s (or pass --font)' % default_fonts_file()))
+    except ValueError as e:
+        out.append(Check(G_RENDER, 'default font', FAIL, str(e), 'fix %s' % default_fonts_file()))
     for p in PROMPTS:
         ok = (Path(root) / 'prompts' / p).is_file()
         out.append(Check(G_RENDER, 'prompts/%s' % p, OK if ok else WARN, '' if ok else 'missing', '' if ok else 'needed by translate.py / ocrreview.py'))

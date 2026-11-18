@@ -299,7 +299,7 @@ def main():
     ap.add_argument('document', type=Path, help='document.json written by booktrans.py')
     ap.add_argument('translations', type=Path, help='JSON with {"units": {unit_id: {"pl": text}}}')
     ap.add_argument('-o', '--output', type=Path, default=None, help='default: <document dir>/render')
-    ap.add_argument('--font', type=Path, help='regular serif TTF with Polish letters (default: bundled Crimson Text)')
+    ap.add_argument('--font', type=Path, help='regular serif TTF with Polish letters, or path@weight for a variable font (default: config/fonts.json, Crimson Text)')
     ap.add_argument('--bold-font', type=Path)
     ap.add_argument('--italic-font', type=Path)
     ap.add_argument('--background', choices=['paper', 'scan'], default='paper',
