@@ -851,3 +851,8 @@ def test_caption_dialog_rereads_and_applies_into_the_review_json(app, monkeypatc
     assert w.dirty
     units = {u['unit_id']: u for u in json.loads(w.editor.get('1.0', 'end-1c'))['units']}
     assert units[uid]['text'] == '37 PITSCHEN OS'
+
+
+def test_the_app_icon_is_set(app):
+    assert gui.ICON.is_file()
+    assert getattr(app, '_app_icon', None) is not None and app._app_icon.width() == 512

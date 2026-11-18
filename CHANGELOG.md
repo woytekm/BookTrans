@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — GUI: app icon
+
+- `assets/booktrans_icon.png` (512 px, drawn by `assets/make_icon.py`: an open book, grey type on the left page, red on
+  the right, an arrow turning the page): the icon of every window and, on macOS, the Dock icon (`gui.set_app_icon`,
+  `iconphoto`). With PyObjC installed (optional) the macOS menu bar says *BookTrans* instead of *Python* (`gui._mac_app_name`).
+
 ## Unreleased — captions
 
 Captions were the weakest part of the rendered book (owner's review of the 14-page test book). Changes, in the order they

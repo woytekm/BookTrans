@@ -54,9 +54,39 @@ TAB_HELP = {
 }
 
 
+ICON = HERE.parent.parent / 'assets' / 'booktrans_icon.png'
+
+
+def _mac_app_name(name='BookTrans'):
+    """macOS: the menu bar shows the bundle name, "Python" for a script.  With PyObjC installed (optional) the name is
+    changed before Tk starts the application; without it nothing happens."""
+    if not MAC:
+        return
+    try:
+        from Foundation import NSBundle
+        info = NSBundle.mainBundle().localizedInfoDictionary() or NSBundle.mainBundle().infoDictionary()
+        if info is not None:
+            info['CFBundleName'] = name
+    except Exception:                                # no PyObjC, or a bundle that refuses: keep "Python"
+        pass
+
+
+def set_app_icon(root):
+    """The BookTrans icon for every window (Tk 8.6 reads PNG; on macOS it is also the Dock icon).  -> the image or None."""
+    try:
+        img = tk.PhotoImage(master=root, file=str(ICON))
+        root.iconphoto(True, img)
+        root._app_icon = img                          # keep a reference: Tk forgets an image Python dropped
+        return img
+    except (tk.TclError, OSError):                   # no file or an old Tk: the default icon
+        return None
+
+
 class MainWindow(tk.Tk):
     def __init__(self, project_path=None):
+        _mac_app_name()
         super().__init__()
+        set_app_icon(self)
         self.title('BookTrans')
         self.geometry('1280x780')
         self.minsize(960, 540)
