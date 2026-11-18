@@ -351,3 +351,18 @@ def test_punctuation_rules_flag_and_retry(tmp_path):
     assert res['units']['u0002']['pl'].startswith('Portal w Byczynie – jak') and not res['units']['u0002']['flags']
     assert 'never both' in prompts[1]                  # the retry names the rule
     assert 'półpauza' in prompts[0]                    # the rule is in the prompt
+
+
+def test_titles_in_italics_are_allowed_other_markup_is_not(tmp_path):
+    ok = 'Zob. Richard Hamann, <i>Deutsche und französische Kunst im Mittelalter</i>, t. II, 1923.'
+    assert T.tag_problems(ok) == '' and T.punctuation_problems(ok) == []
+    assert T.tag_problems('<i>Tytuł</i> i <i>drugi</i>') == ''
+    assert T.tag_problems('<i>Tytuł, 1923.') == 'unbalanced <i>'
+    assert T.tag_problems('<b>Tytuł</b>') == 'tag <b>'
+    assert T.tag_problems('Zob. *Deutsche Kunst*, 1923.') == 'Markdown emphasis'
+    assert T.tag_problems('2 * 3 = 6, a_b') == ''
+    answers = iter(['Dalej impost, zob. *Deutsche Kunst*.', 'Dalej impost, zob. <i>Deutsche Kunst</i>.'])
+    prompts = []
+    res = T.run(_doc(), _args(tmp_path, only=['u0003']), call=lambda p: (prompts.append(p), next(answers))[1])
+    assert res['units']['u0003']['pl'] == 'Dalej impost, zob. <i>Deutsche Kunst</i>.'
+    assert 'Titles of cited works' in prompts[0] and '<i>...</i> only around titles' in prompts[1]

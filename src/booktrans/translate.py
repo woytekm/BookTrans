@@ -334,6 +334,23 @@ PUNCT_FIX = {
 }
 
 
+def tag_problems(pl):
+    """Markup the rules do not allow: only ``<i>…</i>`` (titles of cited works), balanced and not nested; no Markdown
+    emphasis.  -> a short description or ''."""
+    depth = 0
+    for m in re.finditer(r'</?([a-zA-Z]+)[^>]*>', pl):
+        if m.group(1).lower() != 'i':
+            return 'tag <%s>' % m.group(1)
+        depth += -1 if m.group(0).startswith('</') else 1
+        if depth not in (0, 1):
+            return 'unbalanced <i>'
+    if depth:
+        return 'unbalanced <i>'
+    if re.search(r'(?<![*\w])\*{1,2}[^*\s][^*]*\*{1,2}(?![*\w])|(?<![\w_])_[^_\s][^_]*_(?![\w_])', pl):
+        return 'Markdown emphasis'
+    return ''
+
+
 def punctuation_problems(pl):
     """The punctuation rules an answer breaks (names from ``PUNCT_RULES``)."""
     return [name for name, rx in PUNCT_RULES if rx.search(pl)]
@@ -355,6 +372,10 @@ def problems(src, pl, hits):
             found.append('length ratio %.2f' % ratio)
             fixes.append('Your answer is %s than the original; translate the whole text, neither shortening nor '
                          'adding to it.' % ('shorter' if ratio < 1 else 'longer'))
+    tags = tag_problems(pl)
+    if tags:
+        found.append('markup: ' + tags)
+        fixes.append('Use <i>...</i> only around titles of cited works, every <i> closed by </i>, and no other markup.')
     bad = punctuation_problems(pl)
     if bad:
         found.append('punctuation: ' + ', '.join(bad))
