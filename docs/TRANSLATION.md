@@ -81,6 +81,7 @@ python translate.py output/book/document.json --endpoint http://192.168.1.20:123
 python translate.py output/book/document.json --dry-run                                     # only write the prompts (translations.prompts.txt)
 python translate.py output/book/document.json --only u0021 u0022                            # just these units
 python translate.py output/book/document.json --pages 3,5-7                                 # the units on these pages
+python translate.py output/book/document.json --pages 4 --force                             # page 4 again, ignoring cached answers
 python render.py output/book/document.json output/book/translations.json -o output/book/render
 ```
 
@@ -142,6 +143,9 @@ python translate.py output/book/document.json --provider anthropic --price-in 3 
   also in a partial run, so the prompt and the cache key are the same as in a full run: translating page 3 first
   and the whole book later does not translate page 3 twice. (Before, the first selected paragraph lost its context.)
 - The output folder is created when it does not exist (the GUI writes to `<project>/translation/`).
+- `--force` ignores cached answers for the selected units (with `--only` / `--pages`; otherwise the whole book)
+  and asks the model again; the new answer replaces the cached one, so later runs reuse it. Without it, a
+  repeated run with unchanged prompt, glossary hits, context, text and model returns the cached answer.
 - The GUI's *Run translation* window builds this command from the project's translation settings (`GUI.md`, section 3).
 
 ### Claude Code as the translation engine (`--provider claude-code`)

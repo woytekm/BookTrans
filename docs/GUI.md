@@ -210,7 +210,8 @@ TIFF count and size, first TIFF opens, free disk space). Statuses `ok`, `warn`, 
 **Run translation** (`gui_run.TranslateWindow`; header button, Project menu, Cmd/Ctrl+Shift+T): the translation settings of the
 project (engine `claude-code` / `openai` / `anthropic`, model with a hint about the engine's default, source text `corrected` /
 `raw`, timeout, retries, endpoint and "no thinking" only where the engine uses them, glossary files with *Add…*), saved to
-`project.json` on Start; per run, not saved: *pages* (`3` or `1,4-6`, blank = the whole book) and *dry run* (prompts only).
+`project.json` on Start; per run, not saved: *pages* (`3` or `1,4-6`, blank = the whole book), *dry run* (prompts only) and *re-translate*
+(`--force`: ignore cached answers for these pages; with no pages it asks first, since the whole book is sent again).
 Before starting it says, in the window and again in a question, when the translation would not see your work: no
 `document.corrected.json`, or `review/unit_edits.json` / `ocr_decisions.json` newer than it (press *Re-run OCR correction*
 first); and it asks about unsaved correction windows like the other runs. Live log, Stop; at the end the header shows

@@ -272,7 +272,8 @@ class TranslateWindow(ProcessWindow):
                   'endpoint': tk.StringVar(value=t['endpoint']), 'glossary': tk.StringVar(value=t['glossary']),
                   'source': tk.StringVar(value=t['source']), 'timeout': tk.StringVar(value=str(t['timeout'])),
                   'retries': tk.StringVar(value=str(t['retries'])), 'no_think': tk.BooleanVar(value=bool(t['no_think'])),
-                  'pages': tk.StringVar(value=self._pages0 or ''), 'dry_run': tk.BooleanVar(value=False)}
+                  'pages': tk.StringVar(value=self._pages0 or ''), 'dry_run': tk.BooleanVar(value=False),
+                  'force': tk.BooleanVar(value=False)}
         g = ttk.Frame(f)
         g.pack(fill='x')
         self.provider_box = ttk.Combobox(g, textvariable=self.v['provider'], values=PROVIDERS, state='readonly', width=12)
@@ -315,7 +316,12 @@ class TranslateWindow(ProcessWindow):
         ttk.Label(r, text='(e.g. 3 or 1,4-6; blank = the whole book)', foreground=MUTED).pack(side='left', padx=(6, 12))
         dr = ttk.Checkbutton(r, text='dry run (write the prompts, no model calls)', variable=self.v['dry_run'])
         dr.pack(side='left')
-        self.controls += [pe, dr]
+        r2 = ttk.Frame(f)
+        r2.pack(fill='x', pady=(2, 0))
+        fo = ttk.Checkbutton(r2, text='re-translate: ignore cached answers and ask the model again for these pages',
+                             variable=self.v['force'])
+        fo.pack(side='left', padx=(62, 0))
+        self.controls += [pe, dr, fo]
         ttk.Label(f, text='Result: %s  (answers are cached beside it, so a repeated or interrupted run only translates '
                           'what changed; a page run keeps the other pages).' % self.project.translations_file,
                   foreground=MUTED, wraplength=860, justify='left').pack(anchor='w', pady=(6, 0))
@@ -379,6 +385,11 @@ class TranslateWindow(ProcessWindow):
             except ValueError as e:
                 messagebox.showerror('Pages', str(e), parent=self)
                 return None
+        force = self.v['force'].get()
+        if force and not pages and not self.v['dry_run'].get() and not messagebox.askyesno(
+                'Re-translate the whole book?', 'No pages are given, so every unit of the book is sent to the model again '
+                                                 '(cached answers are ignored and replaced).\n\nContinue?', icon='warning', parent=self):
+            return None
         if not self._check_unsaved():
             return None
         self.project.translation.update(t)
@@ -388,8 +399,9 @@ class TranslateWindow(ProcessWindow):
                 'Translate anyway?', '\n\n'.join(warnings) + '\n\nTranslate anyway?', icon='warning', parent=self):
             return None
         try:
-            return (self.project.translate_command(pages, self.v['dry_run'].get()),
-                    self.project.translate_command_line(pages, self.v['dry_run'].get()))
+            dry = self.v['dry_run'].get()
+            return (self.project.translate_command(pages, dry, force),
+                    self.project.translate_command_line(pages, dry, force))
         except ProjectError as e:
             messagebox.showerror('Translation', str(e), parent=self)
             return None

@@ -329,10 +329,10 @@ class Project:
         return ' '.join(shlex.quote(str(c)) for c in self.ocrfix_command())
 
     # ------------------------------------------------------------ translation
-    def translate_command(self, pages=None, dry_run=False):
+    def translate_command(self, pages=None, dry_run=False, force=False):
         """``translate.py`` for this project: the book's document.json (translate.py itself takes the corrected copy
         beside it unless ``source`` is raw) -> ``translation/translations.json``.  ``pages``: e.g. '3-5' (a partial run
-        keeps the other units).  Raises ProjectError when there is no document yet."""
+        keeps the other units); ``force``: ignore cached answers.  Raises ProjectError when there is no document yet."""
         t = self.translation
         doc = self.book_dir() / 'document.json'
         if not doc.exists():
@@ -353,12 +353,14 @@ class Project:
             cmd.append('--no-think')
         if pages and str(pages).strip():
             cmd += ['--pages', str(pages).replace(' ', '')]
+        if force:
+            cmd.append('--force')
         if dry_run:
             cmd.append('--dry-run')
         return cmd
 
-    def translate_command_line(self, pages=None, dry_run=False):
-        return ' '.join(shlex.quote(str(c)) for c in self.translate_command(pages, dry_run))
+    def translate_command_line(self, pages=None, dry_run=False, force=False):
+        return ' '.join(shlex.quote(str(c)) for c in self.translate_command(pages, dry_run, force))
 
     def translation_warnings(self):
         """Things to know before translating, as sentences: the corrected copy is missing or older than the saved

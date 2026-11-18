@@ -204,7 +204,8 @@ def test_translate_command_maps_the_settings(tmp_path, scans):
     c = p.translate_command(pages='3, 5-6', dry_run=True)
     assert c[c.index('--model') + 1] == 'sonnet' and '--endpoint' not in c          # claude-code has no endpoint
     assert c[c.index('--glossary') + 1] == str(p.root / 'g.csv')                     # relative to the project folder
-    assert '--raw' in c and '--no-think' not in c and c[c.index('--pages') + 1] == '3,5-6' and '--dry-run' in c
+    assert '--raw' in c and '--no-think' not in c and c[c.index('--pages') + 1] == '3,5-6' and '--dry-run' in c and '--force' not in c
+    assert '--force' in p.translate_command(pages='3', force=True)
     p.translation['provider'] = 'openai'
     c = p.translate_command()
     assert c[c.index('--endpoint') + 1] == 'http://x:1/v1' and '--no-think' in c
