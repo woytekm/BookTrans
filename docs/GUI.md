@@ -265,6 +265,14 @@ resolution, *book.pdf*, then `render.py` as a subprocess -> `<project>/render/`;
    text.
 Stage A already has the window as a separate, per-page, reused toplevel with the page image fitted to it.
 
+**Glossary window** (since 2026-11-18; `gui_glossary.py`; Project > *Glossary…*, `Cmd/Ctrl+Shift+G`): the central glossary
+folder (shared by all books) with *Change…* / *Show*. Tab *Entries*: every row of the book's layer (`review/glossary.csv`) and
+of the central files, searchable, filter by layer, rows hidden by an earlier definition in grey; *Add…*, *Edit…* (double-click),
+*Delete*, *Promote to central*, *Import name list…*. Tab *Candidates*: the harvested names and terms the glossary lacks (German,
+proposed Polish, kind, how often, other forms seen, units); *Accept → central*, *Accept → this book*, *Edit and accept…*, *Reject*
+(several rows at once), *Collect candidates…* opens *Run translation* with "collect glossary candidates" ticked (`translate.py
+--harvest`). See `TRANSLATION.md` → *One central glossary for all books*.
+
 **Captions…** (since 2026-11-18; `gui_correction.CaptionDialog`, logic in the toolkit-free `caption_tools.py`): captions are the
 worst-read text, and a caption may come out in pieces (several units). The dialog lists the page's caption units; for the selected
 one it shows the caption's whole row enlarged (the letters between pieces are often what the OCR missed), the OCR text and an edit
@@ -281,6 +289,8 @@ nothing is drawn for it); *OCR text* restores; *Apply* writes the texts into the
 | `envcheck.py` | yes | the environment check (also a terminal command) |
 | `pageindex.py` | yes | `replay`, `UnitMap`, `DocIndex`: page rows, the three JSON views, marks with their lines |
 | `assets/booktrans_icon.png` | - | the window / Dock icon (`assets/make_icon.py` draws it; `gui.set_app_icon`) |
+| `glossary_store.py`, `glossary_harvest.py` | yes | the central glossary (user folder, project layer, rejections, import) and the harvest of candidates from a translation |
+| `gui_glossary.py` | no | the glossary window |
 | `caption_tools.py` | yes | the correction window's caption helper: caption units of a page, the enlarged row, read again, join, apply to the review JSON |
 | `gui_demo.py` | yes | synthetic demo project (real stage 4 units, real `ocrfix.run`) |
 | `gui.py` | no | main window, menu, page list, JSON tabs, recent projects |

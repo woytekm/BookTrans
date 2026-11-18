@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — one central glossary for all books
+
+- **Central glossary** (`glossary_store.py`): a folder outside the repository, default `~/BookTrans/glossary`
+  (`~/.booktrans/config.json`, `$BOOKTRANS_GLOSSARY`), seeded from the repository's `glossary/` on first use. A project's
+  own layer `review/glossary.csv` is read first and wins; *Promote to central*. Rejected words in `rejected.csv`.
+  The translation setting *Glossary* blank = project layer + central (was: the repository's files); `translate.py`
+  without `--glossary` reads the central glossary.
+- **Harvest** (`glossary_harvest.py`, `translate.py --harvest FILE`, `Project.harvest_command`): per translated unit the
+  model lists the names and terms and the Polish forms used; known, rejected and invented words are dropped; the rest
+  aggregated into `review/glossary_candidates.json` (cached per unit).
+- **Import** of `german,polish` name lists into the central `places.csv` (ambiguous names marked, existing entries kept).
+- **GUI**: Project > *Glossary…* (`gui_glossary.py`): entries of both layers (search, add, edit, delete, promote, import,
+  central folder), candidates (accept into central or this book, edit and accept, reject, collect); *Run translation*
+  has "collect glossary candidates".
+- Seed fix: `Barzdorf` = **Bernartice** (Bernartice u Javorníka), not Bartultovice (= Batzdorf).
+- Tests never touch the real glossary or configuration (`conftest.py`). GUI tests can run in the sandbox with
+  `/usr/bin/python3.12` under `xvfb-run` (HANDOFF section 10). Tests: 9 new.
+
 ## Unreleased — docs: searchable vector PDF planned
 
 - `RENDERING.md` → *TODO: searchable vector PDF*: the agreed approach (real text drawn from the layout plan with embedded

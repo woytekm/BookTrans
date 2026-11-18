@@ -179,6 +179,10 @@ Full detail: `PIPELINE.md`, `RENDERING.md`, `DATA_MODEL.md`.
 - A synthetic 5x upscale of a drawing page splits the main plate (merge gap limit 40 px); not seen on
   real data.
 - Tesseract confidence is not a calibrated probability.
+- **Glossary** (2026-11-18, owner's decision): one central glossary for all books in a folder outside the repository
+  (default `~/BookTrans/glossary`), a small per-project layer that wins, harvest of candidates from translations,
+  import of name lists, a GUI window (`TRANSLATION.md` → *One central glossary for all books*). The repository's
+  `glossary/` is only the seed.
 - The GUI and the Claude Code translation have only been run on the synthetic demo and under Linux/Xvfb (section 11).
 
 ## 7. Translation
@@ -244,6 +248,10 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 7. DPI-independent thresholds beyond the line-pitch scale factor.
 
 ## 10. Verification habits that worked
+
+- **GUI tests in the Linux sandbox**: the default `python3` (3.13) has no tkinter, so `tests/test_gui_*.py` are skipped there;
+  `/usr/bin/python3.12` has it: `xvfb-run -a /usr/bin/python3.12 -m pytest -q tests/test_gui_smoke.py tests/test_gui_render.py
+  tests/test_gui_demo.py` (about 30 s). A test that leaves a window with unsaved edits hangs at teardown (the quit dialog).
 
 - Run `python -m pytest -q` before every commit (278 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).
@@ -374,7 +382,7 @@ engine should be complete before a GUI goes on top. Agreed order (2026-11-18):
    SCHAFTRING` -> 4 lines at 9.7 px: shorten the translation or set the block's size / max width by hand); a stage 1 "caption"
    region on blank margin paper (page 58) now reads `[REEL LER ENT SER` / `TEEN` (also on main's stage 2).
    Next: automatic font choice from `fontcheck.py`'s score; emphasis detection in stage 2 + prompt rule; **searchable vector PDF** (planned in `RENDERING.md` → *TODO: searchable vector PDF*, reportlab, 1-2 days); incremental
-   layout for long books; glossary reuse between projects (discussed, paused by the owner).
+   layout for long books.
 
 Decided by the owner (2026-11-18): **Crimson Text Regular is the default font**, configurable in `config/fonts.json`
 (or `$BOOKTRANS_FONTS`); **adjustments are book-wide plus per block / per page** (as built). First real pipeline output
