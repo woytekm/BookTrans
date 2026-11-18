@@ -184,3 +184,28 @@ def test_clear_project_data_closes_windows_and_starts_afresh(win, monkeypatch):
     assert not app.project.book_dir().exists() and not app.project.translations_file.exists()
     assert app.project.file.exists() and app.render_window is None and not w.winfo_exists()
     assert 'Run pipeline starts afresh' in app.status_lbl.cget('text')
+
+
+def test_input_folder_is_shown_and_can_be_changed(win, monkeypatch, tmp_path):
+    app, w = win
+    from PIL import Image
+    import gui_dialogs
+    old = app.project.input_dir
+    assert old in app.info_lbl.cget('text')
+    new = tmp_path / 'scans2'
+    new.mkdir()
+    Image.new('L', (4, 3)).save(str(new / 'x.tif'))
+    asked = []
+    monkeypatch.setattr(gui_dialogs.filedialog, 'askdirectory', lambda **k: str(new))
+    monkeypatch.setattr(gui_dialogs.messagebox, 'askyesno', lambda title, msg, **k: (asked.append(msg), True)[1])
+    app.run_pipeline()
+    rw = app.run_window
+    assert old in rw.input_lbl.cget('text') and rw.resume.get()               # the demo has a result: resume offered
+    rw._change_input()
+    assert app.project.input_dir == str(new) and 'x.tif' in asked[-1] and 'without --resume' in asked[-1]
+    assert str(new) in rw.input_lbl.cget('text') and '1 TIFF file' in rw.input_lbl.cget('text')
+    assert not rw.resume.get() and str(new) in app.info_lbl.cget('text')
+    assert json.loads(app.project.file.read_text(encoding='utf-8'))['input_dir'] == str(new)
+    monkeypatch.setattr(gui_dialogs.filedialog, 'askdirectory', lambda **k: '')  # cancelled: nothing changes
+    app.change_input()
+    assert app.project.input_dir == str(new)

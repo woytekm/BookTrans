@@ -322,3 +322,21 @@ def test_clear_data_removes_results_keeps_settings_and_chosen_parts(tmp_path, sc
     assert PR.Project.load(p.root).name == 'mybook'                                    # settings intact
     p.clear_data(['cache', 'review'])
     assert not cache.exists() and not p.edits_file.exists() and p.data_parts() == []
+
+
+# ---------------------------------------------------------------- input folder of an existing project
+def test_change_input_folder_and_its_warnings(tmp_path, scans):
+    p = PR.Project.create(tmp_path / 'p', 'mybook', scans)
+    other = tmp_path / 'other'
+    other.mkdir()
+    assert p.input_change_warnings(scans) == []                               # unchanged: nothing to say
+    assert any('no TIFF files' in w for w in p.input_change_warnings(other))
+    _with_doc(p)
+    touch_tiff(other, 'a.tif')
+    w = p.input_change_warnings(other)
+    assert any('without --resume' in x for x in w)
+    with pytest.raises(PR.ProjectError):
+        p.set_input_dir(tmp_path / 'missing')
+    assert [t.name for t in p.set_input_dir(other)] == ['a.tif']
+    assert PR.Project.load(p.root).input_dir == str(other)
+    assert p.command()[2] == str(other)                                       # booktrans.py reads the new folder
