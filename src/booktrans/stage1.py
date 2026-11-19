@@ -10,7 +10,7 @@ from pytesseract import Output
 
 from imgutil import crop_for_ocr, paper_color
 from deskew import deskew_page, correction_matrix, apply_correction
-from illustrations import detect_illustrations, mask_box, edge_margins
+from illustrations import detect_illustrations, mask_box, edge_margins, page_ignore_margins
 from scale import estimate_scale
 import log
 
@@ -79,7 +79,17 @@ def merge_overlapping_boxes(boxes):
     return boxes
 
 
-def detect_text_regions(rgb, lang='deu', side='L', exclude=()):
+def thin_line(mask):
+    """True when the ink of a short region lies in a hairline: 85 % of it in 2 rows.  Letters - also small, letter-spaced
+    capitals whose tops are cut off by a figure's mask - spread their ink over at least 4-5 rows (2 rows hold < 50 %)."""
+    rows=(mask>0).sum(axis=1).astype(float)
+    if rows.sum()==0 or len(rows)<2:
+        return False
+    band=np.convolve(rows,np.ones(2),'valid')
+    return band.max()>=0.85*rows.sum()
+
+
+def detect_text_regions(rgb, lang='deu', side='L', exclude=(), margins=None):
     """Find coarse printed-text blocks, then OCR each block.
 
     Morphological grouping is much more stable for this book than grouping
@@ -90,15 +100,17 @@ def detect_text_regions(rgb, lang='deu', side='L', exclude=()):
     h,w=gray.shape
 
     # Ignore the physical book edge and the gutter shadow, side-aware.
-    ml,mt,mr,mb=edge_margins(side)
+    ml,mt,mr,mb=margins or edge_margins(side)
     bw[:mt,:]=0; bw[-mb:,:]=0; bw[:,:ml]=0; bw[:,-mr:]=0
     # Illustrations were found first and are masked out: their fragments must
     # never become text regions (and never reach OCR or translation).
     for ex1,ey1,ex2,ey2 in exclude:
         bw[max(0,ey1):ey2,max(0,ex1):ex2]=0
+    bw_raw=bw.copy()
     # Connect characters into lines and nearby lines into paragraph-sized blocks.
     bw=cv2.morphologyEx(bw,cv2.MORPH_CLOSE,cv2.getStructuringElement(cv2.MORPH_RECT,(21,3)))
     grouped=cv2.dilate(bw,cv2.getStructuringElement(cv2.MORPH_RECT,(7,13)))
+    raw=bw_raw
     n,labels,stats,_=cv2.connectedComponentsWithStats(grouped,8)
     candidates=[]
     for i in range(1,n):
@@ -107,6 +119,8 @@ def detect_text_regions(rgb, lang='deu', side='L', exclude=()):
             continue
         if x+ww < 40 or x > w-40:
             continue
+        if hh <= 30 and thin_line(raw[y:y+hh,x:x+ww]):
+            continue                    # a hairline (a crease, a scanner line, a rule), not a line of text
         # Printed text blocks have modest dark-pixel density. Very dense regions
         # are more likely photographs and are handled separately.
         density=float(np.mean(gray[y:y+hh,x:x+ww] < 170))
@@ -151,8 +165,12 @@ def detect_text_regions(rgb, lang='deu', side='L', exclude=()):
 
 def process_page(rgb, side, x_offset, lang):
     # Illustrations first (geometry only), then text outside them.
-    image_regions = [dict(r, type='image_or_drawing') for r in detect_illustrations(rgb, side)]
-    text_regions = detect_text_regions(rgb, lang, side, exclude=[mask_box(r) for r in image_regions])
+    # the stacked page edges at the outer side of a thick book can be wider than the fixed margin
+    margins = page_ignore_margins(cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY), side)
+    if margins != edge_margins(side):
+        log.info('stage1', '  page %s: stacked page edges, ignore margins %s' % (side, list(margins)))
+    image_regions = [dict(r, type='image_or_drawing') for r in detect_illustrations(rgb, side, margins)]
+    text_regions = detect_text_regions(rgb, lang, side, exclude=[mask_box(r) for r in image_regions], margins=margins)
     # Estimate body line height and classify text regions by typography scale.
     hs=[r['ocr_line_height'] for r in text_regions if r['ocr_line_height']>0]
     body_h=float(np.median(hs)) if hs else 20

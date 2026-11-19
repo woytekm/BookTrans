@@ -381,8 +381,8 @@ engine should be complete before a GUI goes on top. Agreed order (2026-11-18):
    again; `marks.is_rule`; figure crops clipped; `stage2.caption_sized`), correction window *Captions…*. Needs stages 1-2 again
    (`booktrans.py` without `--resume`) and a re-translation of the changed units. Still open: digit confusions in caption numbers
    (page 55 reads 45 for 43: fix by hand in *Captions…*); a translation much longer than its narrow slot (page 52's `59 POLITZ
-   SCHAFTRING` -> 4 lines at 9.7 px: shorten the translation or set the block's size / max width by hand); a stage 1 "caption"
-   region on blank margin paper (page 58) now reads `[REEL LER ENT SER` / `TEEN` (also on main's stage 2).
+   SCHAFTRING` -> 4 lines at 9.7 px: shorten the translation or set the block's size / max width by hand); ~~a stage 1 "caption"
+   region on blank margin paper (page 58)~~ fixed 2026-11-19 (a crease; `stage1.thin_line`).
    Next: automatic font choice from `fontcheck.py`'s score; emphasis detection in stage 2 + prompt rule; **searchable vector PDF** (planned in `RENDERING.md` → *TODO: searchable vector PDF*, reportlab, 1-2 days); incremental
    layout for long books.
 
