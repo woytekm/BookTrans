@@ -241,6 +241,13 @@ class RenderWindow(tk.Toplevel):
         ttk.Button(bb, text='Revert', command=self._fill_book).pack(side='left', padx=6)
         self.book_info = ttk.Label(f, text='', foreground=MUTED, wraplength=330, justify='left')
         self.book_info.grid(row=row, column=0, columnspan=3, sticky='w', pady=(6, 0))
+        row += 1
+        er = ttk.Frame(f)
+        er.grid(row=row, column=0, columnspan=3, sticky='w', pady=(10, 0))
+        self.edits_lbl = ttk.Label(er, text='', foreground=MUTED, wraplength=250, justify='left')
+        self.edits_lbl.pack(side='left')
+        self.orphans_btn = ttk.Button(er, text='Show\u2026', command=self.show_orphans, state='disabled')
+        self.orphans_btn.pack(side='left', padx=6)
 
     def _build_page_tab(self):
         f = ttk.Frame(self.nb, padding=10)
@@ -304,11 +311,24 @@ class RenderWindow(tk.Toplevel):
         self.block_apply.pack(side='left')
         self.block_clear = ttk.Button(kb, text='Clear', command=self.clear_block)
         self.block_clear.pack(side='left', padx=6)
-        ttk.Label(f, text='Translation', font=('TkDefaultFont', 11, 'bold')).grid(row=9, column=0, columnspan=3, sticky='w')
+        self.text_head = ttk.Label(f, text='Translation', font=('TkDefaultFont', 11, 'bold'))
+        self.text_head.grid(row=9, column=0, columnspan=3, sticky='w')
         self.block_text = tk.Text(f, wrap='word', height=8, bg=TEXT_BG, fg=TEXT_FG, selectbackground=SEL_BG,
-                                  selectforeground=SEL_FG, relief='flat', state='disabled', padx=6, pady=4)
+                                  selectforeground=SEL_FG, insertbackground=TEXT_FG, relief='flat', state='disabled',
+                                  padx=6, pady=4, undo=True)
         self.block_text.grid(row=10, column=0, columnspan=3, sticky='nsew', pady=(4, 0))
-        f.rowconfigure(10, weight=1)
+        f.rowconfigure(10, weight=3)
+        tb = ttk.Frame(f)
+        tb.grid(row=11, column=0, columnspan=3, sticky='w', pady=(6, 0))
+        self.text_save = ttk.Button(tb, text='Save text', command=self.save_text)
+        self.text_save.pack(side='left')
+        self.text_revert = ttk.Button(tb, text='Machine translation', command=self.revert_text)
+        self.text_revert.pack(side='left', padx=6)
+        ttk.Label(f, text='German original', foreground=MUTED).grid(row=12, column=0, columnspan=3, sticky='w', pady=(8, 0))
+        self.block_german = tk.Text(f, wrap='word', height=5, bg=TEXT_BG, fg=MUTED, relief='flat', state='disabled',
+                                    padx=6, pady=4)
+        self.block_german.grid(row=13, column=0, columnspan=3, sticky='nsew', pady=(2, 0))
+        f.rowconfigure(13, weight=1)
         self._block_state()
 
     # ------------------------------------------------------------------ status, loading, layout
@@ -374,6 +394,7 @@ class RenderWindow(tk.Toplevel):
         self.status(msg + '; %d check(s) in the book' % n, 'warn' if s.stale else 'info')
         self._fill_tree()
         self._fill_book()
+        self._fill_edits_row()
         self.show_page(self.pi)
 
     def _fill_tree(self):
@@ -647,6 +668,9 @@ class RenderWindow(tk.Toplevel):
         self.keep_btn.configure(state='normal' if ok else 'disabled')
         self.block_apply.configure(state='normal' if ok else 'disabled')
         self.block_clear.configure(state='normal' if ok and info['adjustment'] else 'disabled')
+        self.text_save.configure(state='normal' if ok else 'disabled')
+        self.text_revert.configure(state='normal' if ok and info.get('edited') else 'disabled')
+        self.block_text.configure(state='normal' if ok else 'disabled')
 
     def _fill_block_tab(self):
         info = self.session.block_info(self.pi, self.sel) if self.sel else None
@@ -656,6 +680,10 @@ class RenderWindow(tk.Toplevel):
         self.block_note.configure(text='')
         self.block_text.configure(state='normal')
         self.block_text.delete('1.0', 'end')
+        self.block_german.configure(state='normal')
+        self.block_german.delete('1.0', 'end')
+        self.block_german.configure(state='disabled')
+        self.text_head.configure(text='Translation')
         if info is None:
             self.block_info.configure(text='Click a text block on the page.')
             self.block_text.configure(state='disabled')
@@ -681,8 +709,88 @@ class RenderWindow(tk.Toplevel):
         elif not info['unit']:
             self.block_note.configure(text='Not translated (no unit): its pixels are kept or dropped as scan noise.')
         self.block_text.insert('1.0', info['text'])
-        self.block_text.configure(state='disabled')
+        self.block_text.edit_reset()
+        self.block_text.edit_modified(False)
+        if info['unit']:
+            german = self.session.text_of(info['unit'])[0]
+            self.block_german.configure(state='normal')
+            self.block_german.insert('1.0', german)
+            self.block_german.configure(state='disabled')
+            self.text_head.configure(text='Translation (corrected by hand)' if info.get('edited') else
+                                     'Translation (machine; edit and Save text to correct it)')
         self._block_state(info)
+        if not info['unit']:
+            self.block_text.configure(state='disabled')
+
+    # ------------------------------------------------------------------ text corrections
+    def save_text(self):
+        """The Polish of the selected block's unit as a human correction (review/text_edits.json), then lay out."""
+        info = self.session.block_info(self.pi, self.sel) if self.sel else None
+        if not info or not info['unit']:
+            return
+        pl = self.block_text.get('1.0', 'end-1c').strip()
+        if not pl:
+            self.status('An empty text would remove the block\'s translation: use "keep the original" or Machine '
+                        'translation instead.', 'warn')
+            return
+        try:
+            warn = self.session.set_text(info['unit'], pl)
+        except (ValueError, OSError) as e:
+            self._error(e)
+            return
+        self.relayout('Text of %s saved%s; laying out the book…' % (
+            info['unit'], ' (check: %s)' % ', '.join(warn) if warn else ''))
+        self._fill_edits_row()
+
+    def revert_text(self):
+        info = self.session.block_info(self.pi, self.sel) if self.sel else None
+        if not info or not info['unit']:
+            return
+        try:
+            self.session.revert_text(info['unit'])
+        except (ValueError, OSError) as e:
+            self._error(e)
+            return
+        self.relayout('%s is back to the machine translation; laying out the book…' % info['unit'])
+        self._fill_edits_row()
+
+    def _fill_edits_row(self):
+        s = self.session
+        if s.trans is None:
+            return
+        n, o = len(s.edited), len(s.orphans)
+        self.edits_lbl.configure(text='%d block(s) corrected by hand%s' % (
+            n, '; %d correction(s) no longer match their German' % o if o else ''),
+            foreground=NOTE_FG if o else MUTED)
+        self.orphans_btn.configure(state='normal' if o else 'disabled')
+
+    def show_orphans(self):
+        """Corrections whose German text changed (OCR fixed, pipeline run again): their text, to copy or delete."""
+        s = self.session
+        if not s.orphans:
+            return
+        w = tk.Toplevel(self)
+        w.title('Corrections that match no block')
+        w.transient(self)
+        t = tk.Text(w, wrap='word', width=80, height=20, bg=TEXT_BG, fg=TEXT_FG, relief='flat', padx=8, pady=6)
+        t.pack(fill='both', expand=True, padx=10, pady=(10, 4))
+        t.insert('1.0', 'The German text of these blocks changed after they were corrected, so the corrections are not '
+                        'used.  Copy what you still need into the block (Block tab), then delete them.\n\n')
+        for e in s.orphans:
+            t.insert('end', '%s (saved %s, was unit %s):\n%s\n\n' % (e['fingerprint'], e.get('saved', '?'),
+                                                                        e.get('unit', '?'), e.get('pl', '')))
+        b = ttk.Frame(w)
+        b.pack(fill='x', padx=10, pady=(0, 10))
+
+        def delete_all():
+            if not messagebox.askyesno('Delete', 'Delete these %d correction(s)?' % len(s.orphans), parent=w):
+                return
+            for e in list(s.orphans):
+                s.remove_orphan(e['fingerprint'])
+            self._fill_edits_row()
+            w.destroy()
+        ttk.Button(b, text='Close', command=w.destroy).pack(side='right')
+        ttk.Button(b, text='Delete them', command=delete_all).pack(side='right', padx=6)
 
     # ------------------------------------------------------------------ apply
     def _saved(self, what):

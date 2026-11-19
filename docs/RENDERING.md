@@ -59,6 +59,15 @@ hyphenated word joined). `report.json` is `plan.report`.
    vanished on a paper background.
 4. **Lines** from the plan.
 
+**Human text corrections** (since 2026-11-19; `text_edits.py`, `--text-edits review/text_edits.json`, passed by the project's
+render command when the file exists). A human's corrected Polish for a block (render window, Block tab, *Save text*) is kept in
+its own file, never in `translations.json`, so a new translation run cannot overwrite it. Each correction is the whole text of
+the unit, keyed by a fingerprint of the **German it was translated from** (the translation's `source`, whitespace folded) -
+not by the unit number, which changes when the pipeline runs again. The unit number and save time are stored only for a human
+reading the file. A correction whose German no longer exists (OCR corrected, text changed) is *orphaned*: not applied, not
+deleted, listed in the Book tab (*Show…*). Saving the machine text again removes the correction; every save keeps one backup
+(`text_edits.json.bak`). Applied units carry `edited` and `pl_machine` in the plan's translation view.
+
 **Page position** (since 2026-11-18; `--page-position`, project `render.page_position`, *Page position* in the Book tab).
 `original` (default): the content stays where it is on the scan, so left and right pages keep their different
 margins (gutter / outer edge) and the scan's small shifts - right for a print edition. `centered`: every page gets the

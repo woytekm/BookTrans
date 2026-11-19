@@ -228,6 +228,13 @@ model. The glossary is a plain lookup applied *before* the request and a check a
 Cost: negligible memory, no extra model, a few hundred prompt tokens per unit, so it works with a 12B
 model on 16 GB. One unit per request keeps the context small.
 
+### Human corrections of the translation
+
+`translations.json` stays as the translation wrote it. A human's corrections of single blocks are kept in the project's
+`review/text_edits.json` (render window, Block tab) and set over the translation when rendering (`text_edits.py`,
+`RENDERING.md` → *Human text corrections*); a new translation run therefore never overwrites them. They follow the German
+text, not the unit number; when the German changes, the correction is listed as orphaned instead of applied.
+
 ### One central glossary for all books (since 2026-11-18)
 
 The glossary is shared by every book the owner processes (`glossary_store.py`):
