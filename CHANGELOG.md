@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — page numbers on plate pages
+
+- Owner's report: page 69 (two photos with captions, no body text) lost its page number. `marks.find_marks` needed text
+  columns, which a plate page has none of, and looked only 130 px below the content - the pictures ended 180 px above
+  the number. Now plate pages use the content's width, and a page-number sized mark (8-40 px tall, not a speck) counts up
+  to a fifth of the page height away; rules are not looked for on plate pages. Test book: page 55 gets its number too.
+  Takes effect with the next pipeline run (the document is rebuilt even with *resume*).
+- Tests: 1 new.
+
 ## Unreleased — render: space between a picture and its caption
 
 - Owner's finding: on pages 62, 63 and 69 the captions touched their pictures. A general rule now keeps at least half the
