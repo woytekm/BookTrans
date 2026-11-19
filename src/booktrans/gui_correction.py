@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw
 import caption_tools
 import ocr_decisions
 import unit_edits
-from gui_widgets import (CANVAS_BG, CLASS_COLORS, CLASS_LABELS, FIND_CUR_BG, MAC, MOD, MOD_LABEL, MUTED, NOTE_FG, SEL_BG,
+from gui_widgets import (bind_wheel, debug_events, CANVAS_BG, CLASS_COLORS, CLASS_LABELS, FIND_CUR_BG, MAC, MOD, MOD_LABEL, MUTED, NOTE_FG, SEL_BG,
                          FIND_BG, SEL_FG, STATUS_COLORS, TEXT_BG, TEXT_FG, SafePhoto, mono_font, release_pending_images)
 
 ZOOM_STEP, ZOOM_MIN, ZOOM_MAX = 1.25, 0.1, 6.0       # a click on + / - multiplies by this; limits of the scale
@@ -201,9 +201,8 @@ class CorrectionWindow(tk.Toplevel):
         self.canvas.bind('<ButtonRelease-1>', self._release_event)
         for ev in (('<Button-2>', '<Control-Button-1>') if MAC else ('<Button-3>',)):      # right click: decide about a flag
             self.canvas.bind(ev, self._popup)
-        self.canvas.bind('<MouseWheel>', self._wheel)                     # macOS, Windows
-        self.canvas.bind('<Button-4>', lambda e: self._wheel(e, 1))       # X11
-        self.canvas.bind('<Button-5>', lambda e: self._wheel(e, -1))
+        bind_wheel(self.canvas, self._wheel)                              # wheel; buttons 4 / 5 only on X11
+        debug_events(self.canvas, 'correction canvas')
         # the keys must not fire while typing in the editor: they are bound to the canvas side only
         for key, fn in (('plus', lambda: self.zoom_by(ZOOM_STEP)), ('equal', lambda: self.zoom_by(ZOOM_STEP)),
                         ('minus', lambda: self.zoom_by(1 / ZOOM_STEP)), ('0', self.zoom_fit), ('1', lambda: self.set_zoom(1.0))):

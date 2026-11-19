@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — macOS: clicks in the page views
+
+- Owner's report (macOS): a click on the render window's page zoomed it in and never selected a block; no pan either.
+  Buttons 4 / 5 were bound as the scroll wheel everywhere; that is right only on X11. Now `gui_widgets.bind_wheel` binds
+  them on X11 only (render and correction windows).
+- `BOOKTRANS_DEBUG_EVENTS=1`: the page canvases print every mouse event they get (type, button, modifiers, wheel delta,
+  position) and the Tk version to the terminal (`gui_widgets.debug_events`).
+
 ## Unreleased — render window: block clicks
 
 - Owner's report: clicking a block in the render window selected nothing (not reproduced on Linux with real X clicks).
