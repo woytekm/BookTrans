@@ -631,13 +631,24 @@ class RenderWindow(tk.Toplevel):
         self.canvas.scan_mark(e.x, e.y)
 
     def _release_event(self, e):
-        if self._press is None or abs(e.x - self._press[0]) > 4 or abs(e.y - self._press[1]) > 4:
+        if self._press is None:
             return
-        pt = self.to_work(self.canvas.canvasx(e.x), self.canvas.canvasy(e.y))
-        if pt is None:
+        moved = max(abs(e.x - self._press[0]), abs(e.y - self._press[1]))
+        self._press = None
+        if moved > 8:                                  # a drag (panning), not a click
             return
-        bid = self.session.block_at(self.pi, *pt)
-        self.select_block(bid)
+        try:
+            pt = self.to_work(self.canvas.canvasx(e.x), self.canvas.canvasy(e.y))
+            if pt is None:
+                self.status('Click on the page image to select a block.')
+                return
+            bid = self.session.block_at(self.pi, *pt)
+            if bid is None:
+                self.status('No text block at %d, %d (page pixels): figures and empty paper have none.' % pt)
+            self.select_block(bid)
+        except Exception as err:                        # shown, not only printed to the terminal
+            self.status('Selecting the block failed: %s: %s' % (type(err).__name__, err), 'fail')
+            raise
 
     def to_work(self, x, y):
         """Canvas point -> working-pixel point of the page (None outside the page images)."""

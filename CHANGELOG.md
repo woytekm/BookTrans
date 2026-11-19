@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — render window: block clicks
+
+- Owner's report: clicking a block in the render window selected nothing (not reproduced on Linux with real X clicks).
+  A click may now move up to 8 px (was 4: a trackpad click often moves a little and counted as panning); the status line
+  says when there is no text block under the click, and an error while selecting is shown there instead of only on the
+  terminal.
+
 ## Unreleased — correcting the translation by hand
 
 - Render window, Block tab: the block's Polish is editable; *Save text* / *Machine translation*; the German original
