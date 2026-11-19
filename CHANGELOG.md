@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — stage 1/2: scan 0009 (fainter page edges, pale photo parts, photo edge junk)
+
+- Scan 0009: the stacked page edges on page 68 are partly faint and broken: an edge line now needs an unbroken run of
+  8 % of the page height (was 25 %); the band was found only to 47 px, now to 71 px.
+- Page 69: the lower photo's right half is pale stone; the photo box grows over it (up to 200 px per side; a pale stripe
+  inside a photo up to 4 px is crossed; the paper grey beside a side is now the 75th percentile, so a bright gutter
+  highlight does not make the paper look dark; a strip is paper with 40 % paper-like pixels). Both captions are found.
+- Stage 2: a low-confidence line lying 40 % or more over a figure is dropped (a photo's bottom edge read as
+  `IE Er EEE SE` where the figure mask stops at the caption under it).
+- Test book: additionally page 62's text region no longer starts in the book edge (the `| N` noise blocks there).
+- Tests: 2 new.
+
 ## Unreleased — stage 1: stacked page edges, light parts of photographs, hairlines
 
 - Owner's report (scan 0008, page 66): the stacked page edges at the outer side (wider than the fixed 65 px margin) were

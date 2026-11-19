@@ -204,13 +204,15 @@ def is_junk_caption(line):
 
 
 def drop_junk_in_figures(lines, figures, conf=50):
-    """Lines (not captions) lying inside a figure with low confidence: the picture read as letters."""
+    """Lines (not captions) with low confidence that lie inside a figure or largely over it (at least 40 % of the line's
+    box): the picture read as letters - typically a photo's bottom edge, uncovered where the figure's mask stops at a
+    caption set right under it (``clip_mask``)."""
     out = []
     for ln in lines:
         x1, y1, x2, y2 = ln['bbox']
-        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
-        inside = any(fx1 + 4 <= cx <= fx2 - 4 and fy1 + 4 <= cy <= fy2 - 4 for fx1, fy1, fx2, fy2 in figures)
-        if inside and ln.get('type') != 'caption_line' and ln.get('confidence', 100) < conf:
+        area = max(1, (x2 - x1) * (y2 - y1))
+        over = max([_ov(x1, x2, fx1, fx2) * _ov(y1, y2, fy1, fy2) / area for fx1, fy1, fx2, fy2 in figures] or [0])
+        if over >= 0.4 and ln.get('type') != 'caption_line' and ln.get('confidence', 100) < conf:
             continue
         out.append(ln)
     return out

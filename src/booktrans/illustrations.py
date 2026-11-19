@@ -52,7 +52,7 @@ def edge_margins(side):
 
 EDGE_MAX_FRAC = 0.15    # the stacked page edges never take more than this of the page width
 EDGE_START_FRAC = 0.05  # ... and start within this of the outer border
-EDGE_LINE_FRAC = 0.25   # a page-edge line runs over at least this much of the page height
+EDGE_LINE_FRAC = 0.08   # a page-edge line runs unbroken over at least this much of the page height (faint lines break)
 EDGE_GAP = 40           # px between neighbouring edge lines (scaled with the page, see book_edge)
 
 
@@ -215,52 +215,52 @@ def detect_line_art(gray, side, exclude=(), margins=None):
 
 
 GROW_STEP = 2           # px per step when a photograph's box grows over its light parts
-GROW_MAX = 90           # px at most per side
+GROW_MAX = 200          # px at most per side (a light half of a photo: stone columns, sky)
 GROW_NEAR = 12          # a pixel within this of the local paper grey looks like paper
-GROW_PAPER_FRAC = 0.3   # a strip with more paper-like pixels than this is paper (or text on paper), not picture
+GROW_PAPER_FRAC = 0.4   # a strip with more paper-like pixels than this is paper (or text on paper), not picture
+GROW_LOOKAHEAD = 2      # strips: a pale stripe inside a picture this thin is crossed
 
 
 def grow_halftone(gray, box, paper, limits):
-    """A photograph's box grown over its light parts (a sunlit pavement, sky): the dark-tone contour stops where the
-    picture gets lighter than the threshold, and the rest of the picture was then taken for a line drawing that also
-    swallowed the caption.  Each side moves out in ``GROW_STEP`` strips while the next strip is picture: few of its
-    pixels are as light as the paper next to that side (the paper's grey is measured locally, beside each side, since
-    a curved page is darker towards the gutter or the edge; text on paper still has mostly paper pixels).
-    ``paper`` is not used for the decision (kept for callers); ``limits``: the ignore margins (left, top, right, bottom)."""
+    """A photograph's box grown over its light parts (a sunlit pavement, sky, pale stone): the dark-tone contour stops
+    where the picture gets lighter than the threshold, and the rest of the picture was then taken for a line drawing
+    that also swallowed the caption.  Each side moves out in ``GROW_STEP`` strips while the strip is picture: fewer
+    than ``GROW_PAPER_FRAC`` of its pixels are as light as the paper beside that side (the paper's grey is the 75th
+    percentile of a wide band beside the side - a curved page is darker towards the gutter or the edge, a gutter has a
+    bright highlight; text on paper still has mostly paper pixels).  A thin light stripe inside the picture (a pale
+    column) is crossed when picture follows within ``GROW_LOOKAHEAD`` strips.  ``paper`` is kept for callers;
+    ``limits``: the ignore margins (left, top, right, bottom)."""
     h, w = gray.shape
     x1, y1, x2, y2 = box
     ml, mt, mr, mb = limits
-    reach = GROW_MAX + 20
+    reach = GROW_MAX + 60              # far enough to reach paper beyond a light part of the picture
 
     def local(region):
-        return float(np.percentile(region, 90)) if region.size else None
+        return float(np.percentile(region, 75)) if region.size else None
 
     def picture(strip, ref):
         return strip.size > 0 and ref is not None and float(np.mean(strip >= ref - GROW_NEAR)) < GROW_PAPER_FRAC
-    ref = local(gray[y2:min(h, y2 + reach), x1:x2])
-    for _ in range(GROW_MAX // GROW_STEP):
-        if y2 + GROW_STEP <= h - mb and picture(gray[y2:y2 + GROW_STEP, x1:x2], ref):
-            y2 += GROW_STEP
-        else:
-            break
-    ref = local(gray[max(0, y1 - reach):y1, x1:x2])
-    for _ in range(GROW_MAX // GROW_STEP):
-        if y1 - GROW_STEP >= mt and picture(gray[y1 - GROW_STEP:y1, x1:x2], ref):
-            y1 -= GROW_STEP
-        else:
-            break
-    ref = local(gray[y1:y2, max(0, x1 - reach):x1])
-    for _ in range(GROW_MAX // GROW_STEP):
-        if x1 - GROW_STEP >= ml and picture(gray[y1:y2, x1 - GROW_STEP:x1], ref):
-            x1 -= GROW_STEP
-        else:
-            break
-    ref = local(gray[y1:y2, x2:min(w, x2 + reach)])
-    for _ in range(GROW_MAX // GROW_STEP):
-        if x2 + GROW_STEP <= w - mr and picture(gray[y1:y2, x2:x2 + GROW_STEP], ref):
-            x2 += GROW_STEP
-        else:
-            break
+
+    def grow(pos, step, lo, hi, strip_at, ref):
+        start = pos
+        while abs(pos - start) < GROW_MAX:
+            ok = False
+            for k in range(1, GROW_LOOKAHEAD + 2):          # this strip, or one shortly after it
+                a = pos + step * (k - 1) * GROW_STEP
+                b = a + step * GROW_STEP
+                if not (lo <= min(a, b) and max(a, b) <= hi):
+                    break
+                if picture(strip_at(min(a, b), max(a, b)), ref):
+                    pos = b
+                    ok = True
+                    break
+            if not ok:
+                break
+        return pos
+    y2 = grow(y2, 1, 0, h - mb, lambda a, b: gray[a:b, x1:x2], local(gray[y2:min(h, y2 + reach), x1:x2]))
+    y1 = grow(y1, -1, mt, h, lambda a, b: gray[a:b, x1:x2], local(gray[max(0, y1 - reach):y1, x1:x2]))
+    x1 = grow(x1, -1, ml, w, lambda a, b: gray[y1:y2, a:b], local(gray[y1:y2, max(0, x1 - reach):x1]))
+    x2 = grow(x2, 1, 0, w - mr, lambda a, b: gray[y1:y2, a:b], local(gray[y1:y2, x2:min(w, x2 + reach)]))
     return [x1, y1, x2, y2]
 
 

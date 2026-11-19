@@ -50,3 +50,16 @@ def test_hairlines_are_not_text_but_small_capitals_are():
     for x in range(0, 240, 14):
         caps[9:15, x:x + 2] = 255; caps[9:11, x:x + 9] = 255; caps[13:15, x:x + 9] = 255
     assert not stage1.thin_line(caps)
+
+
+def test_faint_broken_edge_lines_count_and_a_pale_stripe_inside_a_photo_is_crossed():
+    g = _page()
+    for x in (6, 9, 12, 44, 46, 70):                     # dark edge lines, then faint broken ones further in
+        for y0 in range(40, 1250, 160):
+            g[y0:y0 + 140, x] = 150
+    assert 60 <= I.book_edge(g, 'L')['left'] <= 80
+    p = np.full((900, 800), 210, np.uint8)
+    p[100:400, 100:400] = 90                            # the dark left part the threshold finds
+    p[100:400, 400:404] = 205                           # a pale column, 4 px
+    p[100:400, 404:520] = 140                           # the rest of the photo, mid grey
+    assert I.grow_halftone(p, [100, 100, 400, 400], 210, (10, 10, 10, 10))[2] >= 518

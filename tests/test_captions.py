@@ -58,3 +58,11 @@ def test_mixed_case_body_size_text_beside_a_picture_is_not_a_caption():
     assert not stage2.caption_sized({'glyph_height': 14.0, 'uppercase_ratio': 0.05}, body)
     assert stage2.caption_sized({'glyph_height': 15.0, 'uppercase_ratio': 0.9}, body)       # capitals with an Ä
     assert stage2.caption_sized({'glyph_height': 10.0, 'uppercase_ratio': 0.05}, body)
+
+
+def test_a_photo_edge_read_as_letters_under_the_mask_line_is_dropped():
+    fig = [[255, 688, 628, 962]]
+    edge = _line('IE Er EEE SE', (254, 950, 627, 967), 30, 17, 'heading_line')     # 70 % over the photo
+    cap = _line('36 GROTTKAU, KATHOLISCHE PFARRKIRCHE', (153, 963, 626, 978), 90)
+    body = _line('Text unter dem Bild', (150, 1000, 620, 1012), 35, 9, 'body_line')
+    assert [l['text'] for l in C.drop_junk_in_figures([edge, cap, body], fig)] == [cap['text'], body['text']]
