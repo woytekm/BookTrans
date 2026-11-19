@@ -206,7 +206,7 @@ class CorrectionWindow(tk.Toplevel):
         # the keys must not fire while typing in the editor: they are bound to the canvas side only
         for key, fn in (('plus', lambda: self.zoom_by(ZOOM_STEP)), ('equal', lambda: self.zoom_by(ZOOM_STEP)),
                         ('minus', lambda: self.zoom_by(1 / ZOOM_STEP)), ('0', self.zoom_fit), ('1', lambda: self.set_zoom(1.0))):
-            self.canvas.bind('<%s>' % key, lambda _e, fn=fn: fn())
+            self.canvas.bind('<Key-%s>' % key, lambda _e, fn=fn: fn())   # '<1>' alone would be a mouse click
         self.canvas.bind('<KP_Add>', lambda _e: self.zoom_by(ZOOM_STEP))
         self.canvas.bind('<KP_Subtract>', lambda _e: self.zoom_by(1 / ZOOM_STEP))
         self.canvas.bind('<Enter>', lambda _e: self.canvas.focus_set())

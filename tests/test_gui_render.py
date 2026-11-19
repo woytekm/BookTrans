@@ -228,3 +228,26 @@ def test_block_text_is_corrected_by_hand_and_reverted(win):
     w.revert_text()
     pump(app, lambda: not w._busy and 'Laid out' in w.status_lbl.cget('text'))
     assert not s.text_of(cap['unit_id'])[3] and '0 block(s)' in w.edits_lbl.cget('text')
+
+
+def test_a_real_click_selects_the_block_under_it(win):
+    """Regression: the zoom key '1' was bound as '<1>', which Tk reads as mouse button 1 - every click zoomed to 100 %
+    and replaced the click handler, so no block could be selected."""
+    app, w = win
+    w.deiconify()                                          # events reach only a mapped widget
+    w.view.set('rebuilt')
+    w.set_zoom(None)
+    pump(app, lambda: w.canvas.winfo_ismapped() and w._img is not None)
+    w.show_page(w.pi)
+    pump(app, lambda: w._img is not None)
+    cap = next(b for b in w.session.doc['pages'][w.pi]['blocks'] if b.get('role') == 'caption')
+    kind, off, (sx, sy) = w._panels[-1]
+    x = w._origin[0] + off + ((cap['bbox'][0] + cap['bbox'][2]) / 2 + sx) * w._scale - w.canvas.canvasx(0)
+    y = w._origin[1] + ((cap['bbox'][1] + cap['bbox'][3]) / 2 + sy) * w._scale - w.canvas.canvasy(0)
+    w.canvas.event_generate('<ButtonPress-1>', x=int(x), y=int(y))
+    w.canvas.event_generate('<ButtonRelease-1>', x=int(x), y=int(y))
+    app.update()
+    assert w.sel == cap['block_id'] and w.zoom is None
+    w.canvas.event_generate('<Key-1>')
+    app.update()
+    assert w.zoom == 1.0                                   # the key still zooms

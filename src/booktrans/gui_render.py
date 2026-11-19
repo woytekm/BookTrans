@@ -161,7 +161,7 @@ class RenderWindow(tk.Toplevel):
         for key, fn in (('plus', lambda: self.zoom_by(ZOOM_STEP)), ('equal', lambda: self.zoom_by(ZOOM_STEP)),
                         ('minus', lambda: self.zoom_by(1 / ZOOM_STEP)), ('0', lambda: self.set_zoom(None)),
                         ('1', lambda: self.set_zoom(1.0))):
-            c.bind('<%s>' % key, lambda _e, fn=fn: fn())
+            c.bind('<Key-%s>' % key, lambda _e, fn=fn: fn())     # '<1>' alone would be a mouse click
 
         rf = ttk.Frame(pan, width=380)
         pan.add(rf, weight=0)
