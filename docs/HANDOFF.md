@@ -67,7 +67,9 @@ real login**. The two samples were translated by hand in a chat session (`exampl
   `stage2.caption_sized` lets body-size lines be captions only when mostly capitals; (2) `captions.LETTER` and the
   letter regexes in stage 2 list German letters only; (3) fixed pixel thresholds in `captions.py`
   (`clip_mask` 14, `figure_of` 45/12/10, `caption_tools.row_box` 400) and `layout.caption_geometry` (8, 40, 60);
-  (4) caption pieces are joined only above/below a figure; (5) one caption size per book is the tested case.
+  (4) caption pieces are joined only above/below a figure; (5) one caption size per book is the tested case. (6) the book-edge detection (`illustrations.book_edge`: band within 5 % of the border, at most 15 % wide, lines of 8 %
+  of the page height, gaps ~40 px) and the photo growing (`grow_halftone`) were tuned on scans 0008, 0009 and the test
+  book; a book with content near the outer edge may need the project's *edge margin* set by hand.
 - **Test material from other books is needed** (owner, 2026-11-18: he will prepare it; not available yet). A small set
   of pages from two or three other books (different layouts, caption styles, languages, page formats), kept as
   regression cases so every change is checked against all of them, not only against the 14-page test book. Until it

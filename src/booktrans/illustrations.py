@@ -87,10 +87,19 @@ def book_edge(gray, side):
     return out
 
 
-def page_ignore_margins(gray, side):
-    """``edge_margins`` widened over a detected band of stacked page edges (``book_edge``) on the outer side(s)."""
+def page_ignore_margins(gray, side, fixed=None):
+    """``edge_margins`` widened over a detected band of stacked page edges (``book_edge``) on the outer side(s).
+    ``fixed``: a number of px to ignore on the outer side(s) instead (the project's *edge margin* set by hand; 0 =
+    nothing), or None / 'auto' for the detection."""
     ml, mt, mr, mb = edge_margins(side)
     if side == 'C':
+        return ml, mt, mr, mb
+    if fixed not in (None, '', 'auto'):
+        f = int(round(float(fixed)))
+        if side in ('L', 'P'):
+            ml = f
+        if side in ('R', 'P'):
+            mr = f
         return ml, mt, mr, mb
     e = book_edge(gray, side)
     pad = 8

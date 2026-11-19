@@ -69,7 +69,7 @@ def step(n, title):
     log.info('wrap', '=== stage %d/4: %s ===' % (n, title))
 
 
-def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spread', resume=False):
+def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spread', resume=False, edge_margin='auto'):
     """One TIFF -> ``<out_root>/<tiff stem>/``.  With ``resume`` and stages 1-3 present they are kept and only stage 4
     and ``document.json`` are redone (as for a book); otherwise the folder is deleted and everything runs."""
     tiff = Path(tiff)
@@ -86,7 +86,8 @@ def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spr
         if out.exists():
             shutil.rmtree(out)
         step(1, 'page split, deskew, illustrations, text regions')
-        run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang, '--scale', scale, '--layout', layout])
+        run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang, '--scale', scale, '--layout', layout,
+                 '--edge-margin', str(edge_margin)])
         step(2, 'OCR lines, captions, paragraphs')
         run([HERE / 'stage2.py', tiff, '--stage1-json', s1 / 'page_structure.json', '-o', s2,
              '--lang', lang, '--ocr-scale', ocr_scale])
@@ -104,7 +105,8 @@ def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spr
     return out, doc
 
 
-def process_book(tiffs, out_root, name, lang='deu', ocr_scale=2.0, scale='auto', layout='spread', resume=False):
+def process_book(tiffs, out_root, name, lang='deu', ocr_scale=2.0, scale='auto', layout='spread', resume=False,
+                 edge_margin='auto'):
     """Several spreads -> one document (stage 4 runs over all of them, in the order given)."""
     out = Path(out_root) / name
     if out.exists() and not resume:
@@ -121,7 +123,8 @@ def process_book(tiffs, out_root, name, lang='deu', ocr_scale=2.0, scale='auto',
         else:
             log.info('wrap', '[%d/%d] %s' % (k, len(tiffs), tiff.name))
             step(1, 'page split, deskew, illustrations, text regions')
-            run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang, '--scale', scale, '--layout', layout])
+            run([HERE / 'stage1.py', tiff, '-o', s1, '--lang', lang, '--scale', scale, '--layout', layout,
+                 '--edge-margin', str(edge_margin)])
             step(2, 'OCR lines, captions, paragraphs')
             run([HERE / 'stage2.py', tiff, '--stage1-json', s1 / 'page_structure.json', '-o', s2,
                  '--lang', lang, '--ocr-scale', ocr_scale])
@@ -172,6 +175,9 @@ def main():
     ap.add_argument('--ocr-scale', type=float, default=2.0)
     ap.add_argument('--scale', default='auto',
                     help='full px per working px (auto = measured from the body line pitch; 1 = analyse as is). Larger scans are analysed downscaled; OCR and figures use full resolution')
+    ap.add_argument('--edge-margin', default='auto',
+                    help='px of the working page ignored at the outer side (book edge): auto = detect the stacked page edges, '
+                         'or a number set by hand (0 = nothing)')
     ap.add_argument('--layout', choices=['spread', 'page', 'crop'], default='spread',
                     help='spread: open book split at the gutter (default); page: one whole page; crop: part of a page')
     ap.add_argument('--no-ocrfix', action='store_true', help='skip the OCR correction stage (ocrfix.py)')
@@ -189,6 +195,12 @@ def main():
     ap.add_argument('--word-space', type=float, default=1.0, help='multiply the natural word space')
     ap.add_argument('-v', '--verbose', action='store_true', help='also print every region and every OCR line with its confidence')
     a = ap.parse_args()
+    if a.edge_margin != 'auto':
+        try:
+            if not 0 <= float(a.edge_margin) <= 400:
+                raise ValueError
+        except ValueError:
+            raise SystemExit('--edge-margin must be "auto" or a number of px between 0 and 400')
     os.environ.setdefault('BOOKTRANS_T0', str(__import__('time').time()))
     if a.verbose:
         os.environ['BOOKTRANS_VERBOSE'] = '1'
@@ -196,11 +208,11 @@ def main():
     jobs = []                                         # (label, out, doc)
     if len(tiffs) > 1 and not a.separate:
         name = a.name or (folder.resolve().name if folder else '%s-%s' % (tiffs[0].stem, tiffs[-1].stem))
-        out, doc = process_book(tiffs, a.output, name, a.lang, a.ocr_scale, a.scale, a.layout, a.resume)
+        out, doc = process_book(tiffs, a.output, name, a.lang, a.ocr_scale, a.scale, a.layout, a.resume, a.edge_margin)
         jobs.append((name, out, doc))
     else:
         for f in tiffs:
-            out, doc = process(f, a.output, a.lang, a.ocr_scale, a.scale, a.layout, a.resume)
+            out, doc = process(f, a.output, a.lang, a.ocr_scale, a.scale, a.layout, a.resume, a.edge_margin)
             jobs.append((f.name, out, doc))
     for label, out, doc in jobs:
         for p in doc['pages']:

@@ -163,11 +163,13 @@ def detect_text_regions(rgb, lang='deu', side='L', exclude=(), margins=None):
                         'ocr_confidence':round(avg_conf,1),'ocr_line_height':round(avg_h,1),'text':text})
     return regions
 
-def process_page(rgb, side, x_offset, lang):
+def process_page(rgb, side, x_offset, lang, edge_margin='auto'):
     # Illustrations first (geometry only), then text outside them.
     # the stacked page edges at the outer side of a thick book can be wider than the fixed margin
-    margins = page_ignore_margins(cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY), side)
-    if margins != edge_margins(side):
+    margins = page_ignore_margins(cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY), side, edge_margin)
+    if edge_margin not in (None, '', 'auto'):
+        log.info('stage1', '  page %s: edge margin set by hand, ignore margins %s' % (side, list(margins)))
+    elif margins != edge_margins(side):
         log.info('stage1', '  page %s: stacked page edges, ignore margins %s' % (side, list(margins)))
     image_regions = [dict(r, type='image_or_drawing') for r in detect_illustrations(rgb, side, margins)]
     text_regions = detect_text_regions(rgb, lang, side, exclude=[mask_box(r) for r in image_regions], margins=margins)
@@ -212,6 +214,9 @@ def main():
     ap.add_argument('--lang', default='deu')
     ap.add_argument('--scale', default='auto',
                     help='full px per working px for layout analysis. auto (default) measures the body line pitch and compares it with the sample scans (~23 px); a number forces it (1 = analyse the scan as is). Larger scans are analysed on a downscaled copy; OCR and figures use the full-resolution pixels')
+    ap.add_argument('--edge-margin', default='auto',
+                    help='px of the working page to ignore at the outer side (book edge): auto = detect the stacked page '
+                         'edges (at least 65 px), or a number set by hand (0 = nothing)')
     ap.add_argument('--layout', choices=['spread','page','crop'], default='spread',
                     help='spread: open book, split at the gutter (default); page: one whole page; crop: part of a page')
     args=ap.parse_args()
@@ -240,7 +245,7 @@ def main():
         page,skew=deskew_page(page)
         log.info('stage1','  skew: baselines %.2f deg, column edges %.2f deg (%s, %d lines)' % (skew['angle_deg'],skew['edge_tilt_deg'],skew['edge_model'],skew['lines_used']))
         log.info('stage1','  detecting illustrations and text regions...')
-        regions=process_page(page,side,offset,args.lang)
+        regions=process_page(page,side,offset,args.lang,args.edge_margin)
         nimg=sum('image' in r['type'] or 'drawing' in r['type'] for r in regions)
         log.info('stage1','  found %d illustrations, %d text regions' % (nimg,len(regions)-nimg))
         for r in regions: log.debug('stage1','%s %s %s' % (r['id'],r['type'],[int(v) for v in r['bbox']]))
