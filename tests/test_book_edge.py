@@ -63,3 +63,31 @@ def test_faint_broken_edge_lines_count_and_a_pale_stripe_inside_a_photo_is_cross
     p[100:400, 400:404] = 205                           # a pale column, 4 px
     p[100:400, 404:520] = 140                           # the rest of the photo, mid grey
     assert I.grow_halftone(p, [100, 100, 400, 400], 210, (10, 10, 10, 10))[2] >= 518
+
+
+def test_a_fixed_edge_margin_overrides_the_detection():
+    g = _page(edge=80)
+    assert I.page_ignore_margins(g, 'L', fixed=120) == (120, 65, 10, 65)
+    assert I.page_ignore_margins(g, 'L', fixed=0)[0] == 0                 # nothing ignored at the outer side
+    assert I.page_ignore_margins(g, 'R', fixed='40') == (10, 65, 40, 65)
+    assert I.page_ignore_margins(g, 'L', fixed='auto') == I.page_ignore_margins(g, 'L')
+    assert I.page_ignore_margins(g, 'C', fixed=120) == I.edge_margins('C')   # a crop has no book edge
+
+
+def test_edge_margin_setting_is_checked_and_passed_on(tmp_path):
+    import pytest
+    from project import DEFAULT_PARAMS, Project, ProjectError, check_params
+    assert DEFAULT_PARAMS['edge_margin'] == 'auto'
+    assert check_params(dict(DEFAULT_PARAMS, edge_margin=' 90 '))['edge_margin'] == '90'
+    assert check_params(dict(DEFAULT_PARAMS, edge_margin=''))['edge_margin'] == 'auto'
+    for bad in ('wide', '-5', '900'):
+        with pytest.raises(ProjectError):
+            check_params(dict(DEFAULT_PARAMS, edge_margin=bad))
+    (tmp_path / 'in').mkdir()
+    p = Project.create(tmp_path / 'p', 'book', tmp_path / 'in', {'edge_margin': '90'})
+    c = p.command()
+    assert c[c.index('--edge-margin') + 1] == '90'
+    legacy = Project.create(tmp_path / 'q', 'book', tmp_path / 'in')
+    del legacy.data['params']['edge_margin']                             # a project made before the setting
+    c = legacy.command()
+    assert c[c.index('--edge-margin') + 1] == 'auto'

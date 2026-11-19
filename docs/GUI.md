@@ -109,7 +109,7 @@ file (`Project.book_dir` knows). The GUI shows `document.corrected.json` when it
 ```json
 {"kind": "booktrans-project", "schema": "1.1", "name": "silesia", "created": "2026-11-15T14:20:00",
  "input_dir": "/scans/silesia",
- "params": {"lang": "deu", "layout": "spread", "scale": "auto", "ocr_scale": 2.0, "ocrfix": "strict", "ocr_suggest": false},
+ "params": {"lang": "deu", "layout": "spread", "scale": "auto", "ocr_scale": 2.0, "edge_margin": "auto", "ocrfix": "strict", "ocr_suggest": false},
  "translation": {"provider": "claude-code", "model": "", "endpoint": "", "glossary": "", "source": "corrected",
                  "timeout": 600, "retries": 2, "no_think": false}}
 ```
@@ -226,6 +226,12 @@ of *Run pipeline*; changed with Project > *Change input folder…* or *Change…
 `Project.set_input_dir`). Before it changes it shows how many TIFFs the new folder holds and, when the project already has a
 pipeline result, that the result came from the old folder: run without `--resume` (the run window unticks it) or clear the
 project data first, since `--resume` keeps spreads by TIFF name (`Project.input_change_warnings`).
+
+**Edge margin** (pipeline setting, *Run pipeline* window, `params.edge_margin`, `booktrans.py --edge-margin`; since
+2026-11-19): how much of the outer side of each page is ignored as the book's edge. `auto` (default) detects the band of
+stacked page edges (`illustrations.book_edge`, at least 65 px); a number of px of the working page image (about 4.7 px per
+mm; the coordinates of the debug images) is used instead, on the outer side(s) only - for a book where the detection
+cuts content or misses the edge; `0` ignores nothing. Takes effect when stage 1 runs (pipeline without *resume*).
 
 **Clear project data** (`gui_dialogs.ClearDataDialog`, Project menu; `Project.data_parts` / `Project.clear_data`): removes the
 results of processing for a fresh start; `project.json` (all settings) is always kept. Ticked by default: the pipeline output

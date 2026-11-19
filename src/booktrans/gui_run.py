@@ -182,7 +182,8 @@ class RunWindow(ProcessWindow):
         p = self.project.params
         self.v = {'lang': tk.StringVar(value=p['lang']), 'layout': tk.StringVar(value=p['layout']),
                   'scale': tk.StringVar(value=str(p['scale'])), 'ocr_scale': tk.StringVar(value=str(p['ocr_scale'])),
-                  'ocrfix': tk.StringVar(value=p['ocrfix']), 'ocr_suggest': tk.BooleanVar(value=bool(p['ocr_suggest']))}
+                  'ocrfix': tk.StringVar(value=p['ocrfix']), 'ocr_suggest': tk.BooleanVar(value=bool(p['ocr_suggest'])),
+                  'edge_margin': tk.StringVar(value=str(p.get('edge_margin', 'auto')))}
         self.resume = tk.BooleanVar(value=self.project.status()['processed'])
         if self.mode == 'pipeline':
             inp = ttk.Frame(f)
@@ -200,6 +201,7 @@ class RunWindow(ProcessWindow):
                  ('Page layout', ttk.Combobox(g, textvariable=self.v['layout'], values=LAYOUTS, state='readonly', width=8)),
                  ('Scale', ttk.Entry(g, textvariable=self.v['scale'], width=7)),
                  ('OCR scale', ttk.Entry(g, textvariable=self.v['ocr_scale'], width=7)),
+                 ('Edge margin', ttk.Combobox(g, textvariable=self.v['edge_margin'], values=('auto', '65', '100', '0'), width=6)),
                  ('OCR correction', ttk.Combobox(g, textvariable=self.v['ocrfix'], values=OCRFIX_MODES, state='readonly', width=10))]
         if self.mode == 'ocrfix':                     # only what stage 5 uses
             for _label, w in cells[:-1]:
@@ -242,7 +244,8 @@ class RunWindow(ProcessWindow):
     def _params(self):
         v = self.v
         return {'lang': v['lang'].get().strip(), 'layout': v['layout'].get(), 'scale': v['scale'].get().strip(),
-                'ocr_scale': v['ocr_scale'].get().strip(), 'ocrfix': v['ocrfix'].get(), 'ocr_suggest': v['ocr_suggest'].get()}
+                'ocr_scale': v['ocr_scale'].get().strip(), 'ocrfix': v['ocrfix'].get(), 'ocr_suggest': v['ocr_suggest'].get(),
+                'edge_margin': v['edge_margin'].get().strip() or 'auto'}
 
     def _warn(self):
         b = self.project.book_dir()

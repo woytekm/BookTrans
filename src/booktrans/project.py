@@ -37,6 +37,7 @@ DEFAULT_PARAMS = {
     'layout': 'spread',     # spread | page | crop  (booktrans.py --layout)
     'scale': 'auto',        # auto | positive number (booktrans.py --scale)
     'ocr_scale': 2.0,       # booktrans.py --ocr-scale
+    'edge_margin': 'auto',  # auto (detect the stacked page edges) | px of the working page ignored at the outer side
     'ocrfix': 'strict',     # strict | aggressive | off  (stage 5, ocrfix.py)
     'ocr_suggest': False,   # ocrfix: slow Hunspell suggestions
 }
@@ -123,6 +124,14 @@ def check_params(p):
             raise ValueError
     except (TypeError, ValueError):
         raise ProjectError('OCR scale must be a positive number')
+    e = str(p.get('edge_margin', 'auto')).strip() or 'auto'
+    if e != 'auto':
+        try:
+            if not 0 <= float(e) <= 400:
+                raise ValueError
+        except ValueError:
+            raise ProjectError('edge margin must be "auto" or a number of px between 0 and 400')
+    p['edge_margin'] = e
     return p
 
 
@@ -481,7 +490,7 @@ class Project:
         p = self.params
         cmd = [sys.executable, str(HERE / 'booktrans.py'), self.input_dir, '-o', str(self.pipeline_root),
                '--name', self.name, '--lang', p['lang'], '--layout', p['layout'], '--scale', str(p['scale']),
-               '--ocr-scale', str(p['ocr_scale'])]
+               '--ocr-scale', str(p['ocr_scale']), '--edge-margin', str(p.get('edge_margin', 'auto'))]
         if p['ocrfix'] == 'off':
             cmd.append('--no-ocrfix')
         else:
