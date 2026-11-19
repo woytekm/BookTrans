@@ -10,8 +10,13 @@
 
 ``ocrfix.py run --decisions FILE`` merges them with what ``ocr_review.json`` already knows (the decisions win), so the next
 pipeline run (``--resume``) puts them into ``document.corrected.json``.  Until then the GUI shows the flag as decided.
-A flag key is ``unit|token|occurrence``; unit ids stay the same as long as stages 1-4 are not re-run on other pages.
+A flag key is ``unit|token|occurrence``.  Unit numbers change when stages 1-4 run again over more (or other) pages, so
+each decision also records a fingerprint of its unit's OCR text (``bases``: key -> fingerprint, since 2026-11-19).
+``remap`` then moves a decision to the unit that now has that text (its new number), and sets aside (``stale``, kept in
+the file, never applied) a decision whose text no longer exists or is not unique - it must not land on another unit
+that happens to have the same number.  Decisions without a fingerprint (older files) keep their key as before.
 """
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -21,7 +26,13 @@ ACCEPT = '='                                   # "the word is right as it is"
 
 
 def empty():
-    return {'schema': SCHEMA, 'resolutions': {}, 'accepted_words': []}
+    return {'schema': SCHEMA, 'resolutions': {}, 'accepted_words': [], 'bases': {}, 'stale': {}}
+
+
+def unit_fingerprint(unit):
+    """The unit's OCR text as the pipeline made it (not a human edit, not the correction), as a short hash."""
+    t = unit.get('text_raw') or unit.get('text_ocrfix') or unit.get('text') or ''
+    return hashlib.sha1(' '.join(t.split()).encode('utf-8')).hexdigest()[:16]
 
 
 def load_decisions(path):
@@ -37,6 +48,8 @@ def load_decisions(path):
         raise ValueError('%s is not an OCR decisions file' % p)
     d.setdefault('resolutions', {})
     d.setdefault('accepted_words', [])
+    d.setdefault('bases', {})
+    d.setdefault('stale', {})
     return d
 
 
@@ -56,6 +69,53 @@ def resolve(d, key, resolution=ACCEPT):
 
 def unresolve(d, key):
     d['resolutions'].pop(key, None)
+    d.setdefault('bases', {}).pop(key, None)
+
+
+def stamp(d, units_by_id):
+    """Give every decision without a fingerprint the fingerprint of its unit (``units_by_id``: unit id -> unit)."""
+    b = d.setdefault('bases', {})
+    for key in d['resolutions']:
+        if key not in b:
+            u = units_by_id.get(key.split('|', 1)[0])
+            if u is not None:
+                b[key] = unit_fingerprint(u)
+    for key in list(b):
+        if key not in d['resolutions']:
+            del b[key]
+
+
+def remap(d, doc):
+    """The decisions fitted to ``doc``'s unit numbers: a copy in which each fingerprinted decision points at the unit
+    that has its text now, and decisions whose text is gone (or not unique) are moved to ``stale``.
+    -> (decisions, moved keys {old: new}, stale keys)."""
+    out = json.loads(json.dumps(d))
+    out.setdefault('bases', {}); out.setdefault('stale', {})
+    by_id = {u['unit_id']: u for u in doc.get('units', [])}
+    by_fp = {}
+    for u in doc.get('units', []):
+        by_fp.setdefault(unit_fingerprint(u), []).append(u['unit_id'])
+    moved, stale = {}, []
+    res, bases = {}, {}
+    for key, r in d['resolutions'].items():
+        base = d.get('bases', {}).get(key)
+        uid, rest = (key.split('|', 1) + [''])[:2]
+        if base is None or (uid in by_id and unit_fingerprint(by_id[uid]) == base):
+            res[key] = r
+            if base:
+                bases[key] = base
+            continue
+        same = by_fp.get(base, [])
+        if len(same) == 1:
+            new = '%s|%s' % (same[0], rest)
+            res[new] = r
+            bases[new] = base
+            moved[key] = new
+        else:
+            out['stale'][key] = {'resolution': r, 'base': base}
+            stale.append(key)
+    out['resolutions'], out['bases'] = res, bases
+    return out, moved, stale
 
 
 def accept_word(d, word):
