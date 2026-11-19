@@ -366,3 +366,21 @@ def test_titles_in_italics_are_allowed_other_markup_is_not(tmp_path):
     res = T.run(_doc(), _args(tmp_path, only=['u0003']), call=lambda p: (prompts.append(p), next(answers))[1])
     assert res['units']['u0003']['pl'] == 'Dalej impost, zob. <i>Deutsche Kunst</i>.'
     assert 'Titles of cited works' in prompts[0] and '<i>...</i> only around titles' in prompts[1]
+
+
+def test_a_cache_miss_says_what_changed(tmp_path, capsys):
+    good = lambda p: ('37 BYCZYNA, PORTAL' if '37 PITSCHEN' in p else
+                      'Portal w Byczynie jest prosty. Ma 3 stopnie.' if 'Portal' in p else 'Następnie Pakosławice z impostem.')
+    T.run(_doc(), _args(tmp_path), call=good)
+    cache = json.loads((tmp_path / 't.cache.json').read_text(encoding='utf-8'))
+    assert cache['_meta']['rules'] and all('parts' in v for k, v in cache.items() if k != '_meta')
+    rules = tmp_path / 'rules.txt'
+    rules.write_text(T.read(ROOT / 'prompts' / 'translate_rules_pl.txt') + '\n- One more rule.', encoding='utf-8')
+    doc = _doc()
+    doc['units'][2]['text'] = 'Danach folgt Bösdorf mit dem Kämpfer und einem Sockel.'
+    capsys.readouterr()
+    T.run(doc, _args(tmp_path, rules=rules), call=good)
+    out = capsys.readouterr()
+    log = out.out + out.err
+    assert 'NOTE: the translation rules changed since the last run' in log
+    assert '2 x changed: the translation rules' in log and '1 x new text' in log

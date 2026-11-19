@@ -115,9 +115,15 @@ What it does for every unit with `translation_status: translate` (excluded and r
 Cache: `<output>.cache.json`, keyed by model, both prompts, glossary block, kind, context and text, so a
 repeated or interrupted run only asks for what changed (editing a glossary entry re-translates only the
 units where it matched). Delete the file to force a fresh translation.
+**Changing the prompt or the rules file changes every key**: the next run translates the whole book again. Since
+2026-11-19 every cached answer also keeps short hashes of its parts (`parts`), the cache remembers the prompt / rules /
+model of the last run (`_meta`), and a run says why a unit was not cached ("changed: the translation rules", "new
+text", ...; a `NOTE` at the start when the prompt, rules or model changed; a summary line at the end). For a cache
+made before that, `cache_explain.py <project>` tries the prompt, rules and glossary versions of the git history and
+reports which one the cached answers were made with.
 
 Settings: `--temperature` (0.2), `--max-tokens` (4096), `--timeout` (600 s per request), `--glossary`
-(default `glossary/*.csv`), `--prompt`, `--rules`.
+(default: the central glossary), `--prompt`, `--rules`.
 
 Diagnostics: every request logs its time, prompt and answer token counts, tokens per second, the finish reason and any hidden reasoning (`reasoning_content`); an empty answer is explained (thinking model that used its tokens for reasoning, or cut off by the token/context limit). Use it to judge a model's real speed before changing anything.
 

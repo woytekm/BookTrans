@@ -626,8 +626,11 @@ def cmd_run(a):
     res, accepted = load_review(review_path)
     if a.decisions:                      # decisions made in the GUI (ocr_decisions.py) win over ocr_review.json
         import ocr_decisions
-        res, accepted = ocr_decisions.merge(res, accepted, ocr_decisions.load_decisions(a.decisions))
-        log.info('ocrfix', 'GUI decisions: %d flags decided, %d words accepted' % (len(res), len(accepted)))
+        dec, moved, stale = ocr_decisions.remap(ocr_decisions.load_decisions(a.decisions), doc)
+        res, accepted = ocr_decisions.merge(res, accepted, dec)
+        log.info('ocrfix', 'GUI decisions: %d flags decided, %d words accepted%s%s' % (
+            len(res), len(accepted), '; %d moved to renumbered units' % len(moved) if moved else '',
+            '; %d set aside (their text changed)' % len(stale) if stale else ''))
     proposals = load_proposals(review_path)
     fixer = Fixer(lex, suggest=not a.no_suggest, accepted=accepted, aggressive=a.aggressive)
     log.info('ocrfix', '%d units' % len(doc['units']))

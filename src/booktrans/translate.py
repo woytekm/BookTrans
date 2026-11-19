@@ -18,7 +18,8 @@ For every unit with ``translation_status: translate``:
 4. the result goes to ``translations.json`` (the format ``render.py`` reads, plus ``glossary`` and ``flags``
    per unit for review).
 
-Answers are cached in ``<output>.cache.json`` (key: model, prompts, glossary list, context, text), so an
+Answers are cached in ``<output>.cache.json`` (key: model, prompts, glossary list, context, text; each answer also
+keeps short hashes of these parts, so a unit translated anew is reported with what changed), so an
 interrupted or repeated run only translates what changed; ``--force`` asks the model again for the selected units.  ``--dry-run`` writes the prompts to
 ``<output>.prompts.txt`` without calling the model.  Standard library only.
 """
@@ -426,6 +427,28 @@ def key_of(model, base, rules, block, kind, upper, text, context):
     return h.hexdigest()
 
 
+PART_NAMES = {'model': 'the model', 'base': 'the translation prompt', 'rules': 'the translation rules',
+              'block': 'the glossary lines for the unit', 'kind': 'the kind of text', 'upper': 'the capitals flag',
+              'context': 'the preceding sentence (context)'}
+
+
+def key_parts(model, base, rules, block, kind, upper, text, context):
+    """Short hashes of what a cache key is made of, stored with each answer: a later miss can then say what changed."""
+    sh = lambda s: hashlib.sha1(str(s).encode('utf-8')).hexdigest()[:10]
+    return {'model': sh(model), 'base': sh(base), 'rules': sh(rules), 'block': sh(block), 'kind': sh(kind),
+            'upper': sh(upper), 'text': sh(text), 'context': sh(context or '')}
+
+
+def miss_reason(parts, by_text):
+    """Why a unit's answer is not in the cache: what differs from the cached answer(s) for the same German text."""
+    olds = by_text.get(parts['text'], [])
+    if not olds:
+        return 'new text (no earlier answer for this German text)'
+    best = min(olds, key=lambda o: sum(o[k] != parts[k] for k in PART_NAMES))
+    diff = [PART_NAMES[k] for k in PART_NAMES if best.get(k) != parts[k]]
+    return 'changed: ' + ', '.join(diff) if diff else 'answer was empty'
+
+
 def glossary_paths(a):
     """The glossary files of a run: ``--glossary`` as given, else the central glossary shared by all books."""
     if a.glossary:
@@ -484,6 +507,17 @@ def run(doc, a, call=None):
     cache_path = a.output.with_suffix('.cache.json')
     cache = json.loads(cache_path.read_text(encoding='utf-8')) if cache_path.exists() else {}
     call = call or make_call(a)
+    meta = cache.get('_meta') or {}
+    for name, now in (('base', base), ('rules', rules), ('model', a.model)):
+        h = hashlib.sha1(str(now).encode('utf-8')).hexdigest()[:10]
+        if meta.get(name) and meta[name] != h:
+            log.info('translate', 'NOTE: %s changed since the last run: the cache keys include it, so every unit is '
+                                  'translated again' % PART_NAMES[name])
+    by_text = {}
+    for k, v in cache.items():
+        if k != '_meta' and isinstance(v, dict) and v.get('parts'):
+            by_text.setdefault(v['parts']['text'], []).append(v['parts'])
+    misses = {}
     for k in USAGE:
         USAGE[k] = 0.0 if k in ('seconds', 'reported_cost') else 0
     units = collect(doc)
@@ -541,13 +575,24 @@ def run(doc, a, call=None):
             prompts_txt.append('===== %s (%s) =====\n%s\n' % (uid, role, prompt))
             continue
         key = key_of(a.model, base, rules, block, role, upper, text, ctx)
+        parts = key_parts(a.model, base, rules, block, role, upper, text, ctx)
         if key in cache and cache[key].get('pl', '').strip() and not getattr(a, 'force', False):   # an empty answer is never reused
             entry['pl'] = cache[key]['pl']; entry['flags'] += cache[key].get('flags', [])
             log.info('translate', '[%d/%d] %s cached' % (n, len(todo), uid))
         else:
             remark, flags = None, []
-            log.info('translate', '[%d/%d] %s %s: sending %d chars%s (waiting for the model ...)' % (
-                n, len(todo), uid, role, len(text), ', cached answer ignored (--force)' if key in cache and getattr(a, 'force', False) else ''))
+            if getattr(a, 'force', False):
+                why = '--force'
+            elif by_text:
+                why = miss_reason(parts, by_text)
+            elif any(k != '_meta' for k in cache):
+                why = 'the cached answers are older than this check (cache_explain.py can tell what changed)'
+            else:
+                why = 'new text (empty cache)'
+            misses[why] = misses.get(why, 0) + 1
+            log.info('translate', '[%d/%d] %s %s: sending %d chars%s (not cached: %s; waiting for the model ...)' % (
+                n, len(todo), uid, role, len(text), ', cached answer ignored (--force)' if key in cache and getattr(a, 'force', False) else '',
+                why))
             for attempt in range(a.retries + 1):
                 try:
                     answer = clean(call(build_prompt(base, rules, block, role, upper, text, ctx, remark)))
@@ -565,7 +610,9 @@ def run(doc, a, call=None):
                 log.info('translate', '%s attempt %d: %s' % (uid, attempt + 1, '; '.join(flags)))
             entry['flags'] += flags
             if entry['pl'].strip():
-                cache[key] = {'pl': entry['pl'], 'flags': flags}
+                cache[key] = {'pl': entry['pl'], 'flags': flags, 'parts': parts}
+                cache['_meta'] = {name: hashlib.sha1(str(v).encode('utf-8')).hexdigest()[:10]
+                                  for name, v in (('base', base), ('rules', rules), ('model', a.model))}
                 cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding='utf-8')
             log.info('translate', '[%d/%d] %s %s: %d -> %d chars%s  (%.0fs)' % (
                 n, len(todo), uid, role, len(text), len(entry['pl']), '  FLAGS: ' + '; '.join(flags) if flags else '', time.time() - t0))
@@ -580,6 +627,9 @@ def run(doc, a, call=None):
                               '%d input tokens, %d output tokens, %d requests (without retries or cache hits)' % (
                                   chars_in / 3.5, chars_src * 0.96 / 3.0, len(todo)))
     else:
+        if misses:
+            log.info('translate', 'translated anew (not in the cache): ' + '; '.join(
+                '%d x %s' % (v, k) for k, v in sorted(misses.items(), key=lambda kv: -kv[1])))
         result['usage'] = report_usage(a)
         result = save()
         log.info('translate', 'wrote %s (%d units, %d with flags)' % (a.output, len(result['units']), sum(bool(u['flags']) for u in result['units'].values())))

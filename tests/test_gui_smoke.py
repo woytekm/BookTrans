@@ -754,6 +754,7 @@ def test_accept_a_flag_as_it_is_turns_it_green_and_writes_the_decision(edit_app)
     assert dict(i for i in w.menu_for(m) if i)['Accept as it is']() is True
     f = a.project.decisions_file
     assert json.loads(f.read_text(encoding='utf-8'))['resolutions'] == {m['key']: '='}
+    assert list(json.loads(f.read_text(encoding='utf-8'))['bases']) == [m['key']]       # tied to the unit's OCR text
     mm = next(x for x in w._marks if x['key'] == m['key'])
     assert mm['cls'] == 'human' and mm['decision'] == 'accepted'
     after = next(r for r in a.rows if r['page'] == 1)

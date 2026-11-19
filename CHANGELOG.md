@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — cache misses explained; OCR decisions follow their text
+
+- Owner's report: after adding one TIFF the whole book was translated again. The translation cache key contains the
+  prompt and the rules file, so a rules change since the last run (here most likely the titles rule, PR #28) re-translates
+  every unit - by design, but silently. Now every cached answer keeps short hashes of its parts, the cache remembers the
+  last run's prompt / rules / model, and the run says why a unit was not cached (per unit, a `NOTE` at the start, a summary
+  at the end). `cache_explain.py <project>`: for an older cache, which git version of the prompt / rules / glossary the
+  cached answers were made with.
+- OCR decisions (`review/ocr_decisions.json`) keep a fingerprint of their unit's OCR text; `ocr_decisions.remap` (GUI load,
+  `ocrfix.py run --decisions`) moves them to renumbered units and sets aside those whose text changed, instead of
+  applying them to whatever unit has the old number.
+- Tests: 2 new.
+
 ## Unreleased — fix: clicks on the page views
 
 - The real cause of "a click zooms the page and selects nothing" (owner's event log, macOS Tk 8.6.17): the zoom keys

@@ -391,6 +391,9 @@ class MainWindow(tk.Tk):
             except ValueError as e:
                 raise ProjectError(str(e))
             result = unit_edits.apply_edits(doc, edits)
+            decisions, moved, stale_dec = ocr_decisions.remap(decisions, doc)    # unit numbers may have changed
+            if moved or stale_dec:
+                ocr_decisions.save_decisions(proj.decisions_file, decisions)
             ix = DocIndex(doc, proj.load_review(), proj.book_dir(), decisions=decisions)
             return which, ix, ix.page_rows(), edits, result['stale'], decisions
 
@@ -460,6 +463,7 @@ class MainWindow(tk.Tk):
         ``review/ocr_decisions.json`` first, then the index re-marks.  The next pipeline run (``--resume``) applies them."""
         new = json.loads(json.dumps(self.decisions))
         mutate(new)
+        ocr_decisions.stamp(new, {u['unit_id']: u for u in self.index.doc.get('units', [])})   # tie them to the OCR text
         if new == self.decisions:
             return False
         ocr_decisions.save_decisions(self.project.decisions_file, new)
