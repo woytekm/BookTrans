@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — render: space between a picture and its caption
+
+- Owner's finding: on pages 62, 63 and 69 the captions touched their pictures. A general rule now keeps at least half the
+  caption size of paper between a caption and the picture above or below it (`layout._keep_clear_of_figure`, measured
+  against the figure's crop); the caption moves only as far as the free space on its other side allows.
+- Tests: 1 new.
+
 ## Unreleased — edge margin setting
 
 - Pipeline setting *Edge margin* (`params.edge_margin`, *Run pipeline* window, `booktrans.py` / `stage1.py
