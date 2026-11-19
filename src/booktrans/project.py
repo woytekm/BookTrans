@@ -338,6 +338,11 @@ class Project:
         return self.review_dir / 'render_overrides.json'
 
     @property
+    def text_edits_file(self):
+        """Human corrections of the translation (``text_edits.py``), set over ``translations.json`` when rendering."""
+        return self.review_dir / 'text_edits.json'
+
+    @property
     def translation_dir(self):
         return self.root / 'translation'
 
@@ -398,7 +403,8 @@ class Project:
                 return p.lstat().st_size
             return sum(q.lstat().st_size for q in p.rglob('*') if q.is_file() or q.is_symlink()) if p.is_dir() else 0
         cache = self.translations_file.with_name('translations.cache.json')
-        review = [self.edits_file, self.decisions_file, self.overrides_file]
+        review = [self.edits_file, self.decisions_file, self.overrides_file, self.text_edits_file,
+                  self.text_edits_file.with_name('text_edits.json.bak')]
         cand = [
             ('pipeline', 'Pipeline output (OCR, layout, document.json, corrected copy, figures, stages)',
              [p for p in sorted(self.pipeline_root.iterdir())] if self.pipeline_root.is_dir() else [], True, ''),
@@ -408,7 +414,7 @@ class Project:
              [cache] if cache.exists() else [], False, 'kept, a new translation only sends what changed'),
             ('render', 'Rendered pages (render/: page images, PDF, report)', [self.render_dir] if self.render_dir.exists() else [],
              True, ''),
-            ('review', 'Your review work (unit edits, OCR decisions, render adjustments)', [p for p in review if p.exists()],
+            ('review', 'Your review work (unit edits, OCR decisions, render adjustments, text corrections)', [p for p in review if p.exists()],
              False, 'kept, it is tied to the OCR text and applies again after a new run'),
         ]
         out = []
@@ -601,6 +607,8 @@ class Project:
             cmd.append('--no-page-fit')
         if self.overrides_file.exists():
             cmd += ['--overrides', str(self.overrides_file)]
+        if self.text_edits_file.exists():
+            cmd += ['--text-edits', str(self.text_edits_file)]
         if pages and str(pages).strip():
             cmd += ['--pages', str(pages).replace(' ', '')]
         if pdf:

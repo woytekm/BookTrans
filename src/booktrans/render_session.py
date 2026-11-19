@@ -16,6 +16,7 @@ from pathlib import Path
 import layout as L
 import render as R
 import render_overrides as RO
+import text_edits as TE
 from project import ProjectError, _font_path, check_render
 from typeset import Fonts
 
@@ -36,6 +37,10 @@ class RenderSession:
     def __init__(self, project):
         self.project = project
         self.doc = self.trans = self.plan = None
+        self.trans_machine = None                  # translations.json as the translation wrote it
+        self.text_edits = TE.empty()               # human corrections over it (review/text_edits.json)
+        self.orphans = []                          # edits whose German no longer matches a unit
+        self.edited = []                           # units with a human correction
         self.overrides = RO.empty()
         self.stale = []
         self.ink, self.ink_info = None, {}
@@ -58,9 +63,14 @@ class RenderSession:
             raise ProjectError('no translation yet (%s): run the translation first' % p.translations_file)
         self.doc = json.loads(doc_file.read_text(encoding='utf-8'))
         self.doc['_dir'] = str(doc_file.parent)
-        self.trans = json.loads(p.translations_file.read_text(encoding='utf-8'))
-        if not isinstance(self.trans.get('units'), dict):
+        self.trans_machine = json.loads(p.translations_file.read_text(encoding='utf-8'))
+        if not isinstance(self.trans_machine.get('units'), dict):
             raise ProjectError('%s has no "units"' % p.translations_file)
+        try:
+            self.text_edits = TE.load(p.text_edits_file)
+        except ValueError as e:
+            raise ProjectError(str(e))
+        self._apply_text_edits()
         try:
             self.overrides = RO.load(p.overrides_file)
         except ValueError as e:
@@ -180,7 +190,45 @@ class RenderSession:
         return {'block': bid, 'role': b.get('role'), 'unit': uid, 'state': state, 'body': body, 'report': unit,
                 'adjustment': self.block_adjustment(bid),
                 'text': (self.trans['units'].get(uid) or {}).get('pl', '') if uid else '',
+                'edited': bool((self.trans['units'].get(uid) or {}).get('edited')) if uid else False,
                 'lines_here': sum(1 for ln in pp.get('lines', []) if ln.get('block') == bid)}
+
+    # ------------------------------------------------------------ human text corrections
+    def _apply_text_edits(self):
+        self.trans, self.edited, self.orphans = TE.apply(self.trans_machine, self.text_edits, self.doc)
+
+    def text_of(self, uid):
+        """(German, Polish as rendered, machine Polish, edited?) of a unit."""
+        u = self.trans['units'].get(uid) or {}
+        return (TE.german_of(uid, self.trans_machine['units'], self.doc), u.get('pl', ''),
+                u.get('pl_machine', u.get('pl', '')), bool(u.get('edited')))
+
+    def set_text(self, uid, pl):
+        """Store a human correction of unit ``uid`` (the machine text again: the edit is removed) and save
+        ``review/text_edits.json``.  -> warnings of the translation checks (``text_edits.warnings``)."""
+        with self.lock:
+            german, _, machine, _ = self.text_of(uid)
+            if not german:
+                raise ValueError('unit %s has no German text to attach the correction to' % uid)
+            trial = json.loads(json.dumps(self.text_edits))
+            TE.set_edit(trial, german, uid, pl, machine)
+            TE.save(self.project.text_edits_file, trial)
+            self.text_edits = trial
+            self._apply_text_edits()
+            self.plan = None
+        return TE.warnings(pl)
+
+    def revert_text(self, uid):
+        _, _, machine, _ = self.text_of(uid)
+        self.set_text(uid, machine)
+
+    def remove_orphan(self, fp):
+        with self.lock:
+            trial = json.loads(json.dumps(self.text_edits))
+            TE.remove(trial, fp)
+            TE.save(self.project.text_edits_file, trial)
+            self.text_edits = trial
+            self._apply_text_edits()
 
     # ------------------------------------------------------------ adjustments
     def block_adjustment(self, bid):

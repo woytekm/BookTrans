@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — correcting the translation by hand
+
+- Render window, Block tab: the block's Polish is editable; *Save text* / *Machine translation*; the German original
+  below it; the translation checks warn (punctuation, markup) but do not block; the Book tab counts corrections and
+  lists orphaned ones (*Show…*, *Delete them*).
+- `text_edits.py`: corrections in `review/text_edits.json`, one whole text per unit, keyed by a fingerprint of the German
+  it was translated from (unit numbers change on a pipeline run, the German does not); unit and time only for reading;
+  a correction whose German changed is orphaned, not applied and not deleted; one backup per save.
+  `translations.json` is never touched, so a new translation cannot overwrite a correction.
+- `render.py --text-edits`, passed by the project's render command; `RenderSession.set_text` / `revert_text`.
+  *Clear project data* counts the file as review work.
+- Tests: 6 new.
+
 ## Unreleased — one central glossary for all books
 
 - **Central glossary** (`glossary_store.py`): a folder outside the repository, default `~/BookTrans/glossary`

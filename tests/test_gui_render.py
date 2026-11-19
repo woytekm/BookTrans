@@ -209,3 +209,22 @@ def test_input_folder_is_shown_and_can_be_changed(win, monkeypatch, tmp_path):
     monkeypatch.setattr(gui_dialogs.filedialog, 'askdirectory', lambda **k: '')  # cancelled: nothing changes
     app.change_input()
     assert app.project.input_dir == str(new)
+
+
+def test_block_text_is_corrected_by_hand_and_reverted(win):
+    app, w = win
+    s = w.session
+    cap = next(b for b in s.doc['pages'][0]['blocks'] if b.get('role') == 'caption' and b.get('unit_id'))
+    w.select_block(cap['block_id'])
+    assert str(w.text_save.cget('state')) == 'normal' and str(w.text_revert.cget('state')) == 'disabled'
+    assert w.block_german.get('1.0', 'end-1c')                                     # the German original is shown
+    w.block_text.delete('1.0', 'end')
+    w.block_text.insert('1.0', 'Podpis poprawiony ręcznie')
+    w.save_text()
+    pump(app, lambda: not w._busy and 'Laid out' in w.status_lbl.cget('text'))
+    assert s.text_of(cap['unit_id'])[3] and '1 block(s) corrected by hand' in w.edits_lbl.cget('text')
+    w.select_block(cap['block_id'])
+    assert 'corrected by hand' in w.text_head.cget('text') and str(w.text_revert.cget('state')) == 'normal'
+    w.revert_text()
+    pump(app, lambda: not w._busy and 'Laid out' in w.status_lbl.cget('text'))
+    assert not s.text_of(cap['unit_id'])[3] and '0 block(s)' in w.edits_lbl.cget('text')

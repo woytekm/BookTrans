@@ -433,12 +433,19 @@ def main():
                     help="human adjustments of blocks and pages (a project's review/render_overrides.json, see render_overrides.py)")
     ap.add_argument('--pdf', nargs='?', const='book.pdf', help='also write the drawn pages as one PDF (default name book.pdf)')
     ap.add_argument('--pdf-dpi', type=float, help='PDF resolution (default: the page resolution, so the PDF has the physical size of the scans)')
+    ap.add_argument('--text-edits', type=Path, default=None,
+                    help='human corrections of the translation (review/text_edits.json, text_edits.py), set over it')
     ap.add_argument('--no-page-fit', action='store_true',
                     help='one body size for the whole book (shrunk only when a page cannot hold its text)')
     a = ap.parse_args()
     doc = json.loads(a.document.read_text(encoding='utf-8'))
     doc['_dir'] = str(a.document.parent)
     trans = json.loads(a.translations.read_text(encoding='utf-8'))
+    if a.text_edits:
+        import text_edits as TE
+        trans, applied, orphans = TE.apply(trans, TE.load(a.text_edits), doc)
+        log.info('render', 'text edits: %d unit(s) with a human correction%s' % (
+            len(applied), '; %d edit(s) match no unit (the German changed) and are not used' % len(orphans) if orphans else ''))
     out = a.output or a.document.parent / 'render'
     ink = 'auto' if a.ink == 'auto' else tuple(int(v) for v in a.ink.split(','))
     log.info('render', 'typesetting %d pages with %d translated units' % (len(doc['pages']), len(trans['units'])))
