@@ -46,7 +46,7 @@ DEFAULT_TRANSLATION = {
     'provider': 'claude-code',  # claude-code (your subscription) | openai (LM Studio ...) | anthropic (API key)
     'model': '',                # '' = translate.py's default for the provider (claude-code: opus)
     'endpoint': '',             # openai / anthropic only; '' = translate.py's default ($LMSTUDIO_ENDPOINT, localhost)
-    'glossary': '',             # glossary CSV files separated by ';' ('' = the repository's glossary/*.csv)
+    'glossary': '',             # glossary CSV files separated by ';' ('' = this project's review/glossary.csv + the central glossary)
     'source': 'corrected',      # corrected: document.corrected.json when it exists | raw: document.json (--raw)
     'timeout': 600,             # seconds per request
     'retries': 2,               # extra attempts when a check fails
@@ -127,7 +127,11 @@ def check_params(p):
 
 
 def glossary_files(spec, base=None):
-    """'a.csv; ~/b.csv' -> [Path, ...]; relative paths are taken from ``base`` (the project folder)."""
+    """'a.csv; ~/b.csv' -> [Path, ...]; relative paths are taken from ``base`` (the project folder).  Empty: the
+    project's own layer (``review/glossary.csv``, when there is one) and the central glossary (``glossary_store``)."""
+    if not str(spec or '').strip():
+        import glossary_store
+        return [f for _, f in glossary_store.layer_files(base)]
     out = []
     for part in str(spec or '').split(';'):
         part = part.strip()
@@ -537,6 +541,18 @@ class Project:
         if dry_run:
             cmd.append('--dry-run')
         return cmd
+
+    @property
+    def candidates_file(self):
+        """Glossary candidates harvested from this book's translation (``translate.py --harvest``)."""
+        return self.review_dir / 'glossary_candidates.json'
+
+    def harvest_command(self):
+        """``translate.py --harvest``: glossary candidates from the translation, with the translation settings."""
+        if not self.translations_file.exists():
+            raise ProjectError('no translation yet (%s): translate first' % self.translations_file)
+        cmd = self.translate_command()
+        return cmd + ['--harvest', str(self.candidates_file)]
 
     def translate_command_line(self, pages=None, dry_run=False, force=False):
         return ' '.join(shlex.quote(str(c)) for c in self.translate_command(pages, dry_run, force))

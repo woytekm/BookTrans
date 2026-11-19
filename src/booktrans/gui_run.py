@@ -12,6 +12,7 @@ comparisons, layout and report; optionally ``book.pdf``), for the whole book or 
 
 All share ``ProcessWindow``: Start / Stop, live log, elapsed time, ``on_done`` when the run ends."""
 import time
+import shlex
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -291,8 +292,9 @@ class TranslateWindow(ProcessWindow):
     WHAT = 'translation'
     mode = 'translate'
 
-    def __init__(self, master, project, on_done=None, unsaved=None, pages=''):
+    def __init__(self, master, project, on_done=None, unsaved=None, pages='', harvest=False):
         self._pages0 = pages
+        self._harvest0 = harvest
         super().__init__(master, project, 'Run translation: %s' % project.name, on_done=on_done, unsaved=unsaved)
 
     def _build_settings(self, f):
@@ -302,7 +304,7 @@ class TranslateWindow(ProcessWindow):
                   'source': tk.StringVar(value=t['source']), 'timeout': tk.StringVar(value=str(t['timeout'])),
                   'retries': tk.StringVar(value=str(t['retries'])), 'no_think': tk.BooleanVar(value=bool(t['no_think'])),
                   'pages': tk.StringVar(value=self._pages0 or ''), 'dry_run': tk.BooleanVar(value=False),
-                  'force': tk.BooleanVar(value=False)}
+                  'force': tk.BooleanVar(value=False), 'harvest': tk.BooleanVar(value=bool(self._harvest0))}
         g = ttk.Frame(f)
         g.pack(fill='x')
         self.provider_box = ttk.Combobox(g, textvariable=self.v['provider'], values=PROVIDERS, state='readonly', width=12)
@@ -332,7 +334,7 @@ class TranslateWindow(ProcessWindow):
         ge.grid(row=2, column=1, columnspan=2, sticky='we')
         gb = ttk.Button(e, text='Add…', command=self._add_glossary)
         gb.grid(row=2, column=3, sticky='w', padx=(6, 0))
-        ttk.Label(e, text="CSV files separated by ';'  (blank = the repository's glossary/*.csv)",
+        ttk.Label(e, text="CSV files separated by ';'  (blank = this project's own glossary layer + the central glossary)",
                   foreground=MUTED).grid(row=3, column=1, columnspan=3, sticky='w', pady=(0, 6))
         self.controls += [self.endpoint_entry, self.no_think_btn, ge, gb]
 
@@ -350,7 +352,13 @@ class TranslateWindow(ProcessWindow):
         fo = ttk.Checkbutton(r2, text='re-translate: ignore cached answers and ask the model again for these pages',
                              variable=self.v['force'])
         fo.pack(side='left', padx=(62, 0))
-        self.controls += [pe, dr, fo]
+        r3 = ttk.Frame(f)
+        r3.pack(fill='x', pady=(2, 0))
+        hv = ttk.Checkbutton(r3, text='collect glossary candidates from the existing translation instead of translating '
+                                      '(names and terms the glossary lacks; review them in Glossary\u2026)',
+                             variable=self.v['harvest'])
+        hv.pack(side='left', padx=(62, 0))
+        self.controls += [pe, dr, fo, hv]
         ttk.Label(f, text='Result: %s  (answers are cached beside it, so a repeated or interrupted run only translates '
                           'what changed; a page run keeps the other pages).' % self.project.translations_file,
                   foreground=MUTED, wraplength=860, justify='left').pack(anchor='w', pady=(6, 0))
@@ -428,6 +436,11 @@ class TranslateWindow(ProcessWindow):
                 'Translate anyway?', '\n\n'.join(warnings) + '\n\nTranslate anyway?', icon='warning', parent=self):
             return None
         try:
+            if self.v['harvest'].get():
+                cmd = self.project.harvest_command()
+                if pages:
+                    cmd += ['--pages', pages.replace(' ', '')]
+                return cmd, ' '.join(shlex.quote(str(c)) for c in cmd)
             dry = self.v['dry_run'].get()
             return (self.project.translate_command(pages, dry, force),
                     self.project.translate_command_line(pages, dry, force))

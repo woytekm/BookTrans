@@ -228,6 +228,38 @@ model. The glossary is a plain lookup applied *before* the request and a check a
 Cost: negligible memory, no extra model, a few hundred prompt tokens per unit, so it works with a 12B
 model on 16 GB. One unit per request keeps the context small.
 
+### One central glossary for all books (since 2026-11-18)
+
+The glossary is shared by every book the owner processes (`glossary_store.py`):
+
+- **Central glossary**: every `*.csv` in one folder outside the repository, default `~/BookTrans/glossary`, set in
+  `~/.booktrans/config.json` (`{"glossary_dir": "..."}`; `$BOOKTRANS_CONFIG` names another config file,
+  `$BOOKTRANS_GLOSSARY` overrides the folder) or in the GUI (*Glossary…* -> *Change…*). On first use the folder is
+  created and seeded with the repository's `glossary/*.csv`; from then on the repository copy is only that seed. New
+  entries go into `terms.csv`, imported name lists into `places.csv`; `terms.csv` is read first.
+- **Project layer**: `review/glossary.csv` of a GUI project, choices for one book only. It is read before the central
+  files, so it wins for the same German word and kind; *Promote to central* moves an entry up.
+- **Rejected words**: `rejected.csv` in the central folder; the harvest never proposes them again.
+- A project's translation setting *Glossary* left blank means project layer + central glossary
+  (`project.glossary_files`); explicit files replace both. `translate.py` without `--glossary` reads the central
+  glossary. Writes are atomic.
+
+**Harvest** (`glossary_harvest.py`, `translate.py --harvest FILE`, in the GUI: *Run translation* with "collect glossary
+candidates", or *Glossary…* -> *Candidates* -> *Collect candidates…*): every translated unit is shown to the model
+once more (German + Polish) with the question which names and art-history terms occur and which Polish form the
+translation used (JSON answer). Dropped: what the glossary already has, what was rejected, German words that are not
+in the German text. The rest is aggregated over the book (most frequent Polish form, the other forms, the units) into
+`review/glossary_candidates.json`; a human accepts each candidate into the central glossary or the book's layer
+(status `confirmed`), edits it first, or rejects it. Answers are cached per (model, prompt, German, Polish) beside the
+candidates file, so a repeated harvest only asks about changed units.
+
+**Import** of large name lists: *Glossary…* -> *Import name list…* (or `glossary_store.import_pairs_central`):
+`german,polish` CSV into the central `places.csv` as `proposed`; a German name with several Polish ones becomes one
+`ambiguous` row; names the central glossary already has are left alone (human work wins).
+
+A cached translation stays valid when the glossary grows: the cache key contains only the glossary lines given for
+that unit, so only units that match a new or changed entry are translated again.
+
 ### File format
 
 `glossary/terms.csv` (UTF-8, several files can be combined, first definition of a (de, kind) wins):
@@ -266,4 +298,7 @@ TRZONU" while the glossary says "pierścień trzonu kolumny".
 ### Still to do
 
 - Resolve ambiguous places from context (neighbouring names, the district named in the text).
-- A review workflow for `proposed` entries (`candidates` is the start).
+- A review pass over `proposed` entries (the harvest covers new words; existing `proposed` entries are confirmed by
+  editing them in the glossary window).
+- The OCR-correction vocabulary (`glossary/vocabulary.txt`, German words the dictionaries lack) is still per
+  repository, not central.

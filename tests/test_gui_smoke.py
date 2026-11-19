@@ -839,20 +839,44 @@ def test_caption_dialog_rereads_and_applies_into_the_review_json(app, monkeypatc
     app.open_correction()
     w = app.windows[page]
     w.update()
-    monkeypatch.setattr(caption_tools, 'read_again', lambda img, box, lang, ocr=None: ('37 PITSCHEN OS', 91.0))
+    monkeypatch.setattr(caption_tools, 'read_again', lambda img, box, lang, ocr=None: ('37 PITSCHEN OS, PORTAL', 91.0))
     w.open_captions()
     dlg = [c for c in w.winfo_children() if isinstance(c, gui_correction.CaptionDialog)][0]
     dlg.update()
     assert dlg.listbox.size() >= 1 and dlg._photo is not None
     dlg.read_again()
-    assert dlg.text.get('1.0', 'end-1c') == '37 PITSCHEN OS'
+    assert dlg.text.get('1.0', 'end-1c') == '37 PITSCHEN OS, PORTAL'
     uid = dlg.caps[0]['unit_id']
     dlg.apply()
     assert w.dirty
     units = {u['unit_id']: u for u in json.loads(w.editor.get('1.0', 'end-1c'))['units']}
-    assert units[uid]['text'] == '37 PITSCHEN OS'
+    assert units[uid]['text'] == '37 PITSCHEN OS, PORTAL'
+    w.editor.edit_modified(False)                      # not saved: closing the app must not ask about it
 
 
 def test_the_app_icon_is_set(app):
     assert gui.ICON.is_file()
     assert getattr(app, '_app_icon', None) is not None and app._app_icon.width() == 512
+
+
+def test_glossary_window_lists_layers_and_decides_candidates(app):
+    import glossary_harvest as H
+    import glossary_store as GS
+    GS.add_project(app.project.root, {'de': 'Pitschen', 'pl': 'Byczyna (ten tom)', 'kind': 'place'})
+    H.write_candidates(app.project.candidates_file, [
+        {'de': 'Kalkau', 'pl': 'Kałków', 'kind': 'place', 'count': 2, 'alternatives': [], 'units': ['u1']},
+        {'de': 'Portal', 'pl': 'portal', 'kind': 'term', 'count': 1, 'alternatives': [], 'units': ['u2']}])
+    app.open_glossary()
+    w = app.glossary_window
+    w.update()
+    layers = [w.rows[int(i)]['_layer'] for i in w.tree.get_children()]
+    assert layers[0] == 'project' and 'central' in layers
+    assert len(w.ctree.get_children()) == 2
+    w.ctree.selection_set('0')
+    w.decide('central')
+    w.ctree.selection_set('0')
+    w.decide('reject')
+    assert not w.cands and any(r['de'] == 'Kalkau' and r['_layer'] == 'central' for r in w.rows)
+    assert ('portal', 'term') in GS.rejected()
+    app.open_glossary()
+    assert app.glossary_window is w

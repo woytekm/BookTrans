@@ -120,7 +120,7 @@ Start with `docs/HANDOFF.md` (what works, how to run it, repository map, open is
 
 - `docs/TRANSLATION.md`: contract and design for the translation service (input units, output JSON, glossary and prompt rules).
 - `docs/RENDERING.md`: page assembly, line breaking and font fitting.
-- `glossary/` and `src/booktrans/glossary.py`: German -> Polish place names and terms (lookup before translation, check after).
+- `src/booktrans/glossary.py`, `glossary_store.py`, `glossary_harvest.py`: German -> Polish place names and terms (lookup before translation, check after). The glossary used is **central, shared by all books** (default `~/BookTrans/glossary`, plus a per-project layer); `glossary/` in the repository only seeds it. See `docs/TRANSLATION.md`.
 - `docs/PIPELINE.md`, `docs/DATA_MODEL.md`: stages and every JSON schema (including `document.json` and the translations/report files).
 - `docs/GUI.md`: the GUI: decisions, project folder, page JSON views, windows, stages.
 - `docs/DECISIONS.md`: durable decisions (ADR-001 ... ADR-018). `docs/DEVELOPMENT.md`: status log. `CHANGELOG.md`: what changed.

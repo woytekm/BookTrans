@@ -137,6 +137,7 @@ class MainWindow(tk.Tk):
         p.add_command(label='Re-run OCR correction…', accelerator='%s+Shift+O' % MOD_LABEL, command=self.rerun_ocrfix)
         p.add_command(label='Run translation…', accelerator='%s+Shift+T' % MOD_LABEL, command=self.run_translation)
         p.add_command(label='Render pages…', accelerator='%s+Shift+P' % MOD_LABEL, command=self.open_render)
+        p.add_command(label='Glossary…', accelerator='%s+Shift+G' % MOD_LABEL, command=self.open_glossary)
         p.add_command(label='Pipeline command…', command=self.show_command)
         p.add_command(label='Reload from disk', accelerator='%s+R' % MOD_LABEL, command=self.reload)
         p.add_command(label='Show project folder', command=lambda: self.project and reveal_in_file_manager(self.project.root))
@@ -152,6 +153,7 @@ class MainWindow(tk.Tk):
         self.bind_all('<%s-O>' % MOD, lambda _e: self.rerun_ocrfix())
         self.bind_all('<%s-T>' % MOD, lambda _e: self.run_translation())
         self.bind_all('<%s-P>' % MOD, lambda _e: self.open_render())
+        self.bind_all('<%s-G>' % MOD, lambda _e: self.open_glossary())
         for key, fn in (('n', self.new_project), ('o', self.open_dialog), ('e', self.check_env), ('r', self.reload),
                         ('f', lambda: (self.find_entry.focus_set(), self.find_entry.selection_range(0, 'end')))):
             self.bind_all('<%s-%s>' % (MOD, key), lambda _e, fn=fn: fn())
@@ -497,6 +499,10 @@ class MainWindow(tk.Tk):
                 rw.run.stop()
             w.destroy()
         self.render_window = None
+        gw = getattr(self, 'glossary_window', None)
+        if gw is not None and gw.winfo_exists():
+            gw.destroy()
+        self.glossary_window = None
 
     # ------------------------------------------------------------------ the list
     def _fill_tree(self, rows, keep=None):
@@ -589,15 +595,29 @@ class MainWindow(tk.Tk):
     def run_pipeline(self):
         self._open_run_window('pipeline')
 
-    def run_translation(self):
-        """translate.py with the project's translation settings -> translation/translations.json."""
-        self._open_run_window('translate')
+    def run_translation(self, harvest=False):
+        """translate.py with the project's translation settings -> translation/translations.json.  ``harvest``: the
+        window opens with "collect glossary candidates" ticked."""
+        self._open_run_window('translate', harvest=harvest)
+
+    def open_glossary(self):
+        """The glossary window (one per project): central glossary, this book's layer, harvested candidates."""
+        if not self.project:
+            return
+        w = getattr(self, 'glossary_window', None)
+        if w is not None and w.winfo_exists():
+            w.deiconify()
+            w.lift()
+            w.reload()
+            return
+        from gui_glossary import GlossaryWindow
+        self.glossary_window = GlossaryWindow(self, self.project)
 
     def rerun_ocrfix(self):
         """Stage 5 only (``ocrfix.py run`` with the saved edits and decisions) -> a fresh ``document.corrected.json``."""
         self._open_run_window('ocrfix')
 
-    def _open_run_window(self, mode):
+    def _open_run_window(self, mode, harvest=False):
         """One run window per project: the pipeline and the OCR correction write document.corrected.json, the
         translation reads it, so they never run at the same time.  A window of another mode is replaced unless it is
         running."""
@@ -605,7 +625,7 @@ class MainWindow(tk.Tk):
             return
         w = getattr(self, 'run_window', None)
         if w is not None and w.winfo_exists():
-            if w.mode == mode or (w.run is not None and w.run.running):
+            if (w.mode == mode and not harvest) or (w.run is not None and w.run.running):
                 if w.mode != mode:
                     messagebox.showinfo('A run is in progress', 'Wait until the running %s has finished.' % w.WHAT, parent=w)
                 w.deiconify()
@@ -614,12 +634,15 @@ class MainWindow(tk.Tk):
             w.destroy()
         unsaved = lambda: sorted(n for n, cw in self.windows.items() if cw.dirty)
         if mode == 'translate':
-            self.run_window = TranslateWindow(self, self.project, on_done=self._pipeline_done, unsaved=unsaved)
+            self.run_window = TranslateWindow(self, self.project, on_done=self._pipeline_done, unsaved=unsaved, harvest=harvest)
         else:
             self.run_window = RunWindow(self, self.project, on_done=self._pipeline_done, mode=mode, unsaved=unsaved)
 
     def _pipeline_done(self):
         self.reload()
+        w = getattr(self, 'glossary_window', None)
+        if w is not None and w.winfo_exists():
+            w.reload()
         self._header()
         w = getattr(self, 'render_window', None)
         if w is not None and w.winfo_exists():
