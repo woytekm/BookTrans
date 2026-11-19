@@ -54,6 +54,9 @@ This document distinguishes the intended pipeline from the currently implemented
     Figure crops stop at a caption touching the picture (`captions.clip_mask`), so no old caption is pasted back.
     A rule (`marks.is_rule`) must be a hairline: 70 % of its ink in 4 rows, running through 85 % of its length;
     faint, letter-spaced capitals (`ZIEGENHALS`) passed the morphological test and were kept as a "rule" crop.
+    Page marks on a **plate page** (pictures and captions only, no text column; since 2026-11-20): looked for across the
+    width of the content, and - page-number sized (8-40 px tall) - up to a fifth of the page height above or below it,
+    since the pictures can end far above the printed number (pages 55 and 69 lost theirs). No rules on plate pages.
 11. Translation (not implemented; contract in `TRANSLATION.md`) produces a translations JSON.
 12. `render.py` rebuilds each page (see `RENDERING.md`).
 
