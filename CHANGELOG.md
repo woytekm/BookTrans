@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — edge margin setting
+
+- Pipeline setting *Edge margin* (`params.edge_margin`, *Run pipeline* window, `booktrans.py` / `stage1.py
+  --edge-margin`): `auto` (default) detects the stacked page edges; a number of px overrides the detection on the outer
+  side(s) (`0` = nothing ignored). Checked 0-400; projects made before have `auto`.
+- HANDOFF generality list: the book-edge and photo-growing thresholds were tuned on this book.
+- Tests: 2 new.
+
 ## Unreleased — stage 1/2: scan 0009 (fainter page edges, pale photo parts, photo edge junk)
 
 - Scan 0009: the stacked page edges on page 68 are partly faint and broken: an edge line now needs an unbroken run of

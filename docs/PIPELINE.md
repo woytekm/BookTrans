@@ -9,7 +9,8 @@ This document distinguishes the intended pipeline from the currently implemented
 3. On each page, use OpenCV thresholding and morphology to propose coarse text regions.
    The outer side of a page is ignored (65 px, `illustrations.edge_margins`), widened over a detected band of
    **stacked page edges** (`illustrations.book_edge`: vertical lines with an unbroken run of 8 % of the page height,
-   starting at the border, up to 15 % of the width; since 2026-11-19) - near the front and back of a thick book that band is wider than 65 px and was read as
+   starting at the border, up to 15 % of the width; since 2026-11-19; `--edge-margin N` sets the outer margin by
+   hand instead, `auto` is the default) - near the front and back of a thick book that band is wider than 65 px and was read as
    text and figures. Short candidates whose ink lies in a hairline (85 % in 2 rows: a crease, a scanner line;
    `stage1.thin_line`) are not text. Photographs are grown over their light parts (`illustrations.grow_halftone`:
    strips with under 40 % of their pixels as light as the paper beside that side, the paper grey being the 75th
