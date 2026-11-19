@@ -17,7 +17,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageColor
 
-from gui_widgets import (BLOCK_OUTLINE, CANVAS_BG, CHECK_COLORS, MOD, MOD_LABEL, MUTED, NOTE_FG, SELECT_OUTLINE,
+from gui_widgets import (bind_wheel, debug_events, BLOCK_OUTLINE, CANVAS_BG, CHECK_COLORS, MOD, MOD_LABEL, MUTED, NOTE_FG, SELECT_OUTLINE,
                          ADJUSTED_OUTLINE, SEL_BG, SEL_FG, STATUS_COLORS, TEXT_BG, TEXT_FG, SafePhoto,
                          release_pending_images, reveal_in_file_manager, run_async)
 from project import BACKGROUNDS, PAGE_POSITIONS, RESOLUTIONS, ProjectError
@@ -155,9 +155,8 @@ class RenderWindow(tk.Toplevel):
         c.bind('<ButtonPress-1>', self._press_event)
         c.bind('<B1-Motion>', lambda e: c.scan_dragto(e.x, e.y, gain=1))
         c.bind('<ButtonRelease-1>', self._release_event)
-        c.bind('<MouseWheel>', self._wheel)
-        c.bind('<Button-4>', lambda e: self._wheel(e, 1))
-        c.bind('<Button-5>', lambda e: self._wheel(e, -1))
+        bind_wheel(c, self._wheel)
+        debug_events(c, 'render canvas')
         c.bind('<Enter>', lambda _e: c.focus_set())
         for key, fn in (('plus', lambda: self.zoom_by(ZOOM_STEP)), ('equal', lambda: self.zoom_by(ZOOM_STEP)),
                         ('minus', lambda: self.zoom_by(1 / ZOOM_STEP)), ('0', lambda: self.set_zoom(None)),

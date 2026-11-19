@@ -3,6 +3,7 @@
 Needs tkinter (system package; MacPorts: ``sudo port install py3NN-tkinter``) and Pillow's ImageTk.
 """
 import json
+import os
 import queue
 import re
 import subprocess
@@ -46,6 +47,34 @@ def mono_font(delta=0):
     f = tkfont.nametofont('TkFixedFont').copy()
     f.configure(size=(12 if MAC else 10) + delta)
     return f
+
+
+def bind_wheel(widget, handler):
+    """Scroll-wheel events to ``handler(event, direction=None)``: ``<MouseWheel>`` everywhere, and buttons 4 / 5 only on
+    X11, where they are the wheel.  On macOS (aqua) and Windows buttons 4 / 5 are other buttons, and binding them made a
+    click zoom the page on some Tk builds."""
+    widget.bind('<MouseWheel>', handler, add='+')
+    if widget.tk.call('tk', 'windowingsystem') == 'x11':
+        widget.bind('<Button-4>', lambda e: handler(e, 1), add='+')
+        widget.bind('<Button-5>', lambda e: handler(e, -1), add='+')
+
+
+def debug_events(widget, name):
+    """With ``BOOKTRANS_DEBUG_EVENTS=1`` in the environment: print every mouse button and wheel event ``widget`` gets
+    (type, button number, modifier state, wheel delta, position) and the Tk version, for diagnosing a platform."""
+    if not os.environ.get('BOOKTRANS_DEBUG_EVENTS'):
+        return
+    print('[events] %s: Tk %s, windowing system %s' % (name, widget.tk.call('info', 'patchlevel'),
+                                                        widget.tk.call('tk', 'windowingsystem')), flush=True)
+
+    def show(e):
+        print('[events] %s: %s num=%s state=0x%x delta=%s x=%s y=%s' % (
+            name, e.type, getattr(e, 'num', '?'), int(e.state) if str(e.state).isdigit() else 0,
+            getattr(e, 'delta', '?'), e.x, e.y), flush=True)
+    tag = 'debug_events_%s' % id(widget)                 # its own bind tag: seen before the widget's own bindings
+    widget.bindtags((tag,) + tuple(widget.bindtags()))
+    for seq in ('<ButtonPress>', '<ButtonRelease>', '<MouseWheel>', '<B1-Motion>'):
+        widget.bind_class(tag, seq, show)
 
 
 def run_async(widget, fn, done, poll_ms=60):
