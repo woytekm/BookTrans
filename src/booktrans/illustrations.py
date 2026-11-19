@@ -50,6 +50,57 @@ def edge_margins(side):
     return (OUTER_MARGIN,) * 4
 
 
+EDGE_MAX_FRAC = 0.15    # the stacked page edges never take more than this of the page width
+EDGE_START_FRAC = 0.05  # ... and start within this of the outer border
+EDGE_LINE_FRAC = 0.25   # a page-edge line runs over at least this much of the page height
+EDGE_GAP = 40           # px between neighbouring edge lines (scaled with the page, see book_edge)
+
+
+def book_edge(gray, side):
+    """Width in px of the band of stacked page edges on the outer side(s) of a page: many long, nearly vertical lines
+    at the border of the scan (a thick book seen from the side, the further from its middle the wider).  The fixed
+    ``OUTER_MARGIN`` is too narrow for it near the front and the back of a book.  -> {'left': px, 'right': px}."""
+    h, w = gray.shape
+    bw = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 41, 15)
+    tall = cv2.morphologyEx(bw, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(20, int(h * EDGE_LINE_FRAC)))))
+    cols = (tall > 0).sum(axis=0) > 0
+    gap = max(12, int(EDGE_GAP * w / 900.0))
+
+    def band(order):
+        end, last = 0, None
+        for i, x in enumerate(order):
+            if i > w * EDGE_MAX_FRAC:
+                break
+            if cols[x]:
+                if last is None and i > w * EDGE_START_FRAC:
+                    break                               # a line further in is content (a frame, a rule), not the edge
+                last = i
+                end = i + 1
+            elif last is not None and i - last > gap:
+                break
+        return end
+    out = {'left': 0, 'right': 0}
+    if side in ('L', 'P'):
+        out['left'] = band(range(w))
+    if side in ('R', 'P'):
+        out['right'] = band(range(w - 1, -1, -1))
+    return out
+
+
+def page_ignore_margins(gray, side):
+    """``edge_margins`` widened over a detected band of stacked page edges (``book_edge``) on the outer side(s)."""
+    ml, mt, mr, mb = edge_margins(side)
+    if side == 'C':
+        return ml, mt, mr, mb
+    e = book_edge(gray, side)
+    pad = 8
+    if e['left']:
+        ml = max(ml, e['left'] + pad)
+    if e['right']:
+        mr = max(mr, e['right'] + pad)
+    return ml, mt, mr, mb
+
+
 def page_margins(side):
     """(left, right) ignore margins for the line-art detector."""
     m = edge_margins(side)
@@ -131,15 +182,16 @@ def _merge_boxes(boxes, gap):
     return boxes
 
 
-def detect_line_art(gray, side, exclude=()):
+def detect_line_art(gray, side, exclude=(), margins=None):
     """Find line drawings: clusters of ink that is not part of any text line.
 
     ``exclude`` lists boxes (already-found photographs) whose ink is ignored, so
-    that a caption set right next to a photo is not fused with it.
+    that a caption set right next to a photo is not fused with it.  ``margins``: (left, top, right, bottom) px to
+    ignore (default ``edge_margins(side)``).
     """
     h, w = gray.shape
     ink = ink_mask(gray)
-    ml, mt, mr, mb = edge_margins(side)
+    ml, mt, mr, mb = margins or edge_margins(side)
     ink[:mt, :] = 0; ink[h - mb:, :] = 0; ink[:, :ml] = 0; ink[:, w - mr:] = 0
     for x1, y1, x2, y2 in exclude:
         ink[max(0, y1):y2, max(0, x1):x2] = 0
@@ -162,8 +214,59 @@ def detect_line_art(gray, side, exclude=()):
     return out
 
 
-def detect_tonal_images(rgb, side='L'):
-    """Photographs / halftones: large, dense contours of dark and mid tones.
+GROW_STEP = 2           # px per step when a photograph's box grows over its light parts
+GROW_MAX = 90           # px at most per side
+GROW_NEAR = 12          # a pixel within this of the local paper grey looks like paper
+GROW_PAPER_FRAC = 0.3   # a strip with more paper-like pixels than this is paper (or text on paper), not picture
+
+
+def grow_halftone(gray, box, paper, limits):
+    """A photograph's box grown over its light parts (a sunlit pavement, sky): the dark-tone contour stops where the
+    picture gets lighter than the threshold, and the rest of the picture was then taken for a line drawing that also
+    swallowed the caption.  Each side moves out in ``GROW_STEP`` strips while the next strip is picture: few of its
+    pixels are as light as the paper next to that side (the paper's grey is measured locally, beside each side, since
+    a curved page is darker towards the gutter or the edge; text on paper still has mostly paper pixels).
+    ``paper`` is not used for the decision (kept for callers); ``limits``: the ignore margins (left, top, right, bottom)."""
+    h, w = gray.shape
+    x1, y1, x2, y2 = box
+    ml, mt, mr, mb = limits
+    reach = GROW_MAX + 20
+
+    def local(region):
+        return float(np.percentile(region, 90)) if region.size else None
+
+    def picture(strip, ref):
+        return strip.size > 0 and ref is not None and float(np.mean(strip >= ref - GROW_NEAR)) < GROW_PAPER_FRAC
+    ref = local(gray[y2:min(h, y2 + reach), x1:x2])
+    for _ in range(GROW_MAX // GROW_STEP):
+        if y2 + GROW_STEP <= h - mb and picture(gray[y2:y2 + GROW_STEP, x1:x2], ref):
+            y2 += GROW_STEP
+        else:
+            break
+    ref = local(gray[max(0, y1 - reach):y1, x1:x2])
+    for _ in range(GROW_MAX // GROW_STEP):
+        if y1 - GROW_STEP >= mt and picture(gray[y1 - GROW_STEP:y1, x1:x2], ref):
+            y1 -= GROW_STEP
+        else:
+            break
+    ref = local(gray[y1:y2, max(0, x1 - reach):x1])
+    for _ in range(GROW_MAX // GROW_STEP):
+        if x1 - GROW_STEP >= ml and picture(gray[y1:y2, x1 - GROW_STEP:x1], ref):
+            x1 -= GROW_STEP
+        else:
+            break
+    ref = local(gray[y1:y2, x2:min(w, x2 + reach)])
+    for _ in range(GROW_MAX // GROW_STEP):
+        if x2 + GROW_STEP <= w - mr and picture(gray[y1:y2, x2:x2 + GROW_STEP], ref):
+            x2 += GROW_STEP
+        else:
+            break
+    return [x1, y1, x2, y2]
+
+
+def detect_tonal_images(rgb, side='L', margins=None):
+    """Photographs / halftones: large, dense contours of dark and mid tones, grown over their light parts
+    (``grow_halftone``).
 
     Otsu is deliberately avoided (uneven lighting).  Typical printed text has an
     ink density well below the 0.35 required here.
@@ -171,7 +274,8 @@ def detect_tonal_images(rgb, side='L'):
     h, w = rgb.shape[:2]
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     bw = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY_INV)[1]
-    ml, mt, mr, mb = edge_margins(side)
+    ml, mt, mr, mb = margins or edge_margins(side)
+    paper = float(np.percentile(gray, 90))
     bw[:mt, :] = 0; bw[h - mb:, :] = 0; bw[:, :ml] = 0; bw[:, w - mr:] = 0
     contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     out = []
@@ -182,7 +286,8 @@ def detect_tonal_images(rgb, side='L'):
         density = float(np.mean(gray[y:y + hh, x:x + ww] < 170))
         if density < .35:
             continue
-        out.append({'bbox': [int(x), int(y), int(x + ww), int(y + hh)], 'ink_density': round(density, 3)})
+        box = grow_halftone(gray, [int(x), int(y), int(x + ww), int(y + hh)], paper, (ml, mt, mr, mb))
+        out.append({'bbox': [int(v) for v in box], 'ink_density': round(density, 3)})
     return out
 
 
@@ -200,15 +305,17 @@ def mask_box(region):
 
 
 
-def detect_illustrations(rgb, side):
+def detect_illustrations(rgb, side, margins=None):
     """All illustrations on a page, as dicts with ``bbox`` and ``detector``.
 
-    Photographs first; their boxes are masked before the line-art pass.
+    Photographs first; their boxes are masked before the line-art pass.  ``margins``: px to ignore at the page's
+    sides (default: ``page_ignore_margins``, which covers the stacked page edges).
     """
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    tonal = detect_tonal_images(rgb, side)
+    margins = margins or page_ignore_margins(gray, side)
+    tonal = detect_tonal_images(rgb, side, margins)
     out = [dict(t, detector='tonal') for t in tonal]
-    for fig in detect_line_art(gray, side, exclude=[t['bbox'] for t in tonal]):
+    for fig in detect_line_art(gray, side, exclude=[t['bbox'] for t in tonal], margins=margins):
         out.append(dict(fig, detector='line_art'))
     out.sort(key=lambda r: (r['bbox'][1], r['bbox'][0]))
     return out

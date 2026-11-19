@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — stage 1: stacked page edges, light parts of photographs, hairlines
+
+- Owner's report (scan 0008, page 66): the stacked page edges at the outer side (wider than the fixed 65 px margin) were
+  OCR'd into junk blocks and drawn; the photo's light lower part plus its caption became one "line drawing", so the
+  caption was lost. `illustrations.book_edge` / `page_ignore_margins` widen the outer margin over the edge band;
+  `grow_halftone` grows photographs over their light parts (local paper grey per side); `stage1.thin_line` drops
+  hairline "text" candidates.
+- Effect on the 14-page test book: page 58's junk caption on the margin (`[REEL LER ENT SER`, a crease) is gone; page 55's
+  upper photo includes its light sky and the sky is no longer a junk "caption"; no other region changes.
+- Takes effect when stage 1 runs again: run the pipeline without *resume* (or delete the scan's `stages/<name>` folder).
+- Tests: 3 new.
+
 ## Unreleased — cache misses explained; OCR decisions follow their text
 
 - Owner's report: after adding one TIFF the whole book was translated again. The translation cache key contains the

@@ -7,6 +7,13 @@ This document distinguishes the intended pipeline from the currently implemented
 1. Load an RGB representation of the TIFF using Pillow.
 2. Estimate the central gutter from a vertical brightness profile and split the open spread into left and right page images.
 3. On each page, use OpenCV thresholding and morphology to propose coarse text regions.
+   The outer side of a page is ignored (65 px, `illustrations.edge_margins`), widened over a detected band of
+   **stacked page edges** (`illustrations.book_edge`: long vertical lines starting at the border, up to 15 % of the
+   width; since 2026-11-19) - near the front and back of a thick book that band is wider than 65 px and was read as
+   text and figures. Short candidates whose ink lies in a hairline (85 % in 2 rows: a crease, a scanner line;
+   `stage1.thin_line`) are not text. Photographs are grown over their light parts (`illustrations.grow_halftone`:
+   strips with few pixels as light as the paper beside that side); before, a light pavement or sky under / over a photo
+   became a separate "line drawing" that swallowed the caption.
 4. Propose large image/drawing regions using threshold contours and simple size/density/overlap heuristics.
 5. Run Tesseract on text crops.
 6. In Stage 2, retain OCR lines with page-local bounding boxes, text, confidence and glyph-height estimates.
