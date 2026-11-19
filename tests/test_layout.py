@@ -506,3 +506,20 @@ def test_centered_page_position_puts_every_page_on_one_size_centred_and_level(tm
     assert img.size == (890, 1300)
     ink = np.where((np.asarray(img.convert('L')) < 150).any(axis=0))[0]
     assert abs((ink.min() + ink.max()) / 2 - 445) < 12                          # the text sits in the middle
+
+
+def test_a_caption_keeps_a_gap_to_its_picture_but_not_at_the_cost_of_the_text(tmp_path):
+    fig = _fig('f0', (40, 100, 400, 300), tmp_path)
+    cap = _cap('c0', 'u1', (40, 301, 400, 309), '49 ZIEGENHALS OS, HAUPTPORTAL', fig='f0')    # printed 1 px under it
+    body = _para('p', 'u2', 3, 40, 400, 360)
+    doc = _doc(tmp_path, [[fig, cap, body]])
+    trans = {'units': {'u1': {'pl': '49 GŁUCHOŁAZY, PORTAL GŁÓWNY'}, 'u2': {'pl': _pl(200)}}}
+    plan = L.make_plan(doc, trans, _fonts(), {})
+    ln = [x for x in plan['pages'][0]['lines'] if x['unit'] == 'u1'][0]
+    cap_top = ln['baseline'] - 0.7 * ln['size']                               # about the capital height
+    assert cap_top >= 300 + 0.5 * ln['size'] - 2                               # paper between picture and caption
+    # with the paragraph right under it there is no room: the caption stays where it was, clear of the text
+    tight = _para('p', 'u2', 3, 40, 400, 312)
+    doc2 = _doc(tmp_path, [[fig, _cap('c0', 'u1', (40, 301, 400, 309), '49 ZIEGENHALS OS', fig='f0'), tight]])
+    ln2 = [x for x in L.make_plan(doc2, trans, _fonts(), {})['pages'][0]['lines'] if x['unit'] == 'u1'][0]
+    assert ln2['baseline'] <= ln['baseline']

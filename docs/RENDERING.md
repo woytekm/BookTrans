@@ -248,6 +248,11 @@ are never hyphenated (`typeset(..., hyphenate=False)`).
   original size), and its lines are laid on a new even grid when their number or pitch changes; the free space it may
   take (down to about a glyph height above the next block) is counted at that pitch. Before, extra lines kept the
   original pitch and a long caption ran into the paragraph below (page 52, `59 POLICE. PIERŚCIEŃ TRZONU KOLUMNY`).
+- **Gap to the picture** (since 2026-11-19, `layout._keep_clear_of_figure`): at least half the caption size of paper
+  between a caption and the picture above (or below) it - printed captions often sit a pixel or two from the picture,
+  and the set caption, with full capitals, touched it. The caption moves away from the picture only as far as the free
+  space on its other side allows (never into the text); captions beside a picture keep their horizontal gap from
+  `caption_geometry`.
 - **Order of tries**: the original number of lines at the base size down to 90 % (first within the picture's width,
   then the content width), then the extra lines, then the usual shrink ladder.
 - An emptied unit (a human joined its text into another caption) is neither drawn nor kept (`report.emptied`).

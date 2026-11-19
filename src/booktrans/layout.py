@@ -603,6 +603,45 @@ def caption_bases(doc, chains, tr, fonts, ratios, settings):
     return out
 
 
+CAPTION_GAP_EM = 0.5      # the least space between a picture and its caption, in caption sizes
+
+
+def _keep_clear_of_figure(page, b, lines, asc, desc, size, noise=()):
+    """Move a caption's lines (in place) so that at least ``CAPTION_GAP_EM`` x its size of paper separates them from
+    the picture above or below them - the printed caption is often only a few pixels from it, and the set caption
+    (larger glyphs, full ascenders) would touch it.  The move is limited by the free space on the other side (the next
+    block), so a caption never runs into the text.  -> the shift in px (+ down, - up)."""
+    fig = _caption_figure(page, b)
+    if fig is None or not lines:
+        return 0.0
+    fx1, fy1, fx2, fy2 = fig.get('crop_bbox') or fig['bbox']
+    x1, y1, x2, y2 = b['bbox']
+    if _overlap(y1, y2, fy1, fy2) > 0.5 * (y2 - y1):        # beside the picture: the horizontal room handles it
+        return 0.0
+    gap = max(3.0, CAPTION_GAP_EM * size)
+    top = min(ln['baseline'] for ln in lines) - asc
+    bottom = max(ln['baseline'] for ln in lines) + desc
+    others = [o['bbox'] for o in page['blocks'] if o is not b and o is not fig and o['block_id'] not in noise
+              and o['kind'] in ('text', 'figure', 'graphic') and _overlap(x1, x2, o['bbox'][0], o['bbox'][2]) > 0]
+    shift = 0.0
+    if fy2 <= y1 + 0.5 * (y2 - y1):                          # the picture is above the caption
+        need = fy2 + gap - top
+        if need > 0:
+            below = [o[1] for o in others if o[1] >= y2 - 1]
+            room = (min(below) - 3.0 - bottom) if below else need
+            shift = max(0.0, min(need, room))
+    elif fy1 >= y2 - 0.5 * (y2 - y1):                        # the picture is below the caption
+        need = bottom - (fy1 - gap)
+        if need > 0:
+            above = [o[3] for o in others if o[3] <= y1 + 1]
+            room = (top - 3.0 - max(above)) if above else need
+            shift = -max(0.0, min(need, room))
+    if shift:
+        for ln in lines:
+            ln['baseline'] = round(ln['baseline'] + shift, 2)
+    return shift
+
+
 def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pages, base=None, size_cap=None,
                 noise=(), emit=True):
     """Set a heading, caption, byline or footnote in its frame.  Captions (``base``: the shared size and spacing of
@@ -774,6 +813,9 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
                                                           top + asc, upper=upper,
                                                           overflow=len(lines) > room and k >= room))
                 li += 1
+        if caption and len(frames) == 1:
+            mine = [ln for ln in plan_pages[frames[0][0]]['lines'] if ln['unit'] == uid]
+            _keep_clear_of_figure(page, first, mine, asc, r['desc'] * size, size, noise)
     return {'unit': uid, 'kind': first['role'], 'lines': len(lines), 'capacity': capacity,
             'size_px': round(size, 2), 'tracking_px': round(track, 2), 'tracking_em': round(track / size, 3),
             'lines_original': capacity, 'shrink': shrink, 'page_index': frames[0][0],
