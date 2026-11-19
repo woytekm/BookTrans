@@ -252,6 +252,8 @@ Render output for a book: `page_NNN_X.png` for every page and one `compare_page_
 - **GUI tests in the Linux sandbox**: the default `python3` (3.13) has no tkinter, so `tests/test_gui_*.py` are skipped there;
   `/usr/bin/python3.12` has it: `xvfb-run -a /usr/bin/python3.12 -m pytest -q tests/test_gui_smoke.py tests/test_gui_render.py
   tests/test_gui_demo.py` (about 30 s). A test that leaves a window with unsaved edits hangs at teardown (the quit dialog).
+  Test mouse interaction with real events (`event_generate` on a **mapped** widget, after `deiconify()`), not by calling
+  the handlers: Tk reads `'<1>'` as mouse button 1, and such a binding mistake is invisible to direct handler calls.
 
 - Run `python -m pytest -q` before every commit (278 tests). On a headless Linux machine the GUI tests need a display:
   `Xvfb :99 &` and `DISPLAY=:99 python -m pytest -q` (or `xvfb-run -a python -m pytest -q`).

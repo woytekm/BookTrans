@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — fix: clicks on the page views
+
+- The real cause of "a click zooms the page and selects nothing" (owner's event log, macOS Tk 8.6.17): the zoom keys
+  were bound as `'<%s>' % key`, and `'<1>'` is Tk's short form of **mouse button 1**. That binding replaced the click
+  handler of the render window's and the correction window's page canvas: every click zoomed to 100 %, no click selected a
+  block, and a drag never started. Now `'<Key-1>'` (and `Key-0`, `Key-plus`, ...). It was on every platform; the GUI
+  tests called the click handlers directly and missed it - a new test sends real button events to a mapped window.
+
 ## Unreleased — macOS: clicks in the page views
 
 - Owner's report (macOS): a click on the render window's page zoomed it in and never selected a block; no pan either.
