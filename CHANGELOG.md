@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — footnotes are text, not a drawing
+
+- Owner's report: the footnotes on scan 0010 (p71) were found as a line drawing and rendered as a picture. Two causes:
+  one note line is letter-spaced in a thin face that the scan breaks into 1-px stems (no piece looked like a letter),
+  and the footnote rule joined it into a "drawing". Now the text-line glyph tests also run on 3x3 and 5x3 closings of
+  the ink, and a line-drawing candidate whose box is mostly text-line ink is dropped (real drawings: 0-15 %, the footnote
+  block 77 %). Test book and scans 0008/0009: stage 1 regions unchanged.
+- Footnotes are now recognised wherever they start (`stage2.mark_foot_notes`): small lines at the foot of a column, in
+  the lower half of the page, after a gap wider than the leading. Before, only lines in the bottom 18 % of the page
+  counted, so on p71 five of six note lines were merged into the body paragraph. Each note becomes its own block.
+  Test book: no line changes role. Takes effect with the next pipeline run (stage 1 and 2 are redone for the page).
+- Tests: 6 new.
+
 ## Unreleased — font B, superscripts, marking text in the render window
 
 - Markup `<f2>…</f2>` (**font B**, another typeface - scan 0010 sets the Latin quotation in a different face) and

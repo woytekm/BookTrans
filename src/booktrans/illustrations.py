@@ -121,28 +121,15 @@ def _is_glyph(h, w, area):
     return 4 <= h <= 22 and 2 <= w <= 30 and area >= 6
 
 
-def text_line_mask(ink):
-    """Boolean mask of ink pixels that belong to text-line-shaped structures.
-
-    A *text line* is a horizontally closed blob that is wide enough (>= 50 px),
-    about one line high, dense, contains several glyph-sized pieces, and whose
-    ink is mostly made of such pieces.  Dimension lines, hatching, frames and
-    halftone texture fail at least one of these tests.
-    """
-    n0, lab0, st0, _ = cv2.connectedComponentsWithStats(ink, 8)
+def _glyph_stats(pieces, lab, n, inkpix):
+    """Per text-line blob (labels ``lab``): number of glyph-sized pieces and ink inside them."""
+    n0, lab0, st0, _ = cv2.connectedComponentsWithStats(pieces, 8)
     glyph = np.zeros(n0, bool)
     for i in range(1, n0):
         x, y, ww, hh, a = st0[i]
         glyph[i] = _is_glyph(hh, ww, a)
-
-    closed = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (21, 1)))
-    n, lab, st, _ = cv2.connectedComponentsWithStats(closed, 8)
-    inkpix = ink > 0
-    glyph_pix = glyph[lab0] & inkpix
+    glyph_pix = glyph[lab0] & inkpix          # every ink pixel lies inside one (possibly closed) piece
     glyph_ink = np.bincount(lab[glyph_pix], minlength=n)
-    total_ink = np.bincount(lab[inkpix], minlength=n)
-
-    # number of glyph-sized pieces per blob (one sample point per piece)
     cnt = np.zeros(n, int)
     for i in np.nonzero(glyph)[0]:
         x, y, ww, hh, a = st0[i]
@@ -153,19 +140,40 @@ def text_line_mask(ink):
             b = np.bincount(v).argmax() if v.size else 0
         if b > 0:
             cnt[b] += 1
+    return cnt, glyph_ink
 
-    keep = np.zeros(n, bool)
+
+def text_line_mask(ink):
+    """Boolean mask of ink pixels that belong to text-line-shaped structures.
+
+    A *text line* is a horizontally closed blob that is wide enough (>= 50 px),
+    about one line high, dense, contains several glyph-sized pieces, and whose
+    ink is mostly made of such pieces.  Dimension lines, hatching, frames and
+    halftone texture fail at least one of these tests.
+    """
+    closed = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (21, 1)))
+    n, lab, st, _ = cv2.connectedComponentsWithStats(closed, 8)
+    inkpix = ink > 0
+    total_ink = np.bincount(lab[inkpix], minlength=n)
+
+    shape_ok = np.zeros(n, bool)
     for i in range(1, n):
         x, y, ww, hh, a = st[i]
-        if not (6 <= hh <= 40 and ww >= 50):
-            continue
-        if a / float(ww * hh) < 0.30:
-            continue
-        if cnt[i] < max(3, 0.04 * ww):
-            continue
-        if glyph_ink[i] < 0.40 * max(1, total_ink[i]):
-            continue
-        keep[i] = True
+        shape_ok[i] = 6 <= hh <= 40 and ww >= 50 and a / float(ww * hh) >= 0.30
+    widths = st[:, 2]
+
+    # The glyph tests run on the raw ink and on two closed versions; passing any of them is enough.
+    # Pale small print breaks letters into 2-3 px fragments (a 3x3 closing makes them letters again);
+    # thin serif faces break into 1-px stems whose hairline joins vanish (a 5x3 closing rejoins them,
+    # while letter spacing keeps neighbouring letters apart).  Normal text already passes on raw ink.
+    keep = np.zeros(n, bool)
+    for kernel in (None, (3, 3), (5, 3)):
+        pieces = ink if kernel is None else cv2.morphologyEx(
+            ink, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, kernel))
+        cnt, glyph_ink = _glyph_stats(pieces, lab, n, inkpix)
+        keep |= (shape_ok & (cnt >= np.maximum(3, 0.04 * widths))
+                 & (glyph_ink >= 0.40 * np.maximum(1, total_ink)))
+    keep[0] = False
     line_blobs = keep[lab]
     return line_blobs & inkpix, line_blobs
 
@@ -189,6 +197,18 @@ def _merge_boxes(boxes, gap):
             if changed:
                 break
     return boxes
+
+
+LINE_ART_MAX_TEXT = 0.5  # a candidate whose box holds more text-line ink than this is text, not a drawing
+
+
+def _mostly_text(ink, text_ink, box):
+    """True when most ink inside ``box`` belongs to text lines: a block of text with a few lines the text-line test
+    missed (a letter-spaced line in a thin face, a footnote rule) - not a drawing.  Drawings, even labelled ones,
+    hold little text-line ink (measured: 0-15 %); a footnote block about 75 %."""
+    x1, y1, x2, y2 = box
+    total = int(np.count_nonzero(ink[y1:y2, x1:x2]))
+    return total > 0 and int(np.count_nonzero(text_ink[y1:y2, x1:x2])) > LINE_ART_MAX_TEXT * total
 
 
 def detect_line_art(gray, side, exclude=(), margins=None):
@@ -219,6 +239,8 @@ def detect_line_art(gray, side, exclude=(), margins=None):
     out = []
     for x1, y1, x2, y2, ink_px in _merge_boxes(boxes, MERGE_GAP):
         if x2 - x1 >= MIN_FIGURE_W and y2 - y1 >= MIN_FIGURE_H and ink_px >= MIN_FIGURE_INK:
+            if _mostly_text(ink, text_ink, (x1, y1, x2, y2)):
+                continue
             out.append({'bbox': [x1, y1, x2, y2], 'ink_pixels': ink_px})
     return out
 

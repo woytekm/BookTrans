@@ -16,12 +16,22 @@ This document distinguishes the intended pipeline from the currently implemented
    strips with under 40 % of their pixels as light as the paper beside that side, the paper grey being the 75th
    percentile of a wide band there; a pale stripe up to 4 px inside the picture is crossed; up to 200 px per side); before, a light pavement or sky under / over a photo
    became a separate "line drawing" that swallowed the caption.
+   Line drawings are the ink that is not part of a text line (`illustrations.text_line_mask`). The glyph tests of a
+   text line run on the raw ink and on a 3x3 and a 5x3 closing (pale small print breaks letters into fragments, a thin
+   face into 1-px stems); passing any of them is enough. A line-drawing candidate whose box holds more than half
+   text-line ink is text (`LINE_ART_MAX_TEXT`, `_mostly_text`; drawings measure 0-15 %, a footnote block ~75 %) -
+   before, footnotes with a rule and a letter-spaced line became a "drawing" (scan 0010, p71).
 4. Propose large image/drawing regions using threshold contours and simple size/density/overlap heuristics.
 5. Run Tesseract on text crops.
 6. In Stage 2, retain OCR lines with page-local bounding boxes, text, confidence and glyph-height estimates.
 7. Classify lines heuristically (body, heading, caption, footer/byline candidates). A line next to a picture is a
    caption only when it is clearly smaller than the body (`stage2.caption_sized`: below 0.88x, or capitals up to 1.15x);
    before 2026-11-18 the body text of a page that starts under a plate became one 24-line "caption" (page 59).
+   **Footnotes** (`stage2.mark_foot_notes`): besides small lines in the bottom 18 % of the page, a run of smaller lines
+   (< 0.9x body, the first at least 4 body heights wide) at the foot of a column - nothing body-sized below it in the
+   column - in the lower half of the page and set off from the text above by more than one body height. Each note is
+   its own block (`split_notes`: a new note starts at a line beginning with `1`, `1)`, `(1)`, `*` or a superscript
+   digit after a line that ends a sentence).
 7a. **Captions** (`captions.py`, since 2026-11-18). The paper mask painted over each figure before OCR stops at a
     caption set right against the picture (`clip_mask`; it used to cover the caption's tops - page 55 read as
     `Br U, MAR AL DER MKCHE`). Low-confidence lines inside a figure are dropped. Caption pieces on one row under one

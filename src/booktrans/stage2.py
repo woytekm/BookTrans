@@ -194,7 +194,40 @@ def classify_lines(lines, images, page_h):
         ln.update({'type':typ,'classification_reason':reason,'classification_confidence':conf,
                    'relative_size':round(h/max(body,1),2),'style':'unknown'})
     absorb_caption_continuations(lines,body)
+    mark_foot_notes(lines,body,page_h)
     return lines,body
+
+
+def _x_overlap(a, b):
+    return min(a[2], b[2]) - max(a[0], b[0]) > 0.3 * min(a[2] - a[0], b[2] - b[0])
+
+
+def mark_foot_notes(lines, body, page_h):
+    """Footnotes wherever they start: a run of smaller lines (< 0.9 body) at the foot of a column - no body-sized
+    line below them in the same column - in the lower half of the page, set off from the text above by a gap wider
+    than the normal leading (or by a footnote rule, which leaves such a gap).  Footnotes taking a quarter of the page
+    start well above the old fixed "bottom 18 %" band, and were then set as body text."""
+    textual = [l for l in lines if l['type'] in ('body_line', 'footnote_or_footer')]
+    small = lambda l: 0 < l['glyph_height'] < body * .9
+    for ln in sorted(textual, key=lambda z: z['bbox'][1]):
+        if ln['type'] != 'body_line' or not small(ln) or ln['bbox'][1] < page_h * .5:
+            continue
+        if ln['bbox'][2] - ln['bbox'][0] < 4 * body:     # a speck or stray mark, not a line of text
+            continue
+        col = [l for l in textual if _x_overlap(l['bbox'], ln['bbox'])]
+        below = [l for l in col if l['bbox'][1] > ln['bbox'][1]]
+        if any(not small(l) for l in below):
+            continue                                  # body text follows: a small passage inside the text
+        run = [ln] + below
+        above = [l for l in col if l['bbox'][3] <= ln['bbox'][1] and l not in run]
+        if above:
+            gap = ln['bbox'][1] - max(l['bbox'][3] for l in above)
+            if gap < body:                            # continues the text above with normal leading
+                continue
+        for l in run:
+            if l['type'] == 'body_line':
+                l.update({'type': 'footnote_or_footer', 'classification_reason': 'small lines at the foot of the column',
+                          'classification_confidence': .74})
 
 
 def make_region(g,n,typ):
@@ -329,6 +362,22 @@ def mark_paragraph_breaks(col, body):
     return ls
 
 
+NOTE_START = re.compile(r'^\s*(\d{1,3}\s?\)|\(\d{1,3}\)|\d{1,3}(?=\s?\S)|\*{1,3}|[\u00b9\u00b2\u00b3\u2070-\u2079]+)')
+SENTENCE_END = re.compile(r'[.!?:;\u201c\u201d"\u00bb\u00ab)\]]\s*$')
+
+
+def split_notes(group):
+    """One block per footnote: a stack of footnote lines splits where a line starts with a note marker (``1``,
+    ``1)``, ``(1)``, ``*``, a superscript digit) and the line above ends a sentence - so each note starts on its own
+    line in the rendering instead of running on from the one before."""
+    parts = [[group[0]]]
+    for prev, ln in zip(group, group[1:]):
+        if NOTE_START.match(ln['text']) and SENTENCE_END.search(prev['text']):
+            parts.append([])
+        parts[-1].append(ln)
+    return parts
+
+
 def build_regions(lines, body):
     """Turn classified lines into semantic regions, at page level.
 
@@ -348,7 +397,8 @@ def build_regions(lines, body):
             cur.append(ln)
         if cur: regs.append(make_region(cur,0,'body_line'))
     for kind in ('heading_line','footnote_or_footer','author_byline_candidate'):
-        for g in group_stacked_lines([l for l in lines if l['type']==kind]): regs.append(make_region(g,0,kind))
+        for g in group_stacked_lines([l for l in lines if l['type']==kind]):
+            for part in (split_notes(g) if kind=='footnote_or_footer' else [g]): regs.append(make_region(part,0,kind))
     regs.sort(key=lambda r:(r['bbox'][1],r['bbox'][0]))
     for i,r in enumerate(regs,1): r['id']=i
     return regs
