@@ -106,10 +106,11 @@ def remove(data, fp):
 
 def warnings(pl):
     """What the translation checks would say about a human text (``translate.punctuation_problems`` and
-    ``tag_problems``): shown as a warning, the human decides."""
+    ``tag_problems`` with all the renderer's tags: <i> <b> <sp> <f2> <sup>): shown as a warning, the human decides."""
     import translate as T
+    from typeset import TAGS
     out = list(T.punctuation_problems(pl))
-    tags = T.tag_problems(pl)
+    tags = T.tag_problems(pl, allowed=TAGS)              # a human may use every tag the renderer knows
     if tags:
         out.append(tags)
     return out

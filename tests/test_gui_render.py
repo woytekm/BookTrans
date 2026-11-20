@@ -251,3 +251,20 @@ def test_a_real_click_selects_the_block_under_it(win):
     w.canvas.event_generate('<Key-1>')
     app.update()
     assert w.zoom == 1.0                                   # the key still zooms
+
+
+def test_mark_selection_wraps_and_clears_tags(win):
+    app, w = win
+    s = w.session
+    para = next(b for b in s.doc['pages'][0]['blocks'] if b.get('role') == 'paragraph' and b.get('unit_id'))
+    w.select_block(para['block_id'])
+    t = w.block_text
+    t.delete('1.0', 'end'); t.insert('1.0', 'ut ipse advocatus valeat')
+    t.tag_add('sel', '1.3', '1.17')                                        # "ipse advocatus"
+    w.mark_selection('f2')
+    assert t.get('1.0', 'end-1c') == 'ut <f2>ipse advocatus</f2> valeat'
+    t.tag_add('sel', '1.0', 'end-1c')
+    w.mark_selection('')
+    assert t.get('1.0', 'end-1c') == 'ut ipse advocatus valeat'
+    assert 'Font B' in [str(b.cget('text')) for b in w.markup_btns]
+    assert 'f2_font' in w.bv

@@ -65,6 +65,7 @@ DEFAULT_RENDER = {
     'font': '',                 # regular TTF or path@weight ('' = the default font, config/fonts.json); relative to the project
     'bold_font': '',
     'italic_font': '',
+    'f2_font': '',              # "font B" for <f2>...</f2> ('' = the regular font)
     'tracking': 'auto',         # auto: fitted | letter-spacing in em, e.g. 0.05
     'size_scale': 1.0,          # multiplies the fitted font size
     'word_space': 1.0,          # multiplies the natural word space
@@ -172,7 +173,7 @@ def check_render(r, base=None):
         raise ProjectError('page position must be one of %s' % ', '.join(PAGE_POSITIONS))
     if r.get('resolution') not in RESOLUTIONS:
         raise ProjectError('resolution must be one of %s' % ', '.join(RESOLUTIONS))
-    for k in ('font', 'bold_font', 'italic_font'):
+    for k in ('font', 'bold_font', 'italic_font', 'f2_font'):
         v = str(r.get(k) or '').strip()
         if v and not _font_file(v, base).is_file():
             raise ProjectError('%s: file not found: %s' % (k.replace('_', ' '), v))
@@ -607,7 +608,8 @@ class Project:
                '--tracking', str(r['tracking']).strip() or 'auto', '--size-scale', str(r['size_scale']),
                '--word-space', str(r['word_space']), '--ink', str(r['ink']).replace(' ', ''),
                '--dpi', str(r.get('output_dpi') or 300), '--page-position', r.get('page_position') or 'original']
-        for k, flag in (('font', '--font'), ('bold_font', '--bold-font'), ('italic_font', '--italic-font')):
+        for k, flag in (('font', '--font'), ('bold_font', '--bold-font'), ('italic_font', '--italic-font'),
+                        ('f2_font', '--f2-font')):
             if str(r.get(k) or '').strip():
                 cmd += [flag, str(_font_path(str(r[k]).strip(), self.root))]
         if str(r.get('paragraph_indent', '')).strip():

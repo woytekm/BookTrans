@@ -27,7 +27,7 @@ from PIL import Image, ImageDraw
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import log  # noqa: E402
-from typeset import (Fonts, typeset, pieces_of, break_lines, line_words, text_of,  # noqa: E402,F401
+from typeset import (Fonts, SUP_RAISE, typeset, pieces_of, break_lines, line_words, text_of,  # noqa: E402,F401
                      SINGLE_LETTER, RMIN, RMAX, _HYPH)
 from layout import (make_plan, fit_track, calibrated_size, block_style, anchor_of,  # noqa: E402,F401
                     FIT_UP, FIT_MAX_EM, DEFAULTS)
@@ -47,11 +47,12 @@ def draw_line(draw, line, font, S, ink, hyph_char='-', fonts=None):
         meta = e[2] if len(e) > 2 else {}
         f = fonts.get(meta['style'], line['size'] * S) if meta.get('style') and fonts else font
         tr = meta.get('track', line.get('track', 0.0)) * S
+        y = base - (SUP_RAISE * line['size'] * S if str(meta.get('style', '')).startswith('sup_') else 0.0)
         if tr > 0:
             for k, ch in enumerate(t):
-                draw.text((cx + f.getlength(t[:k]) + tr * k, base), ch, font=f, fill=ink, anchor='ls')
+                draw.text((cx + f.getlength(t[:k]) + tr * k, y), ch, font=f, fill=ink, anchor='ls')
         else:
-            draw.text((cx, base), t, font=f, fill=ink, anchor='ls')
+            draw.text((cx, y), t, font=f, fill=ink, anchor='ls')
         cx += w * S
         if i < len(words) - 1 and not meta.get('join'):
             cx += line['gap'] * S
@@ -204,7 +205,7 @@ def draw_page(doc, plan, pi, fonts=None, background='paper', ink=None, resolutio
     if not scale:
         scale = output_scale(doc['pages'][pi], resolution, output_dpi)
     ink = tuple(ink or plan.get('ink') or INK)
-    fonts = fonts or Fonts(plan['fonts']['regular'], plan['fonts']['bold'], plan['fonts']['italic'])
+    fonts = fonts or Fonts(plan['fonts']['regular'], plan['fonts']['bold'], plan['fonts']['italic'], plan['fonts'].get('f2'))
     base = Path(doc.get('_dir', '.'))
     page, pp = doc['pages'][pi], plan['pages'][pi]
     canvas, orig, S = _page_images(doc, page, background, resolution, scale)
@@ -411,6 +412,7 @@ def main():
     ap.add_argument('--font', type=Path, help='regular serif TTF with Polish letters, or path@weight for a variable font (default: config/fonts.json, Crimson Text)')
     ap.add_argument('--bold-font', type=Path)
     ap.add_argument('--italic-font', type=Path)
+    ap.add_argument('--f2-font', type=Path, help='"font B" for text marked <f2>...</f2> (default: the regular font)')
     ap.add_argument('--background', choices=['paper', 'scan'], default='paper',
                     help='paper: clean canvas (default); scan: the scanned page with text blocks wiped')
     ap.add_argument('--resolution', choices=['auto', 'work'], default='auto',
@@ -462,7 +464,7 @@ def main():
         import render_overrides
         settings['blocks'], settings['pages'], stale = render_overrides.resolve(doc, render_overrides.load(a.overrides))
         log.info('render', 'overrides: %d block(s), %d page(s) adjusted by hand' % (len(settings['blocks']), len(settings['pages'])))
-    names, rep = render(doc, trans, out, Fonts(a.font, a.bold_font, a.italic_font), a.background, ink, a.resolution, a.paragraph_indent,
+    names, rep = render(doc, trans, out, Fonts(a.font, a.bold_font, a.italic_font, a.f2_font), a.background, ink, a.resolution, a.paragraph_indent,
                         None if a.tracking == 'auto' else float(a.tracking), a.size_scale, a.word_space,
                         pages=pages, settings=settings, pdf=a.pdf, pdf_dpi=a.pdf_dpi, output_dpi=a.dpi, position=a.page_position)
     for s in stale:

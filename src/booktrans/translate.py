@@ -335,18 +335,24 @@ PUNCT_FIX = {
 }
 
 
-def tag_problems(pl):
-    """Markup the rules do not allow: only ``<i>…</i>`` (titles of cited works), balanced and not nested; no Markdown
-    emphasis.  -> a short description or ''."""
-    depth = 0
-    for m in re.finditer(r'</?([a-zA-Z]+)[^>]*>', pl):
-        if m.group(1).lower() != 'i':
+def tag_problems(pl, allowed=('i',)):
+    """Markup the rules do not allow: only ``allowed`` tags (default ``<i>…</i>``, titles of cited works), each closed in
+    order (different tags may nest, the same tag not); no Markdown emphasis.  -> a short description or ''."""
+    stack = []
+    for m in re.finditer(r'</?([a-zA-Z0-9]+)[^>]*>', pl):
+        name = m.group(1).lower()
+        if name not in allowed:
             return 'tag <%s>' % m.group(1)
-        depth += -1 if m.group(0).startswith('</') else 1
-        if depth not in (0, 1):
-            return 'unbalanced <i>'
-    if depth:
-        return 'unbalanced <i>'
+        if m.group(0).startswith('</'):
+            if not stack or stack[-1] != name:
+                return 'unbalanced <%s>' % name
+            stack.pop()
+        else:
+            if name in stack:
+                return 'unbalanced <%s>' % name
+            stack.append(name)
+    if stack:
+        return 'unbalanced <%s>' % stack[-1]
     if re.search(r'(?<![*\w])\*{1,2}[^*\s][^*]*\*{1,2}(?![*\w])|(?<![\w_])_[^_\s][^_]*_(?![\w_])', pl):
         return 'Markdown emphasis'
     return ''

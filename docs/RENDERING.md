@@ -318,14 +318,22 @@ for an automatic choice later (roadmap).
 
 ## Emphasis inside a paragraph
 
-A translation may mark words with `<i>…</i>` (italic), `<b>…</b>` (bold) and `<sp>…</sp>` (Sperrsatz: letter-spaced,
-+0.16 em, `typeset.SP_EM`), also across words and inside a word (`<i>Steinmetzzeichen</i>u`). The line breaker
-measures each run in its own font; a word that changes style inside is not hyphenated. In the plan a word in another
-style is `[text, width, {style, track, join}]` (`join`: no word space after it). The rest of a paragraph carried to the
-next page keeps its tags. Headings in capitals keep the tags (`upper_keep_tags`). Without tags nothing changes.
-Not yet produced upstream: stage 2 does not detect emphasis in the German scan (letter-spaced words, italics), and the
-translation prompt does not ask to keep tags (changing the rules would invalidate the translation cache, so it waits for
-the detection).
+A translation may mark words with `<i>…</i>` (italic), `<b>…</b>` (bold), `<sp>…</sp>` (Sperrsatz: letter-spaced,
++0.16 em, `typeset.SP_EM`), `<f2>…</f2>` (**font B**: another typeface, e.g. for a Latin quotation set in a different
+face; since 2026-11-20) and `<sup>…</sup>` (superscript: a note number, `SUP_SCALE` 0.62 of the size, raised
+`SUP_RAISE` 0.36 of it), also across words and inside a word (`<i>Steinmetzzeichen</i>u`, `valeat<sup>2</sup>`). Tags
+may nest (`<i><sup>3</sup></i>`); font B wins over bold over italic. The line breaker measures each run in its own font;
+a word that changes style inside is not hyphenated. In the plan a word in another style is `[text, width, {style,
+track, join}]` (`join`: no word space after it; a superscript's style is `sup_<style>`). The rest of a paragraph carried
+to the next page keeps its tags. Headings in capitals keep the tags (`upper_keep_tags`). Without tags nothing changes.
+
+Font B is a fourth font next to regular, bold and italic: `render.py --f2-font`, project `render.f2_font`, *Font B* in
+the render window's Book tab; empty = the regular font.
+
+Where the tags come from: the translation writes `<i>` around titles of cited works (rules file); everything else is
+marked **by a human** in the render window's Block tab (*Mark selection*: Italic, Bold, Spaced, Font B, Sup, Plain) and
+kept as a text correction (`review/text_edits.json`). The owner decided (2026-11-20) **not** to detect emphasis or a
+change of typeface in the scan: at the working resolution suggestions would bring more false positives than help.
 
 ## PDF
 

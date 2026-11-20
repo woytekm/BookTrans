@@ -22,7 +22,7 @@ from gui_widgets import (bind_wheel, debug_events, BLOCK_OUTLINE, CANVAS_BG, CHE
                          release_pending_images, reveal_in_file_manager, run_async)
 from project import BACKGROUNDS, PAGE_POSITIONS, RESOLUTIONS, ProjectError
 from render_session import CHECK_KINDS, RenderSession, output_files
-from typeset import default_fonts, default_fonts_file, font_spec
+from typeset import TAG as TAG_RE, default_fonts, default_fonts_file, font_spec
 
 ZOOM_STEP, ZOOM_MIN, ZOOM_MAX = 1.25, 0.15, 4.0
 GAP = 16                                             # px between original and rebuilt in the side-by-side view
@@ -197,12 +197,12 @@ class RenderWindow(tk.Toplevel):
         self.nb.add(f, text='Book')
         r = self.project.render_settings
         self.bv = {k: tk.StringVar(value=str(r.get(k, ''))) for k in
-                   ('font', 'bold_font', 'italic_font', 'tracking', 'size_scale', 'word_space', 'paragraph_indent',
+                   ('font', 'bold_font', 'italic_font', 'f2_font', 'tracking', 'size_scale', 'word_space', 'paragraph_indent',
                     'background', 'ink', 'resolution', 'output_dpi', 'page_position')}
         self.bv_fit = tk.BooleanVar(value=bool(r.get('page_fit', True)))
         f.columnconfigure(1, weight=1)
         row = 0
-        for key, label in (('font', 'Font'), ('bold_font', 'Bold'), ('italic_font', 'Italic')):
+        for key, label in (('font', 'Font'), ('bold_font', 'Bold'), ('italic_font', 'Italic'), ('f2_font', 'Font B')):
             box = ttk.Frame(f)
             ttk.Entry(box, textvariable=self.bv[key], width=22).pack(side='left', fill='x', expand=True)
             ttk.Button(box, text='…', width=3, command=lambda k=key: self._browse_font(k)).pack(side='left', padx=(4, 0))
@@ -323,11 +323,19 @@ class RenderWindow(tk.Toplevel):
         self.text_save.pack(side='left')
         self.text_revert = ttk.Button(tb, text='Machine translation', command=self.revert_text)
         self.text_revert.pack(side='left', padx=6)
-        ttk.Label(f, text='German original', foreground=MUTED).grid(row=12, column=0, columnspan=3, sticky='w', pady=(8, 0))
+        mk = ttk.Frame(f)
+        mk.grid(row=12, column=0, columnspan=3, sticky='w', pady=(4, 0))
+        ttk.Label(mk, text='Mark selection:', foreground=MUTED).pack(side='left', padx=(0, 4))
+        self.markup_btns = []
+        for tag, label in (('i', 'Italic'), ('b', 'Bold'), ('sp', 'Spaced'), ('f2', 'Font B'), ('sup', 'Sup'), ('', 'Plain')):
+            bt = ttk.Button(mk, text=label, width=len(label) + 1, command=lambda t=tag: self.mark_selection(t))
+            bt.pack(side='left', padx=(0, 2))
+            self.markup_btns.append(bt)
+        ttk.Label(f, text='German original', foreground=MUTED).grid(row=13, column=0, columnspan=3, sticky='w', pady=(8, 0))
         self.block_german = tk.Text(f, wrap='word', height=5, bg=TEXT_BG, fg=MUTED, relief='flat', state='disabled',
                                     padx=6, pady=4)
-        self.block_german.grid(row=13, column=0, columnspan=3, sticky='nsew', pady=(2, 0))
-        f.rowconfigure(13, weight=1)
+        self.block_german.grid(row=14, column=0, columnspan=3, sticky='nsew', pady=(2, 0))
+        f.rowconfigure(14, weight=1)
         self._block_state()
 
     # ------------------------------------------------------------------ status, loading, layout
@@ -679,6 +687,8 @@ class RenderWindow(tk.Toplevel):
         self.block_apply.configure(state='normal' if ok else 'disabled')
         self.block_clear.configure(state='normal' if ok and info['adjustment'] else 'disabled')
         self.text_save.configure(state='normal' if ok else 'disabled')
+        for bt in getattr(self, 'markup_btns', []):
+            bt.configure(state='normal' if ok else 'disabled')
         self.text_revert.configure(state='normal' if ok and info.get('edited') else 'disabled')
         self.block_text.configure(state='normal' if ok else 'disabled')
 
@@ -751,6 +761,26 @@ class RenderWindow(tk.Toplevel):
         self.relayout('Text of %s saved%s; laying out the book…' % (
             info['unit'], ' (check: %s)' % ', '.join(warn) if warn else ''))
         self._fill_edits_row()
+
+    def mark_selection(self, tag):
+        """Wrap the selected Polish text in ``<tag>…</tag>`` (i, b, sp, f2, sup), or with ``''`` remove the markup tags
+        inside the selection.  The text is not saved: press Save text to see it on the page."""
+        t = self.block_text
+        if str(t.cget('state')) != 'normal':
+            return
+        try:
+            a, b = t.index('sel.first'), t.index('sel.last')
+        except tk.TclError:
+            self.status('Select some words of the translation first, then choose the marking.')
+            return
+        sel = t.get(a, b)
+        new = TAG_RE.sub('', sel) if not tag else '<%s>%s</%s>' % (tag, sel, tag)
+        t.delete(a, b)
+        t.insert(a, new)
+        t.tag_remove('sel', '1.0', 'end')
+        t.tag_add('sel', a, '%s + %d chars' % (a, len(new)))
+        self.status('Marked; press Save text to lay it out (tags: <i> italic, <b> bold, <sp> spaced, <f2> font B, '
+                    '<sup> superscript).')
 
     def revert_text(self):
         info = self.session.block_info(self.pi, self.sel) if self.sel else None

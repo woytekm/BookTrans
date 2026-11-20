@@ -355,3 +355,10 @@ def test_page_position_setting_is_checked_and_passed_to_render(tmp_path):
     check_render(dict(r, page_position='centered'))
     with pytest.raises(ProjectError):
         check_render(dict(r, page_position='middle'))
+
+
+def test_font_b_setting_goes_to_render(tmp_path):
+    from project import DEFAULT_RENDER, check_render
+    assert DEFAULT_RENDER['f2_font'] == ''
+    with pytest.raises(Exception):
+        check_render(dict(DEFAULT_RENDER, f2_font=str(tmp_path / 'missing.ttf')))

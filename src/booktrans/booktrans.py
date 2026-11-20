@@ -190,6 +190,7 @@ def main():
     ap.add_argument('--font', type=Path, help='regular serif TTF with Polish letters, or path@weight for a variable font (default: config/fonts.json, Crimson Text)')
     ap.add_argument('--bold-font', type=Path)
     ap.add_argument('--italic-font', type=Path)
+    ap.add_argument('--f2-font', type=Path)
     ap.add_argument('--tracking', default='auto', help="letter-spacing for --translations: 'auto' fits it to the original line widths; a number in em fixes it; 0 = none")
     ap.add_argument('--size-scale', type=float, default=1.0, help='multiply the chosen font size')
     ap.add_argument('--word-space', type=float, default=1.0, help='multiply the natural word space')
@@ -228,7 +229,7 @@ def main():
             log.info('wrap', '=== page assembly (render.py) ===')
             doc['_dir'] = str(out)
             trans = json.loads(a.translations.read_text(encoding='utf-8'))
-            names, rep = render(doc, trans, out / 'render', Fonts(a.font, a.bold_font, a.italic_font), a.background,
+            names, rep = render(doc, trans, out / 'render', Fonts(a.font, a.bold_font, a.italic_font, a.f2_font), a.background,
                                tracking=None if a.tracking == 'auto' else float(a.tracking),
                                size_scale=a.size_scale, word_space=a.word_space)
             for w in rep['warnings']:

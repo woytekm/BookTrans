@@ -86,7 +86,7 @@ class RenderSession:
     def fonts(self):
         r = self.settings
         specs = tuple(str(_font_path(str(r.get(k) or '').strip(), self.project.root)) if str(r.get(k) or '').strip() else None
-                      for k in ('font', 'bold_font', 'italic_font'))
+                      for k in ('font', 'bold_font', 'italic_font', 'f2_font'))
         if specs != self._fonts_key or self._fonts is None:
             self._fonts = Fonts(*specs)
             self._fonts_key = specs
