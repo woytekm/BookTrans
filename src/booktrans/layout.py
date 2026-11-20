@@ -223,8 +223,9 @@ def columns_of(blocks, layout_cols):
 class _Flow:
     """The body text of the book: line slots per page and the page-by-page flow."""
 
-    def __init__(self, doc, tr, fonts, settings, chains, body_units, ratios, report):
+    def __init__(self, doc, tr, fonts, settings, chains, body_units, ratios, report, floors=None):
         self.doc, self.tr, self.fonts, self.settings = doc, tr, fonts, settings
+        floors = floors or {}
         self.chains, self.ratios, self.report = chains, ratios, report
         self.slots = {}                     # page index -> [slot]
         rank = {}
@@ -270,6 +271,9 @@ class _Flow:
                                 x1 = max(x1, ox2 + gap)
                             else:
                                 x2 = min(x2, ox1 - gap)
+                    if any(_overlap(x1, x2, fx1, fx2) > 0 and ftop < top < floor
+                           for fx1, fx2, ftop, floor in floors.get(pi, ())):
+                        continue                        # a caption above grew down to here: the text starts lower
                     if x2 - x1 >= 0.25 * (R - L):
                         slots.append({'block': b['block_id'], 'top': top, 'x1': x1, 'x2': x2, 'pitch': pitch,
                                       'col': ci[b['block_id']]})
@@ -514,11 +518,16 @@ def _content_box(page, noise=()):
     return (min(b[0] for b in bs), max(b[2] for b in bs))
 
 
+CAPTION_KEEP_GAP = 0.6   # share of the printed gap between a caption and the next block that a growing caption keeps
+CAPTION_PUSH_LINES = 2   # body lines a caption that does not fit may take from the paragraph under it
+
+
 def caption_geometry(page, b, noise=(), pitch=None, tight=True):
-    """How much room a caption has: (anchor, lo, hi, extra lines, grow, free px).  ``lo``/``hi``: the leftmost and rightmost x the
+    """How much room a caption has: (anchor, lo, hi, extra lines, grow, free px, info).  ``lo``/``hi``: the leftmost and rightmost x the
     text may reach (neighbours on the same rows, else the page content); ``extra``: lines that fit in the free space below
     (``grow`` 'down') or, for a caption beside its figure and aligned with its foot, above (``grow`` 'up'); ``free``:
-    that free space in px (a gap of about a glyph height to the next block already taken off).
+    that free space in px (``CAPTION_KEEP_GAP`` of the printed gap to the next block, at least a glyph height, already
+    taken off); ``info``: ``below`` - the block under a caption growing down (None otherwise), ``keep`` - the gap kept.
     ``tight``: a caption under or over its figure is kept within the figure's width (when it is not wider itself)."""
     x1, y1, x2, y2 = b['bbox']
     gh = (b.get('typography') or {}).get('glyph_height_px') or 8.0
@@ -552,18 +561,27 @@ def caption_geometry(page, b, noise=(), pitch=None, tight=True):
             elif ox1 >= x2 - 2:
                 hi = min(hi, ox1 - gap)
     grow = 'up' if beside and abs(y2 - fig['bbox'][3]) < pitch else 'down'
+    # The caption may take the free space towards the next block, but keeps CAPTION_KEEP_GAP of the printed gap to it:
+    # that space is what separates the caption from the text; down to one glyph height a long caption read as part of
+    # the paragraph under it (page 52).  No block on that side: up to three lines, as before.
     if grow == 'down':
-        limit = min([o['bbox'][1] for o in page['blocks'] if o is not b and o['block_id'] not in noise
-                     and o['kind'] in ('text', 'figure', 'graphic') and o['bbox'][1] >= y2 - 1
-                     and _overlap(lo, hi, o['bbox'][0], o['bbox'][2]) > 0] or [y2 + 3 * pitch])
-        free = limit - gap - y2
+        nxt = [o for o in page['blocks'] if o is not b and o['block_id'] not in noise
+               and o['kind'] in ('text', 'figure', 'graphic') and o['bbox'][1] >= y2 - 1
+               and _overlap(lo, hi, o['bbox'][0], o['bbox'][2]) > 0]
+        limit = min(o['bbox'][1] for o in nxt) if nxt else y2 + 3 * pitch
+        keep = max(gap, CAPTION_KEEP_GAP * (limit - y2)) if nxt else gap
+        free = limit - keep - y2
+        below = min(nxt, key=lambda o: o['bbox'][1]) if nxt else None
     else:
-        limit = max([o['bbox'][3] for o in page['blocks'] if o is not b and o['block_id'] not in noise
-                     and o['kind'] in ('text', 'figure', 'graphic') and o['bbox'][3] <= y1 + 1
-                     and _overlap(lo, hi, o['bbox'][0], o['bbox'][2]) > 0] or [y1 - 3 * pitch])
-        free = y1 - gap - limit
+        prv = [o['bbox'][3] for o in page['blocks'] if o is not b and o['block_id'] not in noise
+               and o['kind'] in ('text', 'figure', 'graphic') and o['bbox'][3] <= y1 + 1
+               and _overlap(lo, hi, o['bbox'][0], o['bbox'][2]) > 0]
+        limit = max(prv) if prv else y1 - 3 * pitch
+        keep = max(gap, CAPTION_KEEP_GAP * (y1 - limit)) if prv else gap
+        free = y1 - keep - limit
+        below = None
     extra = int(max(0, min(3, free // pitch)))
-    return anchor, lo, hi, extra, grow, max(0.0, float(free))
+    return anchor, lo, hi, extra, grow, max(0.0, float(free)), {'below': below, 'keep': float(keep)}
 
 
 def caption_bases(doc, chains, tr, fonts, ratios, settings):
@@ -643,10 +661,12 @@ def _keep_clear_of_figure(page, b, lines, asc, desc, size, noise=()):
 
 
 def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pages, base=None, size_cap=None,
-                noise=(), emit=True):
+                noise=(), emit=True, floors=None):
     """Set a heading, caption, byline or footnote in its frame.  Captions (``base``: the shared size and spacing of
     their kind, ``size_cap``: the largest size allowed, to match the other captions of the page) take room from the
-    free space around them, follow their figure's alignment and are never hyphenated."""
+    free space around them, follow their figure's alignment and are never hyphenated.  A caption that does not fit
+    over a body paragraph takes up to ``CAPTION_PUSH_LINES`` of its lines instead of overflowing; its ink bottom plus
+    the kept gap goes to ``floors`` ({page index: [(x1, x2, top, floor)]}) so the body flow starts below it."""
     first = frames[0][1]
     page = doc['pages'][frames[0][0]]
     adj = settings['blocks'].get(first['block_id'], {})
@@ -679,6 +699,7 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
     capacity = sum(b['line_count'] for _, b in frames)
     W0 = min(b['bbox'][2] - b['bbox'][0] for _, b in frames)
     extra, grow, Ws_wide, free = 0, 'down', None, 0.0
+    space = {'below': None, 'keep': 0.0}
     if caption and len(frames) == 1:
         def widths(lo, hi):
             fx1, _, fx2, _ = first['bbox']
@@ -686,10 +707,10 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
                                                                                                 hi - (fx1 + fx2) / 2))
             maxw = max(W0, maxw)
             return sorted({W0} | {min(maxw, W0 * k) for k in (1.1, 1.25, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0)} | {maxw})
-        anchor, lo, hi, extra, grow, free = caption_geometry(page, first, noise, pitch)
+        anchor, lo, hi, extra, grow, free, space = caption_geometry(page, first, noise, pitch)
         anchor = adj.get('anchor') or anchor
         Ws = widths(lo, hi)
-        _, lo2, hi2, _, _, _ = caption_geometry(page, first, noise, pitch, tight=False)
+        _, lo2, hi2, _, _, _, _ = caption_geometry(page, first, noise, pitch, tight=False)
         if (lo2, hi2) != (lo, hi):
             Ws_wide = widths(lo2, hi2)
     else:
@@ -774,6 +795,27 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
                 break
         if chosen:
             break
+    below = space['below']
+    if not chosen and roomy and grow == 'down' and below is not None and below['role'] == 'paragraph':
+        # over a body paragraph: rather than run into it, take up to CAPTION_PUSH_LINES of its lines - the body flow
+        # then starts lower (``floors``); the caption keeps its size and the separating gap
+        bp = (below.get('typography') or {}).get('line_pitch_px') or pitch
+        free0 = free
+        for k in range(1, CAPTION_PUSH_LINES + 1):
+            free = free0 + k * bp
+            for shrink in ladder:
+                size = size0 * shrink
+                track0 = (tracking * size if tracking is not None else
+                          base_track_em * size if base_track_em is not None else
+                          fit_track([first], fonts.get(style, size * M), M, size) if not upper else 0.0)
+                res = fit(size, track0, None, Ws_wide or Ws)
+                if res:
+                    chosen = (shrink, res[0], res[1], res[2], size, track0)
+                    break
+            if chosen:
+                break
+        if not chosen:
+            free = free0
     if not chosen:
         shrink, Wc = ladder[-1], (Ws_wide or Ws)[-1]; size = size0 * shrink
         font = fonts.get(style, size * M)
@@ -816,6 +858,12 @@ def _fixed_unit(doc, uid, frames, text, fonts, ratios, settings, report, plan_pa
         if caption and len(frames) == 1:
             mine = [ln for ln in plan_pages[frames[0][0]]['lines'] if ln['unit'] == uid]
             _keep_clear_of_figure(page, first, mine, asc, r['desc'] * size, size, noise)
+            if floors is not None and mine and below is not None and below['role'] == 'paragraph':
+                floor = max(ln['baseline'] for ln in mine) + r['desc'] * size + space['keep']
+                if floor > below['bbox'][1]:          # reaches into the paragraph's first line(s)
+                    floors.setdefault(frames[0][0], []).append(
+                        (min(ln['x'] for ln in mine), max(ln['x'] + ln['width'] for ln in mine),
+                         min(ln['baseline'] for ln in mine) - asc, floor))
     return {'unit': uid, 'kind': first['role'], 'lines': len(lines), 'capacity': capacity,
             'size_px': round(size, 2), 'tracking_px': round(track, 2), 'tracking_em': round(track / size, 3),
             'lines_original': capacity, 'shrink': shrink, 'page_index': frames[0][0],
@@ -984,11 +1032,8 @@ def make_plan(doc, trans, fonts, settings=None):
             keep(chains[u], '%s: no translation; original pixels kept' % u)
             body_units.remove(u)
 
-    unit_info = {}
-    if body_units:
-        flow = _Flow(doc, tr, fonts, st, chains, body_units, ratios, report)
-        flow.run(plan['pages'], unit_info)
-        report['units'].extend(unit_info[u] for u in flow.units if u in unit_info)
+    # captions first: one that has to grow into the paragraph under it leaves a floor the body flow starts below
+    floors = {}
     bases = caption_bases(doc, chains, tr, fonts, ratios, st)
     # captions of one page share one size: a dry run gives each its fitted size, the page uses the smallest
     page_cap = {}
@@ -1004,7 +1049,13 @@ def make_plan(doc, trans, fonts, settings=None):
             continue
         cap = page_cap.get((chains[uid][0][0], bases[uid][0])) if uid in bases else None
         report['units'].append(_fixed_unit(doc, uid, chains[uid], tr[uid]['pl'].strip(), fonts, ratios, st, report,
-                                           plan['pages'], base=bases.get(uid), size_cap=cap, noise=noise))
+                                           plan['pages'], base=bases.get(uid), size_cap=cap, noise=noise,
+                                           floors=floors))
+    unit_info = {}
+    if body_units:
+        flow = _Flow(doc, tr, fonts, st, chains, body_units, ratios, report, floors)
+        flow.run(plan['pages'], unit_info)
+        report['units'].extend(unit_info[u] for u in flow.units if u in unit_info)
     checks, summary = check_plan(doc, plan)
     report['checks'], report['check_summary'] = checks, summary
     for c in checks:

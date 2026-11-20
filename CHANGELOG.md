@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — captions keep their distance from the text below
+
+- Owner's report, page 52: the last caption of the row of drawings (`59 POLICE. PIERŚCIEŃ TRZONU KOLUMNY`) nearly
+  touched the paragraph under it. A caption could grow into the free space down to one glyph height above the next
+  block. Now it keeps 60 % of the printed gap (`CAPTION_KEEP_GAP`). Where it still does not fit - here a 74 px column at
+  the page edge, four lines unavoidable - and a body paragraph is below, the caption takes up to two body lines and
+  the text starts lower (`floors` from the captions, laid out before the body flow). Before, such a caption overflowed
+  and pulled the size of all captions of its page down.
+- Test book and scans 0008-0010: only pages 52 (the paragraph starts a line lower; the row's captions at the book's
+  caption size, 11.9 px instead of 10.8) and 53 (takes that line in the room it had at its foot; the page break
+  is unchanged) change. Takes effect with the next render.
+- Tests: 2 new.
+
 ## Unreleased — small-type notes under the last paragraph
 
 - Owner's finding on page 70: the two-line "Literatur:" note in small type under the chapter's last paragraph was set as
