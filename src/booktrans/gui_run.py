@@ -19,6 +19,7 @@ from tkinter import filedialog, messagebox, ttk
 from gui_widgets import MUTED, STATUS_COLORS, TEXT_BG, TEXT_FG, SEL_BG, SEL_FG, mono_font
 from project import (LAYOUTS, OCRFIX_MODES, PROVIDERS, TR_SOURCES, PipelineRun, ProjectError, check_params,
                      check_translation, tiffs_in)
+import spreads
 
 
 class ProcessWindow(tk.Toplevel):
@@ -172,8 +173,9 @@ class ProcessWindow(tk.Toplevel):
 class RunWindow(ProcessWindow):
     """The pipeline (``mode='pipeline'``, booktrans.py) or stage 5 alone (``mode='ocrfix'``)."""
 
-    def __init__(self, master, project, on_done=None, mode='pipeline', unsaved=None):
+    def __init__(self, master, project, on_done=None, mode='pipeline', unsaved=None, redo=''):
         self.mode = mode
+        self._redo0 = redo              # suggested spreads (the selected page's scan); the choice stays "keep finished"
         self.WHAT = 'OCR correction' if mode == 'ocrfix' else 'pipeline'
         super().__init__(master, project, ('Re-run OCR correction: %s' if mode == 'ocrfix' else 'Run pipeline: %s') % project.name,
                          on_done=on_done, unsaved=unsaved)
@@ -184,7 +186,8 @@ class RunWindow(ProcessWindow):
                   'scale': tk.StringVar(value=str(p['scale'])), 'ocr_scale': tk.StringVar(value=str(p['ocr_scale'])),
                   'ocrfix': tk.StringVar(value=p['ocrfix']), 'ocr_suggest': tk.BooleanVar(value=bool(p['ocr_suggest'])),
                   'edge_margin': tk.StringVar(value=str(p.get('edge_margin', 'auto')))}
-        self.resume = tk.BooleanVar(value=self.project.status()['processed'])
+        self.what = tk.StringVar(value='resume' if self.project.status()['processed'] else 'scratch')
+        self.redo = tk.StringVar(value=self._redo0)
         if self.mode == 'pipeline':
             inp = ttk.Frame(f)
             inp.pack(fill='x', pady=(0, 8))
@@ -220,10 +223,62 @@ class RunWindow(ProcessWindow):
                               % (self.project.book_dir() / 'document.json'), foreground=MUTED, wraplength=860,
                       justify='left').pack(anchor='w', pady=(4, 0))
         else:
-            r = ttk.Checkbutton(f, text='--resume: keep finished spreads (stages 1-3), redo stage 4 onwards', variable=self.resume,
-                                command=self._warn)
-            r.pack(anchor='w', pady=(4, 0))
-            self.controls.append(r)
+            self._build_what(f)
+
+    def _build_what(self, f):
+        """What to process: everything from scratch, keep finished spreads (--resume), or keep them but redo some."""
+        box = ttk.LabelFrame(f, text='What to process', padding=(8, 4))
+        box.pack(fill='x', pady=(6, 0))
+        rows = [('scratch', 'Everything from scratch', 'deletes the previous result first'),
+                ('resume', 'Keep finished spreads', 'new scans are processed; stage 4 onwards is redone (--resume)'),
+                ('redo', 'Keep finished spreads, but redo:', None)]
+        for r, (val, text, note) in enumerate(rows):
+            b = ttk.Radiobutton(box, text=text, value=val, variable=self.what, command=self._warn)
+            b.grid(row=r, column=0, sticky='w')
+            self.controls.append(b)
+            if note:
+                ttk.Label(box, text=note, foreground=MUTED).grid(row=r, column=1, columnspan=2, sticky='w', padx=(8, 0))
+        self.redo_entry = ttk.Entry(box, textvariable=self.redo, width=34)
+        self.redo_entry.grid(row=2, column=1, sticky='w', padx=(8, 0))
+        self.choose_btn = ttk.Button(box, text='Choose\u2026', command=self.choose_spreads)
+        self.choose_btn.grid(row=2, column=2, sticky='w', padx=(6, 0))
+        ttk.Label(box, text='scan names or numbers, ranges allowed: 0010, 0012-0014', foreground=MUTED) \
+            .grid(row=3, column=1, columnspan=2, sticky='w', padx=(8, 0))
+        self.controls += [self.redo_entry, self.choose_btn]
+        self.redo.trace_add('write', lambda *a: self._on_redo_typed())
+
+    def _on_redo_typed(self):
+        if self.redo.get().strip() and self.what.get() != 'redo' and self.focus_get() is self.redo_entry:
+            self.what.set('redo')                  # typing in the field means this choice
+        self._warn()
+
+    def choose_spreads(self):
+        """Checklist of the input folder's scans with their state -> the redo field."""
+        stems = [t.stem for t in tiffs_in(self.project.input_dir)]
+        if not stems:
+            messagebox.showinfo('Choose spreads', 'No TIFF files in %s.' % self.project.input_dir, parent=self)
+            return
+        try:
+            pre = set(spreads.select(self.redo.get(), stems))
+        except spreads.SpreadError:
+            pre = set()
+        d = SpreadChooser(self, stems, [spreads.spread_state(self.project.book_dir(), s) for s in stems], pre)
+        self.wait_window(d)
+        if d.result is not None:
+            self.redo.set(spreads.compact(d.result, stems))
+            self.what.set('redo' if d.result else self.what.get())
+            self._warn()
+
+    def redo_spec(self):
+        """(stems, error) of the redo choice; ([], None) when another choice is selected."""
+        if self.mode != 'pipeline' or self.what.get() != 'redo':
+            return [], None
+        if not self.redo.get().strip():
+            return [], 'Enter the spreads to redo, or choose another option.'
+        try:
+            return spreads.select(self.redo.get(), [t.stem for t in tiffs_in(self.project.input_dir)]), None
+        except spreads.SpreadError as e:
+            return [], str(e)
 
     def refresh_input(self):
         t = tiffs_in(self.project.input_dir)
@@ -236,7 +291,7 @@ class RunWindow(ProcessWindow):
         from gui_dialogs import change_input_dir
         if change_input_dir(self, self.project):
             if self.project.status()['processed']:
-                self.resume.set(False)            # a result of the old folder must not be resumed
+                self.what.set('scratch')          # a result of the old folder must not be resumed
             self.refresh_input()
             if hasattr(self.master, '_header'):
                 self.master._header()
@@ -249,7 +304,16 @@ class RunWindow(ProcessWindow):
 
     def _warn(self):
         b = self.project.book_dir()
-        if self.mode == 'pipeline' and b.exists() and not self.resume.get():
+        stems, err = self.redo_spec()
+        if self.mode == 'pipeline' and err:
+            self.warn.configure(text=err)
+        elif stems:
+            self.warn.configure(text='Redo %d spread%s (%s): their stages are deleted and run again, the other spreads are '
+                                     'kept. Where the text of a block comes out different, its OCR corrections and Block-tab '
+                                     'text edits no longer apply and it is translated again. Your work in %s stays.'
+                                     % (len(stems), '' if len(stems) == 1 else 's', spreads.describe(stems),
+                                        self.project.review_dir))
+        elif self.mode == 'pipeline' and b.exists() and self.what.get() == 'scratch':
             self.warn.configure(text='Without --resume the pipeline first DELETES %s, including its ocr_review.json. '
                                      'Your own work in %s is not touched.' % (b, self.project.review_dir))
         else:
@@ -263,8 +327,12 @@ class RunWindow(ProcessWindow):
             return None
         if not self._check_unsaved():
             return None
+        stems, err = self.redo_spec()
+        if err:
+            messagebox.showerror('Spreads to redo', err, parent=self)
+            return None
         b = self.project.book_dir()
-        if self.mode == 'pipeline' and b.exists() and not self.resume.get():
+        if self.mode == 'pipeline' and b.exists() and self.what.get() == 'scratch':
             if not messagebox.askyesno('Delete the previous result?',
                                        'A run without --resume deletes\n%s\nincluding its ocr_review.json.\n\nContinue?' % b,
                                        icon='warning', parent=self):
@@ -277,7 +345,52 @@ class RunWindow(ProcessWindow):
             except ProjectError as e:
                 messagebox.showerror('OCR correction', str(e), parent=self)
                 return None
-        return self.project.command(self.resume.get()), self.project.command_line(self.resume.get())
+        resume = self.what.get() != 'scratch'
+        redo = spreads.compact(stems, [t.stem for t in tiffs_in(self.project.input_dir)]).replace(' ', '') if stems else ''
+        return self.project.command(resume, redo), self.project.command_line(resume, redo)
+
+
+class SpreadChooser(tk.Toplevel):
+    """The scans of the input folder with their state (done / incomplete / new); several can be selected.
+    ``result``: the chosen stems after OK, None after Cancel."""
+
+    def __init__(self, master, stems, states, preselected=()):
+        super().__init__(master)
+        self.title('Spreads to redo')
+        self.transient(master)
+        self.geometry('420x480')
+        self.result = None
+        f = ttk.Frame(self, padding=10)
+        f.pack(fill='both', expand=True)
+        ttk.Label(f, text='Select the spreads to redo (Ctrl / Shift + click for several).', wraplength=390).pack(anchor='w')
+        box = ttk.Frame(f)
+        box.pack(fill='both', expand=True, pady=6)
+        self.tree = ttk.Treeview(box, columns=('state',), selectmode='extended', height=16)
+        self.tree.heading('#0', text='Scan')
+        self.tree.heading('state', text='State')
+        self.tree.column('#0', width=220)
+        self.tree.column('state', width=120)
+        ys = ttk.Scrollbar(box, orient='vertical', command=self.tree.yview)
+        self.tree.configure(yscrollcommand=ys.set)
+        self.tree.pack(side='left', fill='both', expand=True)
+        ys.pack(side='left', fill='y')
+        for s, st in zip(stems, states):
+            self.tree.insert('', 'end', iid=s, text=s, values=(st,))
+        sel = [s for s in stems if s in preselected]
+        if sel:
+            self.tree.selection_set(sel)
+            self.tree.see(sel[0])
+        bar = ttk.Frame(f)
+        bar.pack(fill='x')
+        ttk.Button(bar, text='All', command=lambda: self.tree.selection_set(stems)).pack(side='left')
+        ttk.Button(bar, text='None', command=lambda: self.tree.selection_set(())).pack(side='left', padx=6)
+        ttk.Button(bar, text='Cancel', command=self.destroy).pack(side='right')
+        ttk.Button(bar, text='OK', command=self.ok).pack(side='right', padx=6)
+        self.bind('<Escape>', lambda e: self.destroy())
+
+    def ok(self):
+        self.result = list(self.tree.selection())
+        self.destroy()
 
 
 MODEL_HINT = {'claude-code': 'blank = opus (or sonnet, or a full model id)',

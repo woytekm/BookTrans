@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — redo chosen spreads
+
+- Owner's finding: after the footnote fix a `--resume` run changed nothing - it keeps every finished spread, so detection
+  fixes never reached them (and the footnote entry below wrongly said they would). New `booktrans.py --redo
+  0010,0012-0014` (implies `--resume`): the listed spreads' `stages/<scan>` folders are deleted and run again, the others
+  are kept, then the document is rebuilt. Scan names or numbers, ranges, `.tif` optional (`spreads.py`); a name matching
+  no scan stops the run before anything is deleted.
+- *Run pipeline* window: the `--resume` checkbox became **What to process** - everything from scratch / keep finished
+  spreads / keep finished spreads, but redo: [field] [Choose…]. *Choose…* lists the scans with their state (done,
+  incomplete, new); the selected page's scan is suggested in the field; the warning line names the spreads and what a
+  redo can invalidate (corrections and text edits of blocks whose German text changes; those are translated again).
+- Tests: 10 new.
+
 ## Unreleased — footnotes are text, not a drawing
 
 - Owner's report: the footnotes on scan 0010 (p71) were found as a line drawing and rendered as a picture. Two causes:
@@ -10,7 +23,7 @@
 - Footnotes are now recognised wherever they start (`stage2.mark_foot_notes`): small lines at the foot of a column, in
   the lower half of the page, after a gap wider than the leading. Before, only lines in the bottom 18 % of the page
   counted, so on p71 five of six note lines were merged into the body paragraph. Each note becomes its own block.
-  Test book: no line changes role. Takes effect with the next pipeline run (stage 1 and 2 are redone for the page).
+  Test book: no line changes role. Takes effect when stages 1-2 run again for the spread: from scratch, or *redo* for that scan (next entry); `--resume` alone keeps finished spreads as they are.
 - Tests: 6 new.
 
 ## Unreleased — font B, superscripts, marking text in the render window

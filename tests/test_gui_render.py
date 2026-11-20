@@ -200,11 +200,11 @@ def test_input_folder_is_shown_and_can_be_changed(win, monkeypatch, tmp_path):
     monkeypatch.setattr(gui_dialogs.messagebox, 'askyesno', lambda title, msg, **k: (asked.append(msg), True)[1])
     app.run_pipeline()
     rw = app.run_window
-    assert old in rw.input_lbl.cget('text') and rw.resume.get()               # the demo has a result: resume offered
+    assert old in rw.input_lbl.cget('text') and rw.what.get() == 'resume'      # the demo has a result: resume offered
     rw._change_input()
     assert app.project.input_dir == str(new) and 'x.tif' in asked[-1] and 'without --resume' in asked[-1]
     assert str(new) in rw.input_lbl.cget('text') and '1 TIFF file' in rw.input_lbl.cget('text')
-    assert not rw.resume.get() and str(new) in app.info_lbl.cget('text')
+    assert rw.what.get() == 'scratch' and str(new) in app.info_lbl.cget('text')
     assert json.loads(app.project.file.read_text(encoding='utf-8'))['input_dir'] == str(new)
     monkeypatch.setattr(gui_dialogs.filedialog, 'askdirectory', lambda **k: '')  # cancelled: nothing changes
     app.change_input()

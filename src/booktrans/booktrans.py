@@ -20,7 +20,9 @@ Several TIFFs (or a folder of them) are processed as one book: ``python booktran
 writes ``<out>/<folder name>/`` with the same layout but one ``document.json`` for all spreads (pages
 numbered consecutively, paragraphs joined across spread boundaries, one list of translation units),
 and the per-spread stage files in ``stages/<tiff name>/``. ``--resume`` skips spreads whose stages 1-3
-are already there (also for a single TIFF); ``--separate`` keeps one folder per TIFF instead.
+are already there (also for a single TIFF); ``--redo 0010,0012-0014`` throws away the stages of the listed spreads
+and runs them again, keeping the others (after a detection fix, or new parameters for a few scans);
+``--separate`` keeps one folder per TIFF instead.
 
 The input may be an open-book spread (default, split at the gutter), a single
 whole page (``--layout page``) or a crop of a page (``--layout crop``).
@@ -38,6 +40,7 @@ sys.path.insert(0, str(HERE))
 
 from docmodel import build_document   # noqa: E402
 import log                             # noqa: E402
+import spreads                         # noqa: E402
 
 
 def run(cmd):
@@ -69,7 +72,8 @@ def step(n, title):
     log.info('wrap', '=== stage %d/4: %s ===' % (n, title))
 
 
-def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spread', resume=False, edge_margin='auto'):
+def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spread', resume=False, edge_margin='auto',
+            redo=False):
     """One TIFF -> ``<out_root>/<tiff stem>/``.  With ``resume`` and stages 1-3 present they are kept and only stage 4
     and ``document.json`` are redone (as for a book); otherwise the folder is deleted and everything runs."""
     tiff = Path(tiff)
@@ -78,7 +82,9 @@ def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spr
     s1, s2, s3, s4 = (st / n for n in ('s1', 's2', 's3', 's4'))
     done = (s3 / 'page_structure_stage3.json').exists()
     log.info('wrap', 'input %s -> %s' % (tiff, out))
-    if resume and done:
+    if redo and done:
+        log.info('wrap', '%s: --redo, running everything again' % tiff.name)
+    if resume and done and not redo:
         log.info('wrap', '%s: stages 1-3 present, skipped (--resume)' % tiff.name)
     else:
         if resume:
@@ -106,11 +112,19 @@ def process(tiff, out_root, lang='deu', ocr_scale=2.0, scale='auto', layout='spr
 
 
 def process_book(tiffs, out_root, name, lang='deu', ocr_scale=2.0, scale='auto', layout='spread', resume=False,
-                 edge_margin='auto'):
-    """Several spreads -> one document (stage 4 runs over all of them, in the order given)."""
+                 edge_margin='auto', redo=()):
+    """Several spreads -> one document (stage 4 runs over all of them, in the order given).  ``redo``: stems of
+    spreads whose stages are thrown away and run again although they are finished (implies ``resume`` for the rest)."""
     out = Path(out_root) / name
+    if redo:
+        resume = True
     if out.exists() and not resume:
         shutil.rmtree(out)
+    for stem in redo:
+        st = out / 'stages' / stem
+        if st.exists():
+            log.info('wrap', '%s: --redo, its stages are deleted and run again' % stem)
+            shutil.rmtree(st)
     s4 = out / 'stages' / 's4'
     log.info('wrap', 'book %s: %d spreads -> %s' % (name, len(tiffs), out))
     s3_files = []
@@ -170,6 +184,9 @@ def main():
     ap.add_argument('--name', help='book folder name (default: the folder name, or first-last TIFF name)')
     ap.add_argument('--separate', action='store_true', help='several inputs: one result folder per TIFF instead of one book')
     ap.add_argument('--resume', action='store_true', help='book mode: skip spreads whose stages 1-3 are already in the output folder')
+    ap.add_argument('--redo', default='', metavar='SCANS',
+                    help='redo these spreads completely although they are finished, keep the others (implies --resume): '
+                         'scan names or numbers, ranges allowed, e.g. "0010,0012-0014" or "10,12-14"')
     ap.add_argument('-o', '--output', type=Path, default=Path('output'))
     ap.add_argument('--lang', default='deu')
     ap.add_argument('--ocr-scale', type=float, default=2.0)
@@ -206,14 +223,23 @@ def main():
     if a.verbose:
         os.environ['BOOKTRANS_VERBOSE'] = '1'
     tiffs, folder = expand_inputs(a.inputs)
+    try:
+        redo = spreads.select(a.redo, tiffs) if a.redo.strip() else []
+    except spreads.SpreadError as e:
+        raise SystemExit('--redo: %s' % e)                # before anything is deleted
+    if redo:
+        a.resume = True
+        log.info('wrap', 'redo: %s' % spreads.compact(redo, [t.stem for t in tiffs]))
     jobs = []                                         # (label, out, doc)
     if len(tiffs) > 1 and not a.separate:
         name = a.name or (folder.resolve().name if folder else '%s-%s' % (tiffs[0].stem, tiffs[-1].stem))
-        out, doc = process_book(tiffs, a.output, name, a.lang, a.ocr_scale, a.scale, a.layout, a.resume, a.edge_margin)
+        out, doc = process_book(tiffs, a.output, name, a.lang, a.ocr_scale, a.scale, a.layout, a.resume, a.edge_margin,
+                                redo)
         jobs.append((name, out, doc))
     else:
         for f in tiffs:
-            out, doc = process(f, a.output, a.lang, a.ocr_scale, a.scale, a.layout, a.resume, a.edge_margin)
+            out, doc = process(f, a.output, a.lang, a.ocr_scale, a.scale, a.layout, a.resume, a.edge_margin,
+                               f.stem in redo)
             jobs.append((f.name, out, doc))
     for label, out, doc in jobs:
         for p in doc['pages']:

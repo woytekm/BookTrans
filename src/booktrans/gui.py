@@ -533,6 +533,15 @@ class MainWindow(tk.Tk):
         self._sort = (col, not rev if c == col else False)
         self._fill_tree(self.rows, self._selected_page())
 
+    def _selected_scan(self):
+        """Stem of the scan the selected page comes from ('' without a selection): the run window suggests it for
+        "redo"."""
+        n = self._selected_page()
+        if n is None or self.index is None or n not in self.index.page_by_no:
+            return ''
+        t = self.index.page_by_no[n].get('source_tiff') or ''
+        return Path(t).stem if t else ''
+
     def _selected_page(self):
         sel = self.tree.selection()
         return int(sel[0]) if sel else None
@@ -640,7 +649,8 @@ class MainWindow(tk.Tk):
         if mode == 'translate':
             self.run_window = TranslateWindow(self, self.project, on_done=self._pipeline_done, unsaved=unsaved, harvest=harvest)
         else:
-            self.run_window = RunWindow(self, self.project, on_done=self._pipeline_done, mode=mode, unsaved=unsaved)
+            self.run_window = RunWindow(self, self.project, on_done=self._pipeline_done, mode=mode, unsaved=unsaved,
+                                        redo=self._selected_scan() if mode == 'pipeline' else '')
 
     def _pipeline_done(self):
         self.reload()

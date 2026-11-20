@@ -50,6 +50,7 @@ A whole book (several spreads, or a folder of TIFFs in name order) in one go:
 python booktrans.py /scans/mybook/ -o output                  # -> output/mybook/  (one document.json for the book)
 python booktrans.py 0001.tif 0002.tif 0003.tif -o output --name part1
 python booktrans.py /scans/mybook/ -o output --resume         # skip spreads whose stages 1-3 already exist
+python booktrans.py /scans/mybook/ -o output --redo 0010,12-14  # redo these spreads completely, keep the others
 ```
 
 Pages are numbered consecutively, paragraphs cut at a spread boundary are joined into one translation unit, and the per-spread files are in `stages/<tiff name>/`. `--separate` gives one result folder per TIFF instead.

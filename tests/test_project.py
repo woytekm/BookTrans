@@ -362,3 +362,10 @@ def test_font_b_setting_goes_to_render(tmp_path):
     assert DEFAULT_RENDER['f2_font'] == ''
     with pytest.raises(Exception):
         check_render(dict(DEFAULT_RENDER, f2_font=str(tmp_path / 'missing.ttf')))
+
+
+def test_command_with_spreads_to_redo(tmp_path, scans):
+    p = PR.Project.create(tmp_path / 'p', 'b', scans)
+    c = p.command(redo='0010, 0012-0014')
+    assert c[c.index('--redo') + 1] == '0010,0012-0014' and '--resume' in c
+    assert '--redo' not in p.command(resume=True, redo='  ')
