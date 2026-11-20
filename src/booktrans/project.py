@@ -486,8 +486,9 @@ class Project:
             raise ProjectError('cannot read %s: %s' % (p, e))
 
     # ------------------------------------------------------------ pipeline
-    def command(self, resume=False):
-        """The ``booktrans.py`` command line for this project (argument list)."""
+    def command(self, resume=False, redo=''):
+        """The ``booktrans.py`` command line for this project (argument list).  ``redo``: a spec of spreads to redo
+        completely (``booktrans.py --redo``, which implies ``--resume`` for the others)."""
         p = self.params
         cmd = [sys.executable, str(HERE / 'booktrans.py'), self.input_dir, '-o', str(self.pipeline_root),
                '--name', self.name, '--lang', p['lang'], '--layout', p['layout'], '--scale', str(p['scale']),
@@ -500,12 +501,14 @@ class Project:
             cmd += ['--edits', str(self.edits_file), '--decisions', str(self.decisions_file)]          # human texts from the GUI survive a re-run (a missing file is fine)
             if p['ocr_suggest']:
                 cmd.append('--ocr-suggest')
-        if resume:
+        if redo and redo.strip():
+            cmd += ['--resume', '--redo', ','.join(x.strip() for x in redo.split(',') if x.strip())]
+        elif resume:
             cmd.append('--resume')
         return cmd
 
-    def command_line(self, resume=False):
-        return ' '.join(shlex.quote(str(c)) for c in self.command(resume))
+    def command_line(self, resume=False, redo=''):
+        return ' '.join(shlex.quote(str(c)) for c in self.command(resume, redo))
 
     def ocrfix_command(self):
         """Stage 5 alone: ``ocrfix.py run <book>/document.json`` with the project's OCR-correction mode and the GUI's

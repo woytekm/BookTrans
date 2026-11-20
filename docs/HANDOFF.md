@@ -85,6 +85,7 @@ python translate.py output/book/document.json -o output/book/translations.json  
 python translate.py output/book/document.json --provider claude-code             # Claude Code CLI, your subscription (section 7b)
 python render.py output/0001/document.json translations.json -o output/0001/render  # rebuild only (--pages 3,5-7: draw some pages)
 python booktrans.py /scans/mybook/ -o output [--resume]                        # a whole book: one document.json
+python booktrans.py /scans/mybook/ -o output --redo 0010,0012-0014          # redo some spreads, keep the rest
 python -m pytest -q ../../tests                                                # 278 tests, ~40 s (the 41 GUI window tests need tkinter and a display; they skip otherwise)
 python envcheck.py [PROJECT]                                                   # is the environment intact? (Tesseract + deu model, modules, dictionaries, glossary)
 python gui.py --demo /tmp/demo                                                 # the GUI on a synthetic project (no scans, no Tesseract needed)
@@ -222,7 +223,7 @@ Sonnet on the same units (a different model is a different cache key, so both st
 ## 8. Batch mode (books) and units cut at a spread boundary
 
 `booktrans.py` takes a folder of TIFFs (name order) or several files and builds **one** `document.json`:
-stages 1-3 run per spread (`stages/<tiff name>/s1..s3`, `--resume` skips finished ones), stage 4 runs
+stages 1-3 run per spread (`stages/<tiff name>/s1..s3`, `--resume` skips finished ones, `--redo` reruns chosen ones), stage 4 runs
 once over all spreads, pages are numbered consecutively (`page`; `spread`, `page_in_spread`,
 `source_tiff` say where they came from), block ids keep Stage 4's `sN-` prefix so they stay unique,
 and image/figure files are prefixed with the TIFF name. A paragraph cut at a spread boundary is a single

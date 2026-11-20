@@ -272,9 +272,9 @@ def test_run_window_runs_the_project_command_and_reports_the_result(app, monkeyp
     w.v['scale'].set('1.5')
     done = []
     w.on_done = lambda: done.append(1)
-    monkeypatch.setattr(app.project, 'command', lambda resume=False: [sys.executable, '-c', 'print("stage1 hello"); print("done")'])
+    monkeypatch.setattr(app.project, 'command', lambda resume=False, redo='': [sys.executable, '-c', 'print("stage1 hello"); print("done")'])
     monkeypatch.setattr(gui.messagebox if hasattr(gui, 'messagebox') else __import__('tkinter.messagebox').messagebox, 'askyesno', lambda *a, **k: True)
-    w.resume.set(True)
+    w.what.set('resume')
     w.start()
     t0 = time.time()
     while not done and time.time() - t0 < 20:
@@ -881,3 +881,50 @@ def test_glossary_window_lists_layers_and_decides_candidates(app):
     assert ('portal', 'term') in GS.rejected()
     app.open_glossary()
     assert app.glossary_window is w
+
+
+def test_run_window_redoes_chosen_spreads(app, monkeypatch):
+    """What to process: a third choice keeps finished spreads but redoes the ones in the field; the selected page's
+    scan is suggested; Choose... fills the field; a typo is reported before anything runs."""
+    import gui_run
+    app.tree.selection_set('2')                                    # page 2 comes from demo_0001.tif
+    pump(app)
+    app.run_pipeline()
+    w = app.run_window
+    w.withdraw()
+    assert w.redo.get() == 'demo_0001' and w.what.get() == 'resume'   # suggested, not chosen
+    w.what.set('redo')
+    w._warn()
+    assert 'Redo 1 spread (demo_0001)' in w.warn.cget('text')
+    cmd, line = w._prepare()
+    assert cmd[cmd.index('--redo') + 1] == 'demo_0001' and '--resume' in cmd
+    w.redo.set('demo_0001, 0007')
+    assert 'no scan matches 0007' in w.warn.cget('text')
+    errs = []
+    monkeypatch.setattr(gui_run.messagebox, 'showerror', lambda title, msg, **k: errs.append(msg))
+    assert w._prepare() is None and 'no scan matches 0007' in errs[-1]
+
+    class Chooser:                                                 # the checklist, answered at once
+        def __init__(self, master, stems, states, pre):
+            assert stems == ['demo_0001', 'demo_0002'] and set(pre) == set()     # the field held a typo
+            assert all(s in ('done', 'incomplete', 'new') for s in states)
+            self.result = ['demo_0001', 'demo_0002']
+    monkeypatch.setattr(gui_run, 'SpreadChooser', Chooser)
+    monkeypatch.setattr(w, 'wait_window', lambda d: None)
+    w.choose_spreads()
+    assert w.redo.get() == 'demo_0001-demo_0002' and w.what.get() == 'redo'
+    assert 'Redo 2 spreads' in w.warn.cget('text')
+    w.what.set('resume')
+    w._warn()
+    assert w.warn.cget('text') == '' and '--redo' not in w._prepare()[0]
+    w.destroy()
+
+
+def test_spread_chooser_lists_scans_with_their_state(app):
+    import gui_run
+    d = gui_run.SpreadChooser(app, ['0009', '0010'], ['done', 'new'], ['0010'])
+    pump(app)
+    assert d.tree.item('0009', 'values')[0] == 'done' and d.tree.selection() == ('0010',)
+    d.tree.selection_add('0009')
+    d.ok()
+    assert d.result == ['0009', '0010']

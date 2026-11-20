@@ -224,14 +224,26 @@ first); and it asks about unsaved correction windows like the other runs. Live l
 **Input folder** of an existing project: shown in the header (path, TIFF count and size, or "folder not found") and at the top
 of *Run pipeline*; changed with Project > *Change input folder…* or *Change…* in the run window (`gui_dialogs.change_input_dir`,
 `Project.set_input_dir`). Before it changes it shows how many TIFFs the new folder holds and, when the project already has a
-pipeline result, that the result came from the old folder: run without `--resume` (the run window unticks it) or clear the
+pipeline result, that the result came from the old folder: run without `--resume` (the run window switches to *Everything from scratch*) or clear the
 project data first, since `--resume` keeps spreads by TIFF name (`Project.input_change_warnings`).
 
 **Edge margin** (pipeline setting, *Run pipeline* window, `params.edge_margin`, `booktrans.py --edge-margin`; since
 2026-11-19): how much of the outer side of each page is ignored as the book's edge. `auto` (default) detects the band of
 stacked page edges (`illustrations.book_edge`, at least 65 px); a number of px of the working page image (about 4.7 px per
 mm; the coordinates of the debug images) is used instead, on the outer side(s) only - for a book where the detection
-cuts content or misses the edge; `0` ignores nothing. Takes effect when stage 1 runs (pipeline without *resume*).
+cuts content or misses the edge; `0` ignores nothing. Takes effect when stage 1 runs (from scratch, or *redo* for the
+spreads concerned).
+
+**What to process** (*Run pipeline*, since 2026-11-20): *Everything from scratch* (deletes the result folder first),
+*Keep finished spreads* (`--resume`: new scans get stages 1-3, stage 4 onwards is redone for all) or *Keep finished
+spreads, but redo:* a list of scans (`--redo`): their `stages/<scan>` folders are deleted and run again, the others are
+kept - after a detection fix, or a setting such as the edge margin that only matters for a few scans. The field takes scan
+names or numbers with ranges (`0010, 0012-0014`, `10,12-14`, `scan_0012-scan_0014`; `spreads.select`); *Choose…* opens a
+checklist of the input folder's scans with their state, done / incomplete / new (`gui_run.SpreadChooser`,
+`spreads.spread_state`). The scan of the page selected in the main window is suggested in the field (the choice stays
+*Keep finished spreads*). The warning line names the spreads and what a redo can invalidate: where a block's German text
+comes out different, its OCR corrections and Block-tab text edits (keyed by that text) no longer apply and it is
+translated again; `review/` itself is not touched. A name that matches no scan is reported before the run starts.
 
 **Clear project data** (`gui_dialogs.ClearDataDialog`, Project menu; `Project.data_parts` / `Project.clear_data`): removes the
 results of processing for a fresh start; `project.json` (all settings) is always kept. Ticked by default: the pipeline output
