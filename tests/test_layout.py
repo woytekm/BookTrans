@@ -427,10 +427,10 @@ def test_caption_geometry_follows_its_figure():
     beside = _cap('c', 'u1', (60, 388, 290, 398), fig='f')
     under = _cap('d', 'u2', (380, 410, 480, 418), fig='f')
     page['blocks'] = [fig, beside]
-    anchor, lo, hi, extra, grow, _ = L.caption_geometry(page, beside)
+    anchor, lo, hi, extra, grow, _, _ = L.caption_geometry(page, beside)
     assert anchor == 'right' and grow == 'up' and hi < 300 and lo == 40            # flush to the picture, room above
     page['blocks'] = [fig, under]
-    anchor, lo, hi, extra, grow, _ = L.caption_geometry(page, under)
+    anchor, lo, hi, extra, grow, _, _ = L.caption_geometry(page, under)
     assert anchor == 'center' and (lo, hi) == (300, 560) and grow == 'down' and extra >= 1
     assert L.caption_geometry(page, under, tight=False)[1:3] == (40, 560)
 
@@ -523,3 +523,42 @@ def test_a_caption_keeps_a_gap_to_its_picture_but_not_at_the_cost_of_the_text(tm
     doc2 = _doc(tmp_path, [[fig, _cap('c0', 'u1', (40, 301, 400, 309), '49 ZIEGENHALS OS', fig='f0'), tight]])
     ln2 = [x for x in L.make_plan(doc2, trans, _fonts(), {})['pages'][0]['lines'] if x['unit'] == 'u1'][0]
     assert ln2['baseline'] <= ln['baseline']
+
+
+# ---------------------------------------------------------------- caption over text (2026-11-20)
+def test_a_growing_caption_keeps_most_of_the_printed_gap_to_the_text():
+    page = {'layout': {'columns': [{'left': 40, 'right': 560}]}, 'blocks': []}
+    fig = {'block_id': 'f', 'kind': 'figure', 'bbox': [300, 100, 560, 400]}
+    cap = _cap('c', 'u1', (380, 410, 480, 418), fig='f')
+    para = _para('p', 'u2', 3, 40, 560, 448)                         # 30 px of paper between caption and text
+    page['blocks'] = [fig, cap, para]
+    *_, free, info = L.caption_geometry(page, cap)
+    assert info['below'] is para and info['keep'] == pytest.approx(18.0) and free == pytest.approx(12.0)
+    page['blocks'] = [fig, cap]                                       # nothing below: room as before
+    *_, free, info = L.caption_geometry(page, cap)
+    assert info['below'] is None and free > 12.0
+
+
+def test_a_caption_that_cannot_fit_moves_the_text_down_instead_of_touching_it(tmp_path):
+    """Page 52: a caption in a narrow column at the page edge needs four lines (its words are each almost a full
+    line wide, captions are not hyphenated); it ran down to a few px above the paragraph.  Now the paragraph starts
+    lower and the caption keeps its gap and its size."""
+    fig = _fig('f', (480, 100, 540, 200), tmp_path)
+    cap = _cap('c', 'u1', (480, 210, 556, 225), text='59 POLITZ SCHAFTRING', fig='f')
+    cap['line_count'] = 2
+    cap['lines'] = [{'bbox': [480, 210, 540, 218], 'text': '59 POLITZ', 'glyph_height_px': 8.0},
+                    {'bbox': [480, 225, 556, 233], 'text': 'SCHAFTRING', 'glyph_height_px': 8.0}]
+    cap['bbox'] = [480, 210, 556, 233]
+    cap['typography']['line_pitch_px'] = 15.0
+    para = _para('p', 'u2', 12, 40, 560, 263)                         # 30 px below the caption
+    doc = _doc(tmp_path, [[fig, cap, para]])
+    tr = {'units': {'u1': {'pl': '59 POLICE. PIERŚCIEŃ TRZONU KOLUMNY'}, 'u2': {'pl': _pl(500)}}}
+    plan = L.make_plan(doc, tr, _fonts())
+    assert not [w for w in plan['report']['warnings'] if 'u1' in w]
+    lines = plan['pages'][0]['lines']
+    capl = [l for l in lines if l['unit'] == 'u1']
+    body = [l for l in lines if l['unit'] == 'u2']
+    r = plan['ratios']['regular']
+    cap_bottom = max(l['baseline'] for l in capl) + r['desc'] * capl[0]['size']
+    body_top = min(l['baseline'] for l in body) - r['asc'] * body[0]['size']
+    assert len(capl) >= 3 and body_top - cap_bottom >= 0.6 * 30 - 1

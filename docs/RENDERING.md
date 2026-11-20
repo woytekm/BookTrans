@@ -248,6 +248,14 @@ are never hyphenated (`typeset(..., hyphenate=False)`).
   original size), and its lines are laid on a new even grid when their number or pitch changes; the free space it may
   take (down to about a glyph height above the next block) is counted at that pitch. Before, extra lines kept the
   original pitch and a long caption ran into the paragraph below (page 52, `59 POLICE. PIERŚCIEŃ TRZONU KOLUMNY`).
+- **Gap to the text below** (since 2026-11-20): a caption growing down keeps `CAPTION_KEEP_GAP` (60 %) of the printed
+  gap to the next block, at least a glyph height; down to a glyph height alone, a long caption read as part of the
+  paragraph under it. When it still does not fit (a narrow column at the page edge, words almost a line wide, no
+  hyphenation) and a body paragraph is below, it takes up to `CAPTION_PUSH_LINES` (2) of that paragraph's lines
+  instead of overflowing: captions are laid out before the body flow, and the caption's ink bottom plus the kept gap
+  becomes a floor (`floors`) - body slots above it in that column are skipped, so the text starts lower and the
+  page's flow absorbs the line(s). It no longer pulls the page's shared caption size down either (page 52: the five
+  captions of the row went back to the book's caption size).
 - **Gap to the picture** (since 2026-11-19, `layout._keep_clear_of_figure`): at least half the caption size of paper
   between a caption and the picture above (or below) it - printed captions often sit a pixel or two from the picture,
   and the set caption, with full capitals, touched it. The caption moves away from the picture only as far as the free
