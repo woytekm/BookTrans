@@ -79,29 +79,44 @@ def find_marks(rgb, boxes, content_area, columns, pad_boxes=4):
     for x1, y1, x2, y2 in rule_boxes:
         ink[y1:y2 + 1, x1:x2 + 1] = 0
 
-    # page numbers / marks: only above or below the content (close to it, or - page-number sized - up to a fifth of
-    # the page height away)
+    # page numbers / marks: only above or below the content - close to it, or (page-number sized) up to a fifth of the
+    # page height away, or anywhere in the bottom / top quarter of the page with only blank paper between it and the
+    # content: a page whose text ends early (end of a chapter) has its number where the full pages have theirs, far
+    # below the last line (before 2026-11-20 page 70 lost its number that way).
     reach = max(130, int(0.2 * h))
     blobs = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15)))
     n, lab, st, _ = cv2.connectedComponentsWithStats(blobs, 8)
+    cands = []
     for i in range(1, n):
         x, y, ww, hh, _ = st[i]
         if ww > 140 or hh > 45 or ww < 4 or hh < 4:
             continue
-        cy = y + hh / 2.0
+        ys, xs = np.nonzero((lab[y:y + hh, x:x + ww] == i) & (ink[y:y + hh, x:x + ww] > 0))
+        if len(xs) < 12:
+            continue
+        cands.append((y + hh / 2.0, int(x + xs.min()), int(y + ys.min()), int(x + xs.max()) + 1, int(y + ys.max()) + 1,
+                      len(xs)))
+    # ink outside the candidates (too big for a mark): it, too, stands between the content and a far mark
+    big = [(y, y + hh) for i in range(1, n) for x, y, ww, hh, a in [st[i]]
+           if (ww > 140 or hh > 45) and a >= 12]
+
+    def alone(cy, below):
+        lo, hi = (bottom + 8, cy) if below else (cy, top - 8)
+        others = [c for c in cands if c[0] != cy and lo < c[0] < hi]
+        return not others and not any(y1 < hi and y2 > lo for y1, y2 in big)
+
+    for cy, x1, y1, x2, y2, npx in cands:
         near = top - 130 <= cy < top - 8 or bottom + 8 < cy <= bottom + 130
         # a plate page's content (pictures, captions) can end far above where the page number is printed: further
         # away only something the size of a page number counts, not a speck
         far = top - reach <= cy < top - 8 or bottom + 8 < cy <= bottom + reach
-        if not (near or far):
+        band = (cy > bottom + 8 and cy >= 0.75 * h and alone(cy, True)) or \
+               (cy < top - 8 and cy <= 0.25 * h and alone(cy, False))
+        if not (near or far or band):
             continue
-        ys, xs = np.nonzero((lab[y:y + hh, x:x + ww] == i) & (ink[y:y + hh, x:x + ww] > 0))
-        if len(xs) < 12:
-            continue
-        x1, y1, x2, y2 = int(x + xs.min()), int(y + ys.min()), int(x + xs.max()) + 1, int(y + ys.max()) + 1
         if y2 - y1 < 5:
             continue                          # a hairline or an edge of a picture, not a mark
-        if not near and not (8 <= y2 - y1 <= 40 and 6 <= x2 - x1 <= 90 and len(xs) >= 25):
+        if not near and not (8 <= y2 - y1 <= 40 and 6 <= x2 - x1 <= 90 and npx >= 25):
             continue
         out.append({'role': 'page_mark', 'bbox': [x1 - PAD, y1 - PAD, x2 + PAD, y2 + PAD]})
     out.sort(key=lambda m: (m['bbox'][1], m['bbox'][0]))
