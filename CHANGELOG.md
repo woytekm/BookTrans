@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — page numbers on short pages
+
+- Owner's report: page 70 lost its number again. The chapter ends half way down the page, and the number is printed
+  where the full pages have theirs, ~500 px below the last line - beyond the reach `marks.find_marks` measures from the
+  content (a fifth of the page height). Now a page-number sized mark in the bottom or top quarter of the page counts at
+  any distance, when only blank paper lies between it and the content. Test book and scans 0008-0010: only page 70
+  changes. Takes effect when the document is rebuilt (any pipeline run, also *Keep finished spreads*).
+- Tests: 2 new.
+
 ## Unreleased — redo chosen spreads
 
 - Owner's finding: after the footnote fix a `--resume` run changed nothing - it keeps every finished spread, so detection

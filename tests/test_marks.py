@@ -49,3 +49,31 @@ def test_a_plate_page_keeps_its_page_number_far_below_the_pictures():
     assert [m['role'] for m in found] == ['page_mark']
     x1, y1, x2, y2 = found[0]['bbox']
     assert x1 <= 600 and x2 >= 618 and y1 <= 1150 and y2 >= 1170
+
+
+def _number(img, x, y):
+    img[y:y + 20, x:x + 6] = 40; img[y:y + 20, x + 12:x + 18] = 40; img[y:y + 3, x:x + 18] = 40
+
+
+def test_a_short_page_keeps_its_number_at_the_foot():
+    """Page 70: the chapter ends half way down, the number is printed where the full pages have it, ~500 px below
+    the last line - beyond the reach measured from the content."""
+    img = np.full((1310, 920, 3), 225, np.uint8)
+    img[150:635, 240:814] = 120                             # the text (masked as a box)
+    _number(img, 240, 1135)
+    found = find_marks(img, [[240, 150, 814, 635]], [240, 150, 814, 635], [{'left': 240, 'right': 814}])
+    assert [m['role'] for m in found] == ['page_mark']
+    x1, y1, x2, y2 = found[0]['bbox']
+    assert x1 <= 240 and x2 >= 258 and y1 <= 1135 and y2 >= 1155
+
+
+def test_far_marks_need_the_foot_band_and_blank_paper_up_to_the_content():
+    def page():
+        img = np.full((1310, 920, 3), 225, np.uint8)
+        img[150:635, 240:814] = 120
+        return img
+    args = ([[240, 150, 814, 635]], [240, 150, 814, 635], [{'left': 240, 'right': 814}])
+    img = page(); _number(img, 400, 900)                    # middle of the page, far from the text: not a page number
+    assert find_marks(img, *args) == []
+    img = page(); _number(img, 240, 1135); img[1000:1060, 300:700] = 90      # something printed between
+    assert find_marks(img, *args) == []
