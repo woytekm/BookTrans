@@ -82,3 +82,36 @@ def test_mask_box_pads_small_so_captions_directly_below_stay_readable():
     # A caption can sit only ~6 working px under a photo (crop of a 600 DPI page).
     assert ill.mask_box(photo) == [96, 96, 204, 204]
     assert ill.mask_box(art) == [96, 95, 204, 205]
+
+
+def stem_line(img, x0, x1, y):
+    """A letter-spaced line in a thin face as a pale scan shows it: each letter is two 1-px stems, the hairline
+    joins are lost, so no piece looks like a letter."""
+    x = x0
+    while x < x1 - 20:
+        for _ in range(5):
+            img[y:y + 8, x] = 60; img[y + 2:y + 8, x + 4] = 60
+            x += 9
+        x += 14
+
+
+def test_footnotes_with_a_rule_and_a_thin_line_are_not_a_drawing():
+    """Scan 0010 p71: a footnote block (a dashed rule, notes in small type, one letter-spaced line in a thin face)
+    was found as a line drawing.  Mostly text-line ink in the box -> text, not a figure."""
+    img, rng = text_page(n_lines=12, y0=300)
+    y = 300 + 12 * 18 + 14
+    for x in range(120, 780, 40):
+        img[y:y + 2, x:x + 36] = 70                       # footnote rule, dashed
+    for i in range(6):
+        if i == 2:
+            stem_line(img, 120, 780, y + 10 + i * 16)
+        else:
+            glyph_line(img, 120, 780, y + 10 + i * 16, rng)
+    assert ill.detect_line_art(img, 'L') == []
+
+
+def test_mostly_text_measures_ink_inside_the_box():
+    ink = np.zeros((100, 100), np.uint8); ink[10:90, 10:90:3] = 255
+    text = np.zeros((100, 100), bool); text[10:70, 10:90:3] = True
+    assert ill._mostly_text(ink, text, (0, 0, 100, 100))
+    assert not ill._mostly_text(ink, np.zeros_like(text), (0, 0, 100, 100))
