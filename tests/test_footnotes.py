@@ -32,8 +32,8 @@ def test_small_text_with_normal_leading_or_body_text_below_is_not_a_footnote():
     after = [line(notes[-1]['bbox'][3] + 20, 'Und weiter geht der Fließtext auf dieser Seite', h=14)]
     stage2.mark_foot_notes(body + notes + after, 14.0, 1310)
     assert all(l['type'] == 'body_line' for l in notes)  # a small passage inside the text
-    body, notes = body_and_notes()
-    stage2.mark_foot_notes(body + notes, 14.0, 2400)     # upper half of the page
+    _, notes = body_and_notes()
+    stage2.mark_foot_notes(notes, 14.0, 2400)            # small print alone in the upper half: text, not notes
     assert all(l['type'] == 'body_line' for l in notes)
 
 
@@ -53,3 +53,13 @@ def test_each_note_is_its_own_block():
     marks = [{'text': 'Erste Anmerkung.'}, {'text': '2) Zweite'}, {'text': 'Ende.'}, {'text': '³ Dritte'},
              {'text': 'Schluss.'}, {'text': '* Stern'}]
     assert [len(p) for p in stage2.split_notes(marks)] == [1, 2, 2, 1]
+
+
+def test_a_note_under_the_last_paragraph_counts_anywhere_on_the_page():
+    """Page 70: the chapter ends half way down; a two-line "Literatur:" note in smaller type follows the last
+    paragraph at 46 % of the page height.  It was set as body text and flowed into the paragraph above."""
+    body, _ = body_and_notes()
+    note = [line(980, 'Literatur: Romanische Portale in Niederösterreich von Richard Kurt'),
+            line(998, 'und französische Kunst im Mittelalter von Richard Hamann 1923.')]
+    stage2.mark_foot_notes(body + note, 14.0, 2400)      # 980 / 2400 = 41 %
+    assert all(l['type'] == 'footnote_or_footer' for l in note)
