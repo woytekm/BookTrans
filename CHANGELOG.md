@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — font B, superscripts, marking text in the render window
+
+- Markup `<f2>…</f2>` (**font B**, another typeface - scan 0010 sets the Latin quotation in a different face) and
+  `<sup>…</sup>` (superscript note numbers) next to `<i>`, `<b>`, `<sp>`; tags may nest. `Fonts(..., f2=)`,
+  `render.py --f2-font`, project `render.f2_font`, *Font B* in the Book tab below Italic (empty = the regular font).
+- Render window, Block tab: *Mark selection* - Italic, Bold, Spaced, Font B, Sup, Plain - wraps the selected words (or
+  removes tags); saved as a text correction. Human texts may use every tag (`translate.tag_problems(allowed=...)`),
+  balanced; the model's answers still only `<i>` for titles.
+- Owner's decision: no automatic detection of emphasis or typeface changes (false positives).
+- Tests: 5 new.
+
 ## Unreleased — page numbers on plate pages
 
 - Owner's report: page 69 (two photos with captions, no body text) lost its page number. `marks.find_marks` needed text

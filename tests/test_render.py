@@ -1,4 +1,7 @@
 import json
+from pathlib import Path
+
+import pytest
 
 import numpy as np
 from PIL import Image
@@ -143,3 +146,29 @@ def test_line_drawings_are_printed_ink_only():
     a = np.asarray(canvas)
     assert tuple(a[5, 5]) == (250, 245, 230)                              # the drawing's paper tone is not pasted
     assert a[20, 20].max() < 80                                           # its strokes are
+
+
+# ---------------------------------------------------------------- font B and superscripts (2026-11-20)
+def test_font_b_and_superscript_markup(tmp_path):
+    from typeset import Fonts, styled_pieces, strip_tags, upper_keep_tags, SUP_SCALE
+    root = Path(__file__).resolve().parent.parent / 'fonts'
+    f = Fonts(str(root / 'CrimsonText-Regular.ttf'), f2=str(root / 'CrimsonPro-Light.ttf'))
+    assert f.paths['f2'].endswith('CrimsonPro-Light.ttf') and Fonts(str(root / 'CrimsonText-Regular.ttf')).paths['f2'].endswith('CrimsonText-Regular.ttf')
+    assert f.get('sup_regular', 100).size == pytest.approx(100 * SUP_SCALE, abs=1)
+    ps = styled_pieces('ut <f2>ipse advocatus</f2> valeat<sup>2</sup> <i><sup>3</sup></i>', lambda st: f.get(st, 40), 'regular')
+    styles = [(p['t'], p.get('style')) for p in ps]
+    assert ('ipse', 'f2') in styles and ('tus', 'f2') in styles and ('2', 'sup_regular') in styles
+    assert ('3', 'sup_italic') in styles and ('ut', None) in styles
+    assert strip_tags('a<f2>b</f2><sup>1</sup>') == 'ab1' and upper_keep_tags('a<f2>b</f2>') == 'A<f2>B</f2>'
+
+
+def test_superscripts_are_raised_when_drawn():
+    from PIL import ImageDraw
+    from typeset import Fonts
+    root = Path(__file__).resolve().parent.parent / 'fonts'
+    f = Fonts(str(root / 'CrimsonText-Regular.ttf'))
+    img = Image.new('RGB', (200, 80), 'white')
+    line = {'x': 10, 'baseline': 60, 'size': 40, 'gap': 10, 'words': [['1', 20, {'style': 'sup_regular'}]]}
+    R.draw_line(ImageDraw.Draw(img), line, f.get('regular', 40), 1.0, (0, 0, 0), fonts=f)
+    rows = np.where((np.asarray(img.convert('L')) < 128).any(axis=1))[0]
+    assert rows.max() < 60 - 0.25 * 40                                  # well above the baseline

@@ -123,7 +123,7 @@ class Fonts:
     variable font.  Without bold / italic, siblings of the regular file are used (``X-Regular.ttf`` ->
     ``X-SemiBold.ttf``, ``X-Italic.ttf``), else the regular font itself; nothing is mixed in from another family."""
 
-    def __init__(self, regular=None, bold=None, italic=None):
+    def __init__(self, regular=None, bold=None, italic=None, f2=None):
         if not regular:                               # the configured default font (config/fonts.json)
             try:
                 d = default_fonts()
@@ -133,13 +133,14 @@ class Fonts:
             bold = bold or d['bold']
             italic = italic or d['italic']
         reg = str(regular)
-        for spec in (reg, bold, italic):
+        for spec in (reg, bold, italic, f2):
             if spec and not Path(font_spec(str(spec))[0]).is_file():
                 raise SystemExit('font file not found: %s (pass --font, or set the default in %s)'
                                  % (font_spec(str(spec))[0], default_fonts_file()))
         self.paths = {'regular': reg,
                       'bold': str(bold) if bold else (family_of(reg, 'bold') or reg),
-                      'italic': str(italic) if italic else (family_of(reg, 'italic') or reg)}
+                      'italic': str(italic) if italic else (family_of(reg, 'italic') or reg),
+                      'f2': str(f2) if f2 else reg}           # "font B" (<f2>): another typeface, e.g. for quotations
         self._cache = {}
         self._ratios = {}
 
@@ -148,11 +149,16 @@ class Fonts:
         return Path(font_spec(self.paths['regular'])[0]).stem
 
     def get(self, style, size):
+        """The font of ``style`` (regular, bold, italic, f2; ``sup_<style>``: that font at ``SUP_SCALE`` of the size, for
+        superscripts) at ``size`` px."""
         key = (style, round(size, 2))
         if key not in self._cache:
             if len(self._cache) > 2000:
                 self._cache.clear()
-            self._cache[key] = load_font(self.paths[style], size)
+            if style.startswith('sup_'):
+                self._cache[key] = load_font(self.paths[style[4:]], size * SUP_SCALE)
+            else:
+                self._cache[key] = load_font(self.paths[style], size)
         return self._cache[key]
 
     def ratios(self, style='regular'):
@@ -234,8 +240,11 @@ def _pieces_of(text, font, track=0.0):
 
 
 # ---------------------------------------------------------------- emphasis inside a paragraph
-TAG = re.compile(r'</?(i|b|sp)>')
+TAG = re.compile(r'</?(i|b|sp|f2|sup)>')
+TAGS = ('i', 'b', 'sp', 'f2', 'sup')   # italic, bold, Sperrsatz, font B, superscript
 SP_EM = 0.16                     # extra letter-spacing of <sp> (Sperrsatz, the German emphasis by spacing), in em
+SUP_SCALE = 0.62                 # size of <sup> (a note number) relative to the line
+SUP_RAISE = 0.36                 # how far <sup> sits above the baseline, in the line's size
 
 
 def has_tags(text):
@@ -247,19 +256,25 @@ def strip_tags(text):
 
 
 def upper_keep_tags(text):
-    return ''.join(seg if TAG.fullmatch(seg) else seg.upper() for seg in re.split(r'(</?(?:i|b|sp)>)', text))
+    return ''.join(seg if TAG.fullmatch(seg) else seg.upper() for seg in re.split(r'(</?(?:i|b|sp|f2|sup)>)', text))
 
 
 def _style_of(base, tags):
-    if 'b' in tags:
-        return 'bold'
-    if 'i' in tags:
-        return 'italic'
-    return base
+    """The font style of characters inside ``tags``: font B over bold over italic over the paragraph's; inside
+    ``<sup>`` the superscript variant of it."""
+    if 'f2' in tags:
+        s = 'f2'
+    elif 'b' in tags:
+        s = 'bold'
+    elif 'i' in tags:
+        s = 'italic'
+    else:
+        s = base
+    return 'sup_' + s if 'sup' in tags else s
 
 
 def styled_pieces(text, fonts_for, base_style, track=0.0, sp_track=0.0):
-    """Pieces of a text with ``<i>``, ``<b>``, ``<sp>`` runs (``fonts_for(style)`` gives the font at the measuring
+    """Pieces of a text with ``<i>``, ``<b>``, ``<sp>``, ``<f2>``, ``<sup>`` runs (``fonts_for(style)`` gives the font at the measuring
     size).  A word in one run is split as usual (hyphenation, hard breaks); a word that changes style inside is one
     unbreakable group of pieces (break kind ``join`` between them).  Every piece carries ``tags`` (the open tags), and
     ``style`` / ``sp`` when they differ from the paragraph's."""

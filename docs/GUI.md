@@ -276,7 +276,9 @@ editable; *Save text* stores it as a human correction (`review/text_edits.json`,
 *Machine translation* removes the correction. The German original is shown below it (read-only). A saved text is run through
 the translation checks (punctuation, `<i>` markup); a problem is reported in the status line, the text is saved anyway. The
 Book tab counts the corrected blocks and lists corrections whose German changed since (*Show…*: their text, *Delete them*).
-`render.py` gets the file too (*Render book…*). *Clear project data* counts it as review work (kept by default).
+`render.py` gets the file too (*Render book…*). *Clear project data* counts it as review work (kept by default). *Mark selection* (since 2026-11-20) wraps the selected words in a markup tag - *Italic* `<i>`, *Bold* `<b>`,
+*Spaced* `<sp>` (Sperrsatz), *Font B* `<f2>`, *Sup* `<sup>` (a note number) - or, with *Plain*, removes the tags inside the
+selection; *Save text* lays it out. The tags can also be typed. Font B is chosen in the Book tab (*Font B*, below Italic).
 
 **Glossary window** (since 2026-11-18; `gui_glossary.py`; Project > *Glossary…*, `Cmd/Ctrl+Shift+G`): the central glossary
 folder (shared by all books) with *Change…* / *Show*. Tab *Entries*: every row of the book's layer (`review/glossary.csv`) and

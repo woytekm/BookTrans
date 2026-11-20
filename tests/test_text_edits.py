@@ -81,3 +81,11 @@ def test_render_py_sets_the_corrections(tmp_path):
     assert 'text edits: 1 unit(s) with a human correction' in r.stdout + r.stderr
     plan = json.loads((p.render_dir / 'layout.json').read_text(encoding='utf-8'))
     assert any('ręcznie' in w for pg in plan['pages'] for ln in pg['lines'] if ln['unit'] == uid for w, _ in ln['words'])
+
+
+def test_human_text_may_use_every_render_tag_but_balanced():
+    assert TE.warnings('Ut <f2>ipse <i>advocatus</i></f2> valeat<sup>2</sup>, <sp>Mauer</sp> i <b>x</b>.') == []
+    assert TE.warnings('Ut <f2>ipse advocatus valeat.') == ['unbalanced <f2>']
+    assert TE.warnings('Ut <u>ipse</u>.') == ['tag <u>']
+    import translate as T
+    assert T.tag_problems('Ut <f2>ipse</f2>.') == 'tag <f2>'                  # the model's answers: titles only

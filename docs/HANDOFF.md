@@ -385,7 +385,7 @@ engine should be complete before a GUI goes on top. Agreed order (2026-11-18):
    (page 55 reads 45 for 43: fix by hand in *Captions…*); a translation much longer than its narrow slot (page 52's `59 POLITZ
    SCHAFTRING` -> 4 lines at 9.7 px: shorten the translation or set the block's size / max width by hand); ~~a stage 1 "caption"
    region on blank margin paper (page 58)~~ fixed 2026-11-19 (a crease; `stage1.thin_line`).
-   Next: automatic font choice from `fontcheck.py`'s score; emphasis detection in stage 2 + prompt rule; **searchable vector PDF** (planned in `RENDERING.md` → *TODO: searchable vector PDF*, reportlab, 1-2 days); incremental
+   Next: automatic font choice from `fontcheck.py`'s score; ~~emphasis detection~~ (owner, 2026-11-20: not wanted - too many false positives; emphasis, font B and superscripts are marked by hand in the render window); **searchable vector PDF** (planned in `RENDERING.md` → *TODO: searchable vector PDF*, reportlab, 1-2 days); incremental
    layout for long books.
 
 Decided by the owner (2026-11-18): **Crimson Text Regular is the default font**, configurable in `config/fonts.json`
