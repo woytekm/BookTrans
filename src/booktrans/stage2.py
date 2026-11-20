@@ -203,14 +203,16 @@ def _x_overlap(a, b):
 
 
 def mark_foot_notes(lines, body, page_h):
-    """Footnotes wherever they start: a run of smaller lines (< 0.9 body) at the foot of a column - no body-sized
-    line below them in the same column - in the lower half of the page, set off from the text above by a gap wider
-    than the normal leading (or by a footnote rule, which leaves such a gap).  Footnotes taking a quarter of the page
-    start well above the old fixed "bottom 18 %" band, and were then set as body text."""
+    """Notes at the foot of the text, wherever they start: a run of smaller lines (< 0.9 body) at the foot of a column -
+    no body-sized line below them in the same column - set off from the text above by a gap wider than the normal
+    leading (or by a footnote rule, which leaves such a gap).  With body text above it in the column the run is a note
+    anywhere on the page: footnotes taking a quarter of the page, or a "Literatur:" note under the last paragraph of a
+    chapter that ends half way down (page 70); before, those were set as body text and flowed with it.  Without body
+    text above (a page of small print), only a run in the lower half of the page counts."""
     textual = [l for l in lines if l['type'] in ('body_line', 'footnote_or_footer')]
     small = lambda l: 0 < l['glyph_height'] < body * .9
     for ln in sorted(textual, key=lambda z: z['bbox'][1]):
-        if ln['type'] != 'body_line' or not small(ln) or ln['bbox'][1] < page_h * .5:
+        if ln['type'] != 'body_line' or not small(ln):
             continue
         if ln['bbox'][2] - ln['bbox'][0] < 4 * body:     # a speck or stray mark, not a line of text
             continue
@@ -224,6 +226,8 @@ def mark_foot_notes(lines, body, page_h):
             gap = ln['bbox'][1] - max(l['bbox'][3] for l in above)
             if gap < body:                            # continues the text above with normal leading
                 continue
+        if not any(not small(l) for l in above) and ln['bbox'][1] < page_h * .5:
+            continue                                  # no body text above: small print in the upper half is text
         for l in run:
             if l['type'] == 'body_line':
                 l.update({'type': 'footnote_or_footer', 'classification_reason': 'small lines at the foot of the column',

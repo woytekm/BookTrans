@@ -29,7 +29,9 @@ This document distinguishes the intended pipeline from the currently implemented
    before 2026-11-18 the body text of a page that starts under a plate became one 24-line "caption" (page 59).
    **Footnotes** (`stage2.mark_foot_notes`): besides small lines in the bottom 18 % of the page, a run of smaller lines
    (< 0.9x body, the first at least 4 body heights wide) at the foot of a column - nothing body-sized below it in the
-   column - in the lower half of the page and set off from the text above by more than one body height. Each note is
+   column - set off from the text above by more than one body height. Under body text it counts anywhere on the page
+   (a "Literatur:" note after the last paragraph of a chapter that ends half way down, page 70); without body text above
+   it only in the lower half of the page. Each note is
    its own block (`split_notes`: a new note starts at a line beginning with `1`, `1)`, `(1)`, `*` or a superscript
    digit after a line that ends a sentence).
 7a. **Captions** (`captions.py`, since 2026-11-18). The paper mask painted over each figure before OCR stops at a

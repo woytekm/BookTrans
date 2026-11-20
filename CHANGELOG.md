@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — small-type notes under the last paragraph
+
+- Owner's finding on page 70: the two-line "Literatur:" note in small type under the chapter's last paragraph was set as
+  body text; the column flow put its first line under the paragraph above, at body size, and the rest in its own frame
+  (a break after "Kurt"). The footnote rule (`stage2.mark_foot_notes`) only looked in the lower half of the page; the
+  note starts at 46 %. Now a run of smaller lines at the foot of a column counts anywhere when body text stands above it
+  in the column (the lower-half condition remains for a page without body text above). It is then a note set at its
+  own size in its own frame. Test book and scans 0008/0009: no line changes role. Takes effect when stages 1-2 run
+  again for the spread (*redo* 0010).
+- Tests: 1 new, 1 adjusted.
+
 ## Unreleased — page numbers on short pages
 
 - Owner's report: page 70 lost its number again. The chapter ends half way down the page, and the number is printed
